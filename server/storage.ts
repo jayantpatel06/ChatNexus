@@ -1,8 +1,8 @@
 import { type User, type InsertUser, type Message, type InsertMessage } from "@shared/schema";
 import { prisma } from "./db";
 import session from "express-session";
-import * as connectRedis from "connect-redis";
-import * as sessionFileStore from "session-file-store";
+import { RedisStore } from "connect-redis";
+import sessionFileStore from "session-file-store";
 import { createClient } from "redis";
 
 
@@ -47,7 +47,6 @@ export class DatabaseStorage implements IStorage {
           console.log('✅ Redis connected for session storage');
         });
         
-        const RedisStore = (connectRedis as any)(session);
         return new RedisStore({
           client: redisClient,
           prefix: 'chatnexus:sess:',
@@ -66,7 +65,7 @@ export class DatabaseStorage implements IStorage {
     
     // Production fallback: Use FileStore for persistence
     console.log('📁 Using FileStore for production session storage');
-  const FileStoreSession = (sessionFileStore as any)(session);
+    const FileStoreSession = sessionFileStore(session);
     return new FileStoreSession({
       path: './sessions',
       ttl: 86400, // 24 hours
