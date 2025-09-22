@@ -87,7 +87,9 @@ export function registerRoutes(app: Express): Server {
   // Setup Socket.IO server
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' ? false : ["http://localhost:5173"],
+      origin: process.env.NODE_ENV === 'production' 
+        ? process.env.FRONTEND_URL || true // Allow same-origin in production
+        : ["http://localhost:5173", "http://localhost:5000"],
       methods: ["GET", "POST"],
       credentials: true
     }
