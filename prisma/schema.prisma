@@ -1,29 +1,25 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  userId       Int       @id @default(autoincrement()) @map("user_id")
-  gmail        String?   @unique @db.VarChar(100)
-  passwordHash String?   @map("password_hash") @db.VarChar(255)
-  username     String    @db.VarChar(50)
-  age          Int?
-  gender       String?   @db.VarChar(10)
-  isOnline     Boolean   @default(false) @map("is_online")
-  isGuest      Boolean   @default(false) @map("is_guest")
-  
-  sentMessages     Message[] @relation("Sender")
+  userId           Int       @id @default(autoincrement()) @map("user_id")
+  gmail            String?   @unique @db.VarChar(100)
+  passwordHash     String?   @map("password_hash") @db.VarChar(255)
+  username         String    @db.VarChar(50)
+  age              Int?
+  gender           String?   @db.VarChar(10)
+  isOnline         Boolean   @default(false) @map("is_online")
+  isGuest          Boolean   @default(false) @map("is_guest")
   receivedMessages Message[] @relation("Receiver")
-  
+  sentMessages     Message[] @relation("Sender")
+
   @@map("Users")
 }
 
@@ -31,11 +27,10 @@ model Message {
   msgId      Int      @id @default(autoincrement()) @map("msg_id")
   senderId   Int      @map("sender_id")
   receiverId Int      @map("receiver_id")
-  message    String   @db.Text
+  message    String
   timestamp  DateTime @default(now())
-  
-  sender   User @relation("Sender", fields: [senderId], references: [userId])
-  receiver User @relation("Receiver", fields: [receiverId], references: [userId])
-  
+  receiver   User     @relation("Receiver", fields: [receiverId], references: [userId])
+  sender     User     @relation("Sender", fields: [senderId], references: [userId])
+
   @@map("Messages")
 }
