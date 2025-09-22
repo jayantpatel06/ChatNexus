@@ -2,6 +2,9 @@ import { type User, type InsertUser, type Message, type InsertMessage } from "@s
 import { prisma } from "./db";
 import session from "express-session";
 import { nanoid } from "nanoid";
+import RedisStore from "connect-redis";
+import { createClient } from "redis";
+import FileStore from "session-file-store";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -19,9 +22,59 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   public sessionStore: any;
   constructor() {
-    // Use MemoryStore for sessions since we're using Supabase
-    // In production, consider using Redis or another persistent session store
-    this.sessionStore = new session.MemoryStore();
+    this.sessionStore = this.createSessionStore();
+  }
+
+  private createSessionStore() {
+    // Production: Use Redis if REDIS_URL is available
+    if (process.env.NODE_ENV === 'production' && process.env.REDIS_URL) {
+      try {
+        console.log('🔗 Connecting to Redis for session storage...');
+        const redisClient = createClient({
+          url: process.env.REDIS_URL,
+          socket: {
+            connectTimeout: 10000,
+            lazyConnect: true,
+          },
+        });
+        
+        redisClient.connect().catch(console.error);
+        
+        redisClient.on('error', (err) => {
+          console.error('Redis Client Error:', err);
+        });
+        
+        redisClient.on('connect', () => {
+          console.log('✅ Redis connected for session storage');
+        });
+        
+        return new RedisStore({
+          client: redisClient,
+          prefix: 'chatnexus:sess:',
+        });
+      } catch (error) {
+        console.warn('⚠️ Redis connection failed, falling back to MemoryStore:', error);
+        return new session.MemoryStore();
+      }
+    }
+    
+    // Development: Use MemoryStore
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔧 Using MemoryStore for development');
+      return new session.MemoryStore();
+    }
+    
+    // Production fallback: Use FileStore for persistence
+    console.log('📁 Using FileStore for production session storage');
+    const FileStoreSession = FileStore(session);
+    return new FileStoreSession({
+      path: './sessions',
+      ttl: 86400, // 24 hours
+      retries: 5,
+      factor: 1,
+      minTimeout: 50,
+      maxTimeout: 100,
+    });
   }
   
   async getUser(id: number): Promise<User | undefined> {

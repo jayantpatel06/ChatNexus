@@ -172,6 +172,7 @@ $RECYCLE.BIN/
 
 # Session store files (if using file-based sessions)
 sessions/
+./sessions/
 
 # Upload directories
 uploads/
