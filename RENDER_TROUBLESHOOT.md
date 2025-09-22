@@ -1,14 +1,18 @@
 # 🔧 Render Deployment Troubleshooting
 
-## ✅ Build Fix Applied
+## ✅ Build Fixes Applied
 
-I've fixed the "vite: not found" error by:
+I've fixed multiple build issues:
 
-1. **Moved build dependencies to `dependencies`**:
-   - `vite`, `esbuild`, `typescript`, `tailwindcss`, `autoprefixer`, `postcss`
-   - `@vitejs/plugin-react`, `@tailwindcss/vite`
+1. **"vite: not found" error**:
+   - Moved build dependencies to `dependencies`: `vite`, `esbuild`, `typescript`, `tailwindcss`, etc.
+   - Updated build script to use `npx` for more reliability
 
-2. **Updated build script** to use `npx` for more reliability
+2. **Replit plugin loading error**:
+   - Modified `vite.config.ts` to skip Replit plugins in production
+   - Moved Replit plugins to `dependencies` to avoid import errors
+   - Added safe plugin loading that won't fail on Render
+
 3. **Added `postinstall` script** to generate Prisma client automatically
 
 ## 🚀 Deploy Steps (Updated)
