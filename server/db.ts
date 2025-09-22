@@ -15,10 +15,26 @@ const createPrismaClient = () => {
       return null;
     }
     
+    console.log('Initializing Prisma client...');
+    console.log('Database URL host:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown');
+    
     return new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
+      // Add connection pool settings for production
+      __internal: {
+        engine: {
+          connectionTimeout: 20000, // 20 seconds
+          maxConcurrency: 20,
+        },
+      },
     });
   } catch (error) {
+    console.error('Prisma client creation failed:', error);
     console.warn(
       "Prisma connection failed. Running in fallback mode (development only).",
       error
@@ -31,6 +47,18 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
+}
+
+// Test database connection on startup
+if (prisma) {
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ Database connected successfully');
+    })
+    .catch((error) => {
+      console.error('❌ Database connection failed on startup:', error.message);
+      console.error('Database URL (masked):', process.env.DATABASE_URL?.replace(/:[^:]*@/, ':***@') || 'not set');
+    });
 }
 
 // Initialize Supabase client
