@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Initialize Prisma client
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: PrismaClient | undefined | null;
 };
 
 const createPrismaClient = () => {
@@ -25,13 +25,7 @@ const createPrismaClient = () => {
           url: process.env.DATABASE_URL,
         },
       },
-      // Add connection pool settings for production
-      __internal: {
-        engine: {
-          connectionTimeout: 20000, // 20 seconds
-          maxConcurrency: 20,
-        },
-      },
+      // Note: __internal Prisma client options removed for compatibility with typing
     });
   } catch (error) {
     console.error('Prisma client creation failed:', error);
