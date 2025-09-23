@@ -53,7 +53,7 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
           <h2 className="text-lg font-semibold text-foreground">ChatNexus</h2>
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="bg-gray-300 text-black flex items-center gap-1" data-testid="text-connection-status">
-              <div className={`w-2 h-2 bg-green-600 rounded-full ${isConnected ? 'animate-pulse' : ''}`}></div>
+              <div className={`w-2 h-2 bg-green-600 rounded-full ${isConnected ? 'animate-pulse' : 'bg-red-600'}`}></div>
               {isConnected ? 'Online' : 'Offline'}
             </Badge>
             <Button 

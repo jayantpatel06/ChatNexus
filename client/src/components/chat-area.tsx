@@ -137,7 +137,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
             <Send className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">Select a user to start chatting</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Select a User to start chatting</h3>
           <p className="text-muted-foreground">Choose someone from the online users list to begin a conversation</p>
         </div>
       </div>
@@ -167,7 +167,6 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
             <div className={`w-10 h-10 ${selectedUser.isGuest ? 'bg-gray-500' : 'bg-gradient-to-br ' + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}>
               {selectedUser.isGuest ? 'G' : getUserInitials(selectedUser.username)}
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-card rounded-full"></div>
           </div>
           <div>
             <h3 className="font-semibold text-foreground" data-testid={`text-chat-username-${selectedUser.userId}`}>
@@ -195,10 +194,13 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0" data-testid="chat-messages-area">
-        {/* Date Divider */}
-        <div className="flex items-center justify-center my-4">
-          <div className="bg-secondary text-muted-foreground text-xs px-3 py-1 rounded-full">
-            Today
+        {/* System Message */}
+        <div className="flex justify-center my-4">
+          <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
+            <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+              🔒
+            </div>
+            Messages are end-to-end encrypted
           </div>
         </div>
 
@@ -224,19 +226,14 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
                     {message.message}
                   </p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span>
                     {formatMessageTime(message.timestamp)}
                   </span>
                   {isOwnMessage && (
-                    <div className="flex">
-                      <div className="w-3 h-3 text-accent">
+                    <span className="flex items-center text-black">
                         ✓
-                      </div>
-                      <div className="w-3 h-3 text-accent -ml-1">
-                        ✓
-                      </div>
-                    </div>
+                    </span>
                   )}
                 </div>
               </div>
@@ -270,33 +267,28 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
             </div>
           </div>
         )}
-
-        {/* System Message */}
-        <div className="flex justify-center my-4">
-          <div className="bg-muted/50 text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
-            <div className="w-3 h-3">
-              🔒
-            </div>
-            Messages are end-to-end encrypted
-          </div>
-        </div>
-
         <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input Area */}
-      <div className="bg-card border-t border-border p-4 flex-shrink-0">
-        <div className="flex items-end gap-3">
+      <div className="bg-card border-t border-border p-3 flex-shrink-0">
+        <div className="flex items-end gap-2">
           {/* Attachment Button */}
-          <Button variant="ghost" size="sm" title="Attach File" data-testid="button-attach-file">
-            <Paperclip className="w-5 h-5 text-muted-foreground" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-10 w-10 flex-shrink-0" 
+            title="Attach File" 
+            data-testid="button-attach-file"
+          >
+            <Paperclip className="w-4 h-4 text-muted-foreground" />
           </Button>
           
           {/* Message Input */}
           <div className="flex-1 relative">
             <Textarea
               placeholder="Type a message..."
-              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-gray-200 text-black placeholder:text-muted-foreground border border-border resize-none"
+              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-gray-200 text-black placeholder:text-muted-foreground border border-border resize-none rounded-lg"
               rows={1}
               value={messageText}
               onChange={handleInputChange}
@@ -307,12 +299,12 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
             {/* Emoji Button */}
             <Button
               variant="ghost"
-              size="sm"
-              className="absolute right-3 bottom-3"
+              size="icon"
+              className="absolute right-1 bottom-1 h-10 w-10 flex items-center justify-center"
               title="Add Emoji"
               data-testid="button-emoji"
             >
-              <Smile className="w-5 h-5 text-muted-foreground" />
+              <Smile className="w-4 h-4 text-muted-foreground" />
             </Button>
           </div>
           
@@ -320,24 +312,13 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           <Button 
             onClick={handleSendMessage}
             disabled={!messageText.trim()}
+            className="h-10 w-10 flex-shrink-0"
+            size="icon"
             title="Send Message"
             data-testid="button-send-message"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4" />
           </Button>
-        </div>
-        
-        {/* Status Indicators */}
-        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <div className={`w-2 h-2 ${isConnected ? 'bg-green-500' : 'bg-destructive'} rounded-full`}></div>
-            <span data-testid="text-connection-status">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span>Press Enter to send, Shift+Enter for new line</span>
-          </div>
         </div>
       </div>
     </div>
