@@ -54,11 +54,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     socketIO.on('new_message', (data) => {
-      setMessages(prev => [...prev, data.message]);
+      setMessages(prev => {
+        // Check if message already exists to prevent duplicates
+        const exists = prev.some(msg => msg.msgId === data.message.msgId);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, data.message];
+      });
     });
 
     socketIO.on('message_sent', (data) => {
-      setMessages(prev => [...prev, data.message]);
+      setMessages(prev => {
+        // Check if message already exists to prevent duplicates
+        const exists = prev.some(msg => msg.msgId === data.message.msgId);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, data.message];
+      });
     });
 
     socketIO.on('user_typing', (data) => {

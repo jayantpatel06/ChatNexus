@@ -66,23 +66,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get all recent messages for current user
-  app.get("/api/messages", async (req, res, next) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      // Get recent messages involving the current user
-      const messages = await storage.getRecentMessagesForUser(req.user!.userId);
-      res.json(messages);
-    } catch (error) {
-      console.error('Error fetching recent messages:', error);
-      next(error);
-    }
-  });
-
   const httpServer = createServer(app);
+
+  // Track guest user disconnection times for grace period handling
+  const guestDisconnectionTimes = new Map<number, number>();
 
   // Setup Socket.IO server
   const io = new SocketIOServer(httpServer, {
@@ -135,6 +122,9 @@ export function registerRoutes(app: Express): Server {
     // Mark user as online
     if (authenticatedSocket.userId) {
       await storage.updateUserOnlineStatus(authenticatedSocket.userId, true);
+      
+      // Clear any pending deletion for this guest user
+      guestDisconnectionTimes.delete(authenticatedSocket.userId);
       
       // Broadcast updated online users list
       const onlineUsers = await storage.getOnlineUsers();
@@ -210,7 +200,17 @@ export function registerRoutes(app: Express): Server {
     socket.on('disconnect', async () => {
       console.log('Socket.IO client disconnected');
       if (authenticatedSocket.userId) {
+        // Get user info to check if they are a guest
+        const user = await storage.getUser(authenticatedSocket.userId);
+        
+        // Update online status for all users
         await storage.updateUserOnlineStatus(authenticatedSocket.userId, false);
+        
+        // For guest users, track disconnection time for grace period
+        if (user && user.isGuest) {
+          guestDisconnectionTimes.set(authenticatedSocket.userId, Date.now());
+          console.log(`Guest user ${user.username} (ID: ${authenticatedSocket.userId}) disconnected, starting grace period`);
+        }
         
         // Broadcast updated online users list
         const onlineUsers = await storage.getOnlineUsers();
@@ -219,9 +219,12 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Periodic cleanup of stale online users (every 5 minutes)
+  // Periodic cleanup of stale users and guest deletion after grace period (every 30 seconds)
   setInterval(async () => {
     try {
+      const now = Date.now();
+      const gracePeriod = 30 * 1000; // 30 seconds grace period
+      
       // Get all currently connected socket user IDs
       const connectedUserIds = new Set<number>();
       io.sockets.sockets.forEach((socket: any) => {
@@ -229,21 +232,54 @@ export function registerRoutes(app: Express): Server {
           connectedUserIds.add(socket.userId);
         }
       });
-
-      // Get all users marked as online in database
-      const onlineUsers = await storage.getOnlineUsers();
       
-      // Mark users as offline if they don't have an active socket connection
+      // Check disconnected guest users for deletion
+      const usersToDelete: number[] = [];
+      
+      for (const [userId, disconnectionTime] of guestDisconnectionTimes.entries()) {
+        // If user reconnected, remove from tracking
+        if (connectedUserIds.has(userId)) {
+          guestDisconnectionTimes.delete(userId);
+          continue;
+        }
+        
+        // If grace period has passed, mark for deletion
+        if (now - disconnectionTime >= gracePeriod) {
+          const user = await storage.getUser(userId);
+          if (user && user.isGuest) {
+            usersToDelete.push(userId);
+          }
+          guestDisconnectionTimes.delete(userId);
+        }
+      }
+      
+      // Delete guest users who exceeded grace period
+      for (const userId of usersToDelete) {
+        const user = await storage.getUser(userId);
+        if (user) {
+          await storage.deleteUser(userId);
+          console.log(`Deleted guest user ${user.username} (ID: ${userId}) after grace period`);
+        }
+      }
+      
+      // Handle regular users - mark offline if disconnected
+      const onlineUsers = await storage.getOnlineUsers();
       for (const user of onlineUsers) {
-        if (!connectedUserIds.has(user.userId)) {
+        if (!user.isGuest && !connectedUserIds.has(user.userId)) {
           await storage.updateUserOnlineStatus(user.userId, false);
           console.log(`Marked user ${user.userId} (${user.username}) as offline due to no active connection`);
         }
       }
+      
+      // Broadcast updated online users list if any changes were made
+      if (usersToDelete.length > 0) {
+        const updatedOnlineUsers = await storage.getOnlineUsers();
+        io.emit('online_users_updated', { users: updatedOnlineUsers });
+      }
     } catch (error) {
-      console.error('Error during periodic online status cleanup:', error);
+      console.error('Error during periodic cleanup:', error);
     }
-  }, 5 * 60 * 1000); // 5 minutes
+  }, 30 * 1000); // Check every 30 seconds
 
   return httpServer;
 }

@@ -187,7 +187,13 @@ export function setupAuth(app: Express) {
   app.post("/api/logout", async (req, res, next) => {
     try {
       if (req.user) {
-        await storage.updateUserOnlineStatus(req.user.userId, false);
+        if (req.user.isGuest) {
+          // If it's a guest user, delete them from the database
+          await storage.deleteUser(req.user.userId);
+        } else {
+          // For regular users, just update online status
+          await storage.updateUserOnlineStatus(req.user.userId, false);
+        }
       }
       
       req.logout((err) => {

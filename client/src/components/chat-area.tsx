@@ -30,14 +30,29 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     enabled: !!selectedUser?.userId,
   });
 
-  // Combine fetched messages with real-time messages
-  const allMessages = [...(messageHistory || []), ...messages.filter(m => 
+  // Combine fetched messages with real-time messages and deduplicate
+  const relevantRealtimeMessages = messages.filter(m => 
     (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
     (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
-  )];
-
-  // Sort messages by timestamp
-  const sortedMessages = allMessages.sort((a, b) => 
+  );
+  
+  // Create a map to deduplicate messages by msgId
+  const messageMap = new Map<number, Message>();
+  
+  // Add fetched messages first
+  (messageHistory || []).forEach(msg => {
+    messageMap.set(msg.msgId, msg);
+  });
+  
+  // Add real-time messages, but only if they're not already in the map
+  relevantRealtimeMessages.forEach(msg => {
+    if (!messageMap.has(msg.msgId)) {
+      messageMap.set(msg.msgId, msg);
+    }
+  });
+  
+  // Convert map back to array and sort by timestamp
+  const sortedMessages = Array.from(messageMap.values()).sort((a, b) => 
     new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
   );
 

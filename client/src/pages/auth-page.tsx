@@ -62,7 +62,7 @@ export default function AuthPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
             <MessageCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">ChatApp</h1>
+          <h1 className="text-3xl font-bold text-foreground">ChatNexus</h1>
           <p className="text-muted-foreground">Connect and chat in real-time</p>
         </div>
 
@@ -95,7 +95,7 @@ export default function AuthPage() {
               <p className="text-sm text-muted-foreground mb-3">Join instantly as a guest with a random username</p>
               <Button 
                 variant="secondary" 
-                className="w-full"
+                className="w-full hover:scale-105 transition-transform"
                 onClick={handleGuestLogin}
                 disabled={guestLoginMutation.isPending}
                 data-testid="button-guest-login"
@@ -147,7 +147,7 @@ export default function AuthPage() {
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full hover:scale-105 transition-transform"
                   disabled={loginMutation.isPending}
                   data-testid="button-login-submit"
                 >
@@ -235,7 +235,7 @@ export default function AuthPage() {
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full hover:scale-105 transition-transform"
                   disabled={registerMutation.isPending}
                   data-testid="button-register-submit"
                 >

@@ -44,7 +44,7 @@ export default function ChatDashboard() {
       <ChatArea 
         selectedUser={selectedUser} 
         onBack={handleBackToSidebar}
-        showBackButton={false}
+        showBackButton={true}
       />
     </div>
   );

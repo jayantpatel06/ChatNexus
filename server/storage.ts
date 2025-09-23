@@ -11,6 +11,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByGmail(gmail: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  deleteUser(id: number): Promise<void>;
   updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void>;
   updateUserUsername(id: number, username: string): Promise<User | undefined>;
   getOnlineUsers(): Promise<User[]>;
@@ -126,6 +127,28 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error creating user:', error);
       throw error;
+    }
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    if (!prisma) return;
+    try {
+      // First delete all messages associated with this user
+      await prisma.message.deleteMany({
+        where: {
+          OR: [
+            { senderId: id },
+            { receiverId: id }
+          ]
+        }
+      });
+      
+      // Then delete the user
+      await prisma.user.delete({
+        where: { userId: id }
+      });
+    } catch (error) {
+      console.error('Error deleting user:', error);
     }
   }
 
@@ -257,6 +280,19 @@ class InMemoryStorage implements IStorage {
 
     this.users.push(user);
     return user;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    // Remove user from users array
+    const userIndex = this.users.findIndex((u) => u.userId === id);
+    if (userIndex !== -1) {
+      this.users.splice(userIndex, 1);
+    }
+    
+    // Remove all messages associated with this user
+    this.messages = this.messages.filter((m) => 
+      m.senderId !== id && m.receiverId !== id
+    );
   }
 
   async updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void> {
