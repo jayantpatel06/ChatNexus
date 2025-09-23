@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User } from "@shared/schema";
+import { UserSettingsModal } from "@/components/user-settings-modal";
 import { Search, Settings, LogOut, User as UserIcon } from "lucide-react";
 
 interface UsersSidebarProps {
@@ -16,6 +17,7 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
   const { user, logoutMutation } = useAuth();
   const { onlineUsers, isConnected } = useSocket();
   const [searchTerm, setSearchTerm] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const filteredUsers = onlineUsers.filter(u => 
     u.userId !== user?.userId && 
@@ -44,7 +46,7 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
   };
 
   return (
-    <div className="w-80 bg-card border-r border-border flex flex-col">
+    <div className="w-full md:w-80 bg-card border-r border-border flex flex-col">
       {/* Sidebar Header */}
       <div className="p-4 border-b border-border bg-card">
         <div className="flex items-center justify-between mb-4">
@@ -54,7 +56,13 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
               <div className={`w-2 h-2 bg-green-500 rounded-full ${isConnected ? 'animate-pulse' : ''}`}></div>
               {isConnected ? 'Online' : 'Offline'}
             </Badge>
-            <Button variant="ghost" size="sm" title="Settings" data-testid="button-settings">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              title="Settings" 
+              data-testid="button-settings"
+              onClick={() => setSettingsOpen(true)}
+            >
               <Settings className="w-4 h-4 text-muted-foreground" />
             </Button>
           </div>
@@ -145,6 +153,12 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <UserSettingsModal 
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      />
     </div>
   );
 }

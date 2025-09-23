@@ -12,6 +12,7 @@ export interface IStorage {
   getUserByGmail(gmail: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void>;
+  updateUserUsername(id: number, username: string): Promise<User | undefined>;
   getOnlineUsers(): Promise<User[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
@@ -140,6 +141,20 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateUserUsername(id: number, username: string): Promise<User | undefined> {
+    if (!prisma) return undefined;
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { userId: id },
+        data: { username }
+      });
+      return updatedUser;
+    } catch (error) {
+      console.error('Error updating username:', error);
+      return undefined;
+    }
+  }
+
   async getOnlineUsers(): Promise<User[]> {
     if (!prisma) return [];
     try {
@@ -247,6 +262,15 @@ class InMemoryStorage implements IStorage {
   async updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void> {
     const u = this.users.find((x) => x.userId === id);
     if (u) u.isOnline = isOnline as any;
+  }
+
+  async updateUserUsername(id: number, username: string): Promise<User | undefined> {
+    const userIndex = this.users.findIndex((u) => u.userId === id);
+    if (userIndex !== -1) {
+      this.users[userIndex].username = username;
+      return this.users[userIndex] as User;
+    }
+    return undefined;
   }
 
   async getOnlineUsers(): Promise<User[]> {

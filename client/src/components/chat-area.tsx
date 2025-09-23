@@ -5,16 +5,20 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { User, Message } from "@shared/schema";
-import { Phone, Video, MoreVertical, Paperclip, Smile, Send } from "lucide-react";
+import { Phone, Video, MoreVertical, Paperclip, Smile, Send, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ChatAreaProps {
   selectedUser: User | null;
+  onBack?: () => void;
+  showBackButton?: boolean;
 }
 
-export function ChatArea({ selectedUser }: ChatAreaProps) {
+export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatAreaProps) {
   const { user } = useAuth();
   const { sendMessage, startTyping, stopTyping, messages, isConnected, typingUsers } = useSocket();
+  const isMobile = useIsMobile();
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,6 +134,20 @@ export function ChatArea({ selectedUser }: ChatAreaProps) {
       {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {/* Back button for mobile */}
+          {(showBackButton || isMobile) && onBack && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onBack}
+              className="p-2"
+              title="Back to users"
+              data-testid="button-back-to-users"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          
           <div className="relative">
             <div className={`w-10 h-10 ${selectedUser.isGuest ? 'bg-gray-500' : 'bg-gradient-to-br ' + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}>
               {selectedUser.isGuest ? 'G' : getUserInitials(selectedUser.username)}

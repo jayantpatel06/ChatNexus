@@ -211,4 +211,59 @@ export function setupAuth(app: Express) {
       next(error);
     }
   });
+
+  // Update username
+  app.put("/api/user/username", async (req, res, next) => {
+    try {
+      console.log('Username update request:', {
+        isAuthenticated: req.isAuthenticated(),
+        hasSession: !!req.session,
+        sessionId: req.sessionID,
+        user: req.user ? { userId: req.user.userId, username: req.user.username } : null,
+        cookies: req.headers.cookie
+      });
+      
+      if (!req.isAuthenticated()) {
+        console.log('User not authenticated for username update');
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const { username } = req.body;
+      
+      if (!username || typeof username !== "string" || username.trim().length === 0) {
+        return res.status(400).json({ message: "Username is required" });
+      }
+      
+      const trimmedUsername = username.trim();
+      
+      if (trimmedUsername.length < 2) {
+        return res.status(400).json({ message: "Username must be at least 2 characters long" });
+      }
+      
+      if (trimmedUsername.length > 20) {
+        return res.status(400).json({ message: "Username must be less than 20 characters" });
+      }
+      
+      if (trimmedUsername === req.user.username) {
+        return res.status(400).json({ message: "Please choose a different username" });
+      }
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(trimmedUsername);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      // Update the username
+      const updatedUser = await storage.updateUserUsername(req.user.userId, trimmedUsername);
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to update username" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating username:', error);
+      next(error);
+    }
+  });
 }
