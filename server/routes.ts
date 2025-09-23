@@ -203,13 +203,17 @@ export function registerRoutes(app: Express): Server {
         // Get user info to check if they are a guest
         const user = await storage.getUser(authenticatedSocket.userId);
         
-        // Update online status for all users
-        await storage.updateUserOnlineStatus(authenticatedSocket.userId, false);
-        
-        // For guest users, track disconnection time for grace period
-        if (user && user.isGuest) {
-          guestDisconnectionTimes.set(authenticatedSocket.userId, Date.now());
-          console.log(`Guest user ${user.username} (ID: ${authenticatedSocket.userId}) disconnected, starting grace period`);
+        // Only update online status if user still exists
+        if (user) {
+          await storage.updateUserOnlineStatus(authenticatedSocket.userId, false);
+          
+          // For guest users, track disconnection time for grace period
+          if (user.isGuest) {
+            guestDisconnectionTimes.set(authenticatedSocket.userId, Date.now());
+            console.log(`Guest user ${user.username} (ID: ${authenticatedSocket.userId}) disconnected, starting grace period`);
+          }
+        } else {
+          console.log(`User ${authenticatedSocket.userId} no longer exists in database`);
         }
         
         // Broadcast updated online users list

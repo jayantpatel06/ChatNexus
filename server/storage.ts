@@ -65,17 +65,40 @@ export class DatabaseStorage implements IStorage {
       return new session.MemoryStore();
     }
     
-    // Production fallback: Use FileStore for persistence
+    // Production fallback: Use MemoryStore for serverless environments like Render
+    // FileStore can be problematic in ephemeral environments
+    if (process.env.RENDER || process.env.VERCEL || process.env.NETLIFY) {
+      console.log('🧠 Using MemoryStore for serverless production environment');
+      return new session.MemoryStore();
+    }
+    
+    // Traditional production: Use FileStore for persistence
     console.log('📁 Using FileStore for production session storage');
-    const FileStoreSession = sessionFileStore(session);
-    return new FileStoreSession({
-      path: './sessions',
-      ttl: 86400, // 24 hours
-      retries: 5,
-      factor: 1,
-      minTimeout: 50,
-      maxTimeout: 100,
-    });
+    const fs = require('fs');
+    const path = require('path');
+    
+    try {
+      // Ensure sessions directory exists
+      const sessionsDir = './sessions';
+      if (!fs.existsSync(sessionsDir)) {
+        fs.mkdirSync(sessionsDir, { recursive: true });
+        console.log('Created sessions directory');
+      }
+      
+      const FileStoreSession = sessionFileStore(session);
+      return new FileStoreSession({
+        path: sessionsDir,
+        ttl: 86400, // 24 hours
+        retries: 2, // Reduce retries to avoid spam
+        factor: 1,
+        minTimeout: 50,
+        maxTimeout: 200,
+        logFn: () => {}, // Disable logging to reduce noise
+      });
+    } catch (error) {
+      console.warn('⚠️ FileStore failed, falling back to MemoryStore:', error);
+      return new session.MemoryStore();
+    }
   }
   
   async getUser(id: number): Promise<User | undefined> {
