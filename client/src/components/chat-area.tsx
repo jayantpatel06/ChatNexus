@@ -145,9 +145,9 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col h-full">
       {/* Chat Header */}
-      <div className="bg-card border-b border-border p-4 flex items-center justify-between">
+      <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           {/* Back button for mobile */}
           {(showBackButton || isMobile) && onBack && (
@@ -194,7 +194,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background" data-testid="chat-messages-area">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0" data-testid="chat-messages-area">
         {/* Date Divider */}
         <div className="flex items-center justify-center my-4">
           <div className="bg-secondary text-muted-foreground text-xs px-3 py-1 rounded-full">
@@ -285,7 +285,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       </div>
 
       {/* Message Input Area */}
-      <div className="bg-card border-t border-border p-4">
+      <div className="bg-card border-t border-border p-4 flex-shrink-0">
         <div className="flex items-end gap-3">
           {/* Attachment Button */}
           <Button variant="ghost" size="sm" title="Attach File" data-testid="button-attach-file">

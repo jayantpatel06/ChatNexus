@@ -91,8 +91,8 @@ export default function AuthPage() {
 
             {/* Guest Login Section */}
             <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border">
-              <h3 className="font-medium text-foreground mb-2">Quick Access</h3>
-              <p className="text-sm text-muted-foreground mb-3">Join instantly as a guest with a random username</p>
+              <h3 className="font-medium text-foreground mb-2 text-center">Quick Access</h3>
+              <p className="text-sm text-muted-foreground mb-3 text-center">Join instantly as a guest with a random username</p>
               <Button 
                 variant="secondary" 
                 className="w-full hover:scale-105 transition-transform"

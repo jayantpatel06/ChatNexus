@@ -20,7 +20,7 @@ export default function ChatDashboard() {
     // On mobile, show either sidebar or chat area, not both
     if (selectedUser) {
       return (
-        <div className="min-h-screen bg-background" data-testid="chat-dashboard">
+        <div className="h-screen bg-background" data-testid="chat-dashboard">
           <ChatArea 
             selectedUser={selectedUser} 
             onBack={handleBackToSidebar}
@@ -30,7 +30,7 @@ export default function ChatDashboard() {
       );
     } else {
       return (
-        <div className="min-h-screen bg-background" data-testid="chat-dashboard">
+        <div className="h-screen bg-background" data-testid="chat-dashboard">
           <UsersSidebar selectedUser={selectedUser} onUserSelect={handleUserSelect} />
         </div>
       );
@@ -39,7 +39,7 @@ export default function ChatDashboard() {
 
   // Desktop layout - show both sidebar and chat area
   return (
-    <div className="min-h-screen bg-background flex" data-testid="chat-dashboard">
+    <div className="h-screen bg-background flex" data-testid="chat-dashboard">
       <UsersSidebar selectedUser={selectedUser} onUserSelect={handleUserSelect} />
       <ChatArea 
         selectedUser={selectedUser} 
