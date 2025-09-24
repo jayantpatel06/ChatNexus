@@ -1,5 +1,7 @@
 # ChatNexus - Real-time Chat Application
 
+Website : https://chatnexus-8vh2.onrender.com/
+
 ## Project Overview
 
 ChatNexus is a modern full-stack real-time chat web application built with React, Express, Socket.IO, and Supabase. It features a dual user system supporting both guest users (temporary random usernames) and registered members (with email/password authentication). The application provides instant messaging, user presence tracking, typing indicators, and persistent chat history with a robust PostgreSQL database backend.
