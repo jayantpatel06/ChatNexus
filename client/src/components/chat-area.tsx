@@ -204,10 +204,13 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       </div>
 
       {/* Messages Area */}
-      <div 
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0" 
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0"
         style={{
-          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight - 80, 0)}px` : '0px',
+          // When keyboard is visible on mobile, add padding equal to keyboard height plus
+          // the input bar area so messages are not hidden. Previously code subtracted a
+          // magic number which caused excessive empty space. Use addition to avoid that.
+          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight + 88, 88)}px` : undefined,
         }}
         data-testid="chat-messages-area"
       >
@@ -291,7 +294,9 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       <div
         className="bg-card border-t border-border p-3 flex-shrink-0"
         style={{
-          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight, 0)}px` : undefined,
+          position: 'sticky' as any,
+          bottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight, 0)}px` : '0px',
+          zIndex: 30,
         }}
       >
         <div className="flex items-end gap-2">
