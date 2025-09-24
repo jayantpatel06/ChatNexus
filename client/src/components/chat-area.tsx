@@ -158,7 +158,15 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Chat Header */}
-      <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0">
+      <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0"
+        style={{
+          position: 'sticky' as any,
+          top: 0,
+          zIndex: 40,
+          // Ensure header is opaque when layered above messages
+          backdropFilter: 'saturate(180%) blur(4px)',
+        }}
+      >
         <div className="flex items-center gap-3">
           {/* Back button for mobile */}
           {(showBackButton || isMobile) && onBack && (
