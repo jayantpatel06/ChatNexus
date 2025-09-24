@@ -288,7 +288,12 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       </div>
 
       {/* Message Input Area */}
-      <div className="bg-card border-t border-border p-3 flex-shrink-0">
+      <div
+        className="bg-card border-t border-border p-3 flex-shrink-0"
+        style={{
+          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight, 0)}px` : undefined,
+        }}
+      >
         <div className="flex items-end gap-2">
           {/* Attachment Button */}
           <Button 
