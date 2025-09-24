@@ -210,7 +210,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           // When keyboard is visible on mobile, add padding equal to keyboard height plus
           // the input bar area so messages are not hidden. Previously code subtracted a
           // magic number which caused excessive empty space. Use addition to avoid that.
-          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight + 88, 88)}px` : undefined,
+          // paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight , 0)}px` : '0px',
         }}
         data-testid="chat-messages-area"
       >
@@ -294,9 +294,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       <div
         className="bg-card border-t border-border p-3 flex-shrink-0"
         style={{
-          position: 'sticky' as any,
-          bottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight, 0)}px` : '0px',
-          zIndex: 30,
+          paddingBottom: isMobile && isKeyboardVisible ? `72px` : '12px',
         }}
       >
         <div className="flex items-end gap-2">
