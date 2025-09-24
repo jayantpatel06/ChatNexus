@@ -8,6 +8,7 @@ import { User, Message } from "@shared/schema";
 import { Phone, Video, MoreVertical, Paperclip, Smile, Send, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -19,6 +20,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   const { user } = useAuth();
   const { sendMessage, startTyping, stopTyping, messages, isConnected, typingUsers } = useSocket();
   const isMobile = useIsMobile();
+  const { keyboardHeight, isKeyboardVisible } = useKeyboardHeight();
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -108,6 +110,15 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     }, 1000);
   };
 
+  const handleInputFocus = () => {
+    // Scroll to bottom when input is focused to ensure visibility
+    if (isMobile) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 300); // Small delay to allow keyboard to appear
+    }
+  };
+
   const getUserInitials = (username: string) => {
     return username.slice(0, 2).toUpperCase();
   };
@@ -193,7 +204,13 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0" data-testid="chat-messages-area">
+      <div 
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0" 
+        style={{
+          paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight - 80, 0)}px` : '0px',
+        }}
+        data-testid="chat-messages-area"
+      >
         {/* System Message */}
         <div className="flex justify-center my-4">
           <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
@@ -293,6 +310,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
               value={messageText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onFocus={handleInputFocus}
               data-testid="textarea-message-input"
             />
             
