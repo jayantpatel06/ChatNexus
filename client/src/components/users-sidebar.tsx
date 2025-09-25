@@ -4,6 +4,7 @@ import { useSocket } from "@/hooks/use-socket";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { User } from "@shared/schema";
 import { UserSettingsModal } from "@/components/user-settings-modal";
 import { Search, Settings, LogOut, User as UserIcon } from "lucide-react";
@@ -52,10 +53,21 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-foreground">ChatNexus</h2>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="bg-gray-300 text-black flex items-center gap-1" data-testid="text-connection-status">
-              <div className={`w-2 h-2 bg-green-600 rounded-full ${isConnected ? 'animate-pulse' : 'bg-red-600'}`}></div>
-              {isConnected ? 'Online' : 'Offline'}
-            </Badge>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <Badge variant="secondary" className="bg-gray-300 text-black flex items-center gap-1" data-testid="text-connection-status">
+                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-600 animate-pulse' : 'bg-red-600'}`}></div>
+                  {isConnected ? 'Server Online' : 'Server Offline'}
+                </Badge>
+              </HoverCardTrigger>
+              {!isConnected && (
+                <HoverCardContent>
+                  <div className="text-sm">
+                     Wait a moment while we are reconnecting....
+                  </div>
+                </HoverCardContent>
+              )}
+            </HoverCard>
             <Button 
               variant="ghost" 
               size="sm" 
