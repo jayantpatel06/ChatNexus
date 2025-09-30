@@ -9,6 +9,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import ChatDashboard from "@/pages/chat-dashboard";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
+import { ChatThemeProvider } from "@/hooks/use-chat-theme";
 
 function Router() {
   return (
@@ -27,7 +28,9 @@ function App() {
         <AuthProvider>
           <SocketProvider>
             <Toaster />
-            <Router />
+            <ChatThemeProvider>
+              <Router />
+            </ChatThemeProvider>
           </SocketProvider>
         </AuthProvider>
       </TooltipProvider>

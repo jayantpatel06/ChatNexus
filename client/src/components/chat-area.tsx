@@ -9,6 +9,16 @@ import { Phone, Video, MoreVertical, Paperclip, Smile, Send, ArrowLeft } from "l
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { useChatTheme, ChatTheme } from "@/hooks/use-chat-theme";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -25,6 +35,10 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const { getThemeForUser, setThemeForUser, availableThemes } = useChatTheme();
+
+  const currentTheme: ChatTheme = getThemeForUser(selectedUser?.userId ?? null);
+  const themeClass = `chat-theme-${currentTheme}`;
 
   // Fetch message history when user is selected
   const { data: messageHistory } = useQuery<Message[]>({
@@ -156,7 +170,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className={cn("flex-1 flex flex-col h-full", themeClass)}>
       {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0"
         style={{
@@ -193,7 +207,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
             </h3>
             <div className="flex items-center gap-1 text-xs">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-black font-medium">Online</span>
+              <span className="text-foreground font-medium">Online</span>
             </div>
           </div>
         </div>
@@ -205,9 +219,26 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           <Button variant="ghost" size="sm" title="Video Call" data-testid="button-video-call">
             <Video className="w-5 h-5 text-muted-foreground" />
           </Button>
-          <Button variant="ghost" size="sm" title="More Options" data-testid="button-more-options">
-            <MoreVertical className="w-5 h-5 text-muted-foreground" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" title="More Options" data-testid="button-more-options">
+                <MoreVertical className="w-5 h-5 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Chat Theme</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={currentTheme}
+                onValueChange={(val) => setThemeForUser(selectedUser?.userId ?? null, val as ChatTheme)}
+              >
+                {availableThemes.map((t) => (
+                  <DropdownMenuRadioItem key={t.id} value={t.id}>
+                    {t.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -259,7 +290,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
                     {formatMessageTime(message.timestamp)}
                   </span>
                   {isOwnMessage && (
-                    <span className="flex items-center text-black">
+                    <span className="flex items-center text-muted-foreground">
                         ✓
                     </span>
                   )}
@@ -321,7 +352,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           <div className="flex-1 relative">
             <Textarea
               placeholder="Type a message..."
-              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-gray-200 text-black placeholder:text-muted-foreground border border-border resize-none rounded-lg"
+              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg"
               rows={1}
               value={messageText}
               onChange={handleInputChange}

@@ -131,3 +131,83 @@
     width: 100%;
   }
 }
+
+/* Chat themes (scoped) */
+.chat-theme-default {
+  /* Inherit app variables; no overrides needed */
+}
+
+.chat-theme-midnight {
+  --background: #0f172a; /* slate-900 */
+  --foreground: #e2e8f0; /* slate-200 */
+  --card: #0b1220;
+  --card-foreground: #e2e8f0;
+  --border: #1f2937;
+  --primary: #6366f1; /* indigo-500 */
+  --primary-foreground: #ffffff;
+  --accent: #1e293b;
+  --accent-foreground: #93c5fd;
+  --muted: #0b1220;
+  --muted-foreground: #94a3b8;
+  --input: #0b1220;
+}
+
+.chat-theme-forest {
+  --background: #0b2e26;
+  --foreground: #e8fdf5;
+  --card: #134e4a; /* teal-800 */
+  --card-foreground: #ecfeff;
+  --border: #0f3c35;
+  --primary: #22c55e; /* emerald-500 */
+  --primary-foreground: #052e16;
+  --accent: #064e3b;
+  --accent-foreground: #a7f3d0;
+  --muted: #0a3a32;
+  --muted-foreground: #bbf7d0;
+  --input: #0b3b33;
+}
+
+.chat-theme-sunset {
+  --background: #1f0a18;
+  --foreground: #ffe4e6; /* rose-100 */
+  --card: #33111e;
+  --card-foreground: #ffe4e6;
+  --border: #4a1d2a;
+  --primary: #f97316; /* orange-500 */
+  --primary-foreground: #0b0a07;
+  --accent: #3f1f2b;
+  --accent-foreground: #fecdd3;
+  --muted: #2b1320;
+  --muted-foreground: #fecaca;
+  --input: #2a1420;
+}
+
+.chat-theme-bubblegum {
+  --background: #fff1f2; /* rose-50 */
+  --foreground: #111827; /* gray-900 */
+  --card: #ffe4e6; /* rose-100 */
+  --card-foreground: #111827;
+  --border: #fecdd3; /* rose-200 */
+  --primary: #ec4899; /* pink-500 */
+  --primary-foreground: #ffffff;
+  --accent: #fce7f3; /* pink-100 */
+  --accent-foreground: #9d174d;
+  --muted: #ffe4e6;
+  --muted-foreground: #6b7280; /* gray-500 */
+  --input: #fff1f2;
+}
+
+.chat-theme-slate {
+  --background: #f1f5f9; /* slate-100 */
+  --foreground: #0f172a; /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+  --primary: #3b82f6; /* blue-500 */
+  --primary-foreground: #ffffff;
+  --accent: #e2e8f0;
+  --accent-foreground: #1e293b;
+  --muted: #f8fafc;
+  --muted-foreground: #334155;
+  --input: #f8fafc;
+}
