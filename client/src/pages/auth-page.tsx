@@ -62,8 +62,8 @@ export default function AuthPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
             <MessageCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">ChatNexus</h1>
-          <p className="text-muted-foreground">Connect and chat in real-time</p>
+          <h1 className="text-3xl font-bold text-white">ChatNexus</h1>
+          <p className="text-white">Connect and chat in real-time</p>
         </div>
 
         {/* Auth Card */}
@@ -249,7 +249,7 @@ export default function AuthPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground mt-6">
+        <p className="text-center text-sm text-white mt-6">
           By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>

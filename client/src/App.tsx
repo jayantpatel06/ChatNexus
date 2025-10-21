@@ -10,6 +10,7 @@ import ChatDashboard from "@/pages/chat-dashboard";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 import { ChatThemeProvider } from "@/hooks/use-chat-theme";
+import DotGrid from "./DotGrid";
 
 function Router() {
   return (
@@ -29,6 +30,26 @@ function App() {
           <SocketProvider>
             <Toaster />
             <ChatThemeProvider>
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: -1,
+                  backgroundColor: "black",
+                }}
+              >
+                <DotGrid
+                  dotSize={6}
+                  gap={15}
+                  baseColor="#393055"
+                  activeColor="#8239FF"
+                  proximity={100}
+                  shockRadius={220}
+                  shockStrength={5}
+                  resistance={550}
+                  returnDuration={1}
+                />
+              </div>
               <Router />
             </ChatThemeProvider>
           </SocketProvider>
