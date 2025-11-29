@@ -7,7 +7,7 @@ interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
   onlineUsers: User[];
-  sendMessage: (receiverId: number, message: string) => void;
+  sendMessage: (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => void;
   startTyping: (receiverId: number) => void;
   stopTyping: (receiverId: number) => void;
   messages: Message[];
@@ -104,11 +104,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  const sendMessage = (receiverId: number, message: string) => {
+  const sendMessage = (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => {
     if (socket && socket.connected) {
       socket.emit('private_message', {
         receiverId,
-        message
+        message,
+        attachment
       });
     }
   };

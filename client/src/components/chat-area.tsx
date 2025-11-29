@@ -11,6 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useChatTheme, ChatTheme } from "@/hooks/use-chat-theme";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +37,8 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const { getThemeForUser, setThemeForUser, availableThemes } = useChatTheme();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const currentTheme: ChatTheme = getThemeForUser(selectedUser?.userId ?? null);
   const themeClass = `chat-theme-${currentTheme}`;
@@ -169,6 +172,48 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     );
   }
 
+
+
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedUser) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "File size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      
+      // Send message with attachment directly via socket
+      sendMessage(selectedUser.userId, "", {
+        url: base64,
+        filename: file.name,
+        fileType: file.type
+      });
+      
+      // Clear input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Read failed",
+        description: "Failed to read file. Please try again.",
+        variant: "destructive",
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className={cn("flex-1 flex flex-col h-full", themeClass)}>
       {/* Chat Header */}
@@ -266,6 +311,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
         {sortedMessages.map((message) => {
           const isOwnMessage = message.senderId === user?.userId;
           const sender = isOwnMessage ? user : selectedUser;
+          const attachments = (message as any).attachments || [];
 
           return (
             <div
@@ -281,9 +327,73 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
               
               <div className={`flex flex-col gap-1 max-w-xs lg:max-w-md ${isOwnMessage ? 'items-end' : ''}`}>
                 <div className={`${isOwnMessage ? 'bg-primary text-primary-foreground rounded-lg rounded-tr-none' : 'bg-card border border-border rounded-lg rounded-tl-none shadow-sm'} p-3`}>
-                  <p className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
-                    {message.message}
-                  </p>
+                  {attachments.length > 0 ? (
+                    <div className="space-y-2">
+                      {attachments.map((att: any) => (
+                        <div key={att.id} className="relative group">
+                          {att.fileType.startsWith('image/') ? (
+                            <div className="relative">
+                              <img 
+                                src={att.url} 
+                                alt={att.filename} 
+                                className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-95 transition-opacity"
+                                onClick={() => window.open(att.url, '_blank')}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-xs italic opacity-70">Image expired or deleted</span>';
+                                }}
+                              />
+                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                <Button
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(att.url, '_blank');
+                                  }}
+                                  title="Open in new tab"
+                                >
+                                  <MoreVertical className="w-4 h-4 rotate-90" />
+                                </Button>
+                                <a 
+                                  href={att.url} 
+                                  download={att.filename}
+                                  className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Download"
+                                >
+                                  <ArrowLeft className="w-4 h-4 rotate-[-90deg]" />
+                                </a>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 p-2 bg-background/20 rounded border border-border/50">
+                              <Paperclip className="w-4 h-4" />
+                              <span className="text-sm truncate flex-1">{att.filename}</span>
+                              <a 
+                                href={att.url} 
+                                download={att.filename}
+                                className="p-1 hover:bg-black/10 rounded"
+                                title="Download"
+                              >
+                                <ArrowLeft className="w-4 h-4 rotate-[-90deg]" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {message.message && message.message !== "Sent an attachment" && (
+                        <p className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
+                          {message.message}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
+                      {message.message}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <span>
@@ -338,12 +448,20 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       >
         <div className="flex items-end gap-2">
           {/* Attachment Button */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileSelect}
+            accept="image/*"
+          />
           <Button 
             variant="ghost" 
             size="icon" 
             className="h-10 w-10 flex-shrink-0" 
             title="Attach File" 
             data-testid="button-attach-file"
+            onClick={() => fileInputRef.current?.click()}
           >
             <Paperclip className="w-4 h-4 text-muted-foreground" />
           </Button>

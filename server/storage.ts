@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage } from "@shared/schema";
+import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage, type Attachment, type InsertAttachment } from "@shared/schema";
 import { prisma } from "./db";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
@@ -20,6 +20,9 @@ export interface IStorage {
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
   createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage>;
   getGlobalMessages(): Promise<GlobalMessage[]>;
+  createAttachment(attachment: InsertAttachment): Promise<Attachment>;
+  deleteAttachment(id: number): Promise<void>;
+  getOldAttachments(olderThan: Date): Promise<Attachment[]>;
   sessionStore: any;
 }
 
@@ -168,6 +171,11 @@ export class DatabaseStorage implements IStorage {
         }
       });
 
+      // Delete global messages sent by this user
+      await prisma.globalMessage.deleteMany({
+        where: { senderId: id }
+      });
+
       // Then delete the user
       await prisma.user.delete({
         where: { userId: id }
@@ -238,7 +246,8 @@ export class DatabaseStorage implements IStorage {
             { senderId: user2Id, receiverId: user1Id }
           ]
         },
-        orderBy: { timestamp: 'asc' }
+        orderBy: { timestamp: 'asc' },
+        include: { attachments: true } as any
       });
     } catch (error) {
       console.error('Error getting messages between users:', error);
@@ -257,7 +266,8 @@ export class DatabaseStorage implements IStorage {
           ]
         },
         orderBy: { timestamp: 'desc' },
-        take: 50 // Get last 50 messages
+        take: 50, // Get last 50 messages
+        include: { attachments: true } as any
       });
     } catch (error) {
       console.error('Error getting recent messages for user:', error);
@@ -287,6 +297,46 @@ export class DatabaseStorage implements IStorage {
       });
     } catch (error) {
       console.error('Error getting global messages:', error);
+      return [];
+    }
+  }
+
+  async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
+    if (!prisma) throw new Error('Database not initialized');
+    try {
+      const createdAttachment = await (prisma as any).attachment.create({
+        data: attachment
+      });
+      return createdAttachment;
+    } catch (error) {
+      console.error('Error creating attachment:', error);
+      throw error;
+    }
+  }
+
+  async deleteAttachment(id: number): Promise<void> {
+    if (!prisma) return;
+    try {
+      await (prisma as any).attachment.delete({
+        where: { id }
+      });
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+    }
+  }
+
+  async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
+    if (!prisma) return [];
+    try {
+      return await (prisma as any).attachment.findMany({
+        where: {
+          createdAt: {
+            lt: olderThan
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error getting old attachments:', error);
       return [];
     }
   }
@@ -413,6 +463,27 @@ class InMemoryStorage implements IStorage {
     return this.globalMessages
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .slice(-100);
+  }
+
+  async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
+    const id = Math.floor(Math.random() * 10000);
+    const newAttachment: Attachment = {
+      id,
+      messageId: attachment.messageId,
+      url: attachment.url,
+      filename: attachment.filename,
+      fileType: attachment.fileType,
+      createdAt: new Date()
+    };
+    return newAttachment;
+  }
+
+  async deleteAttachment(id: number): Promise<void> {
+    // No-op for in-memory
+  }
+
+  async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
+    return [];
   }
 }
 

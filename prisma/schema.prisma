@@ -33,7 +33,20 @@ model Message {
   receiver   User     @relation("Receiver", fields: [receiverId], references: [userId])
   sender     User     @relation("Sender", fields: [senderId], references: [userId])
 
+  attachments Attachment[]
   @@map("Messages")
+}
+
+model Attachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @map("message_id")
+  url       String
+  filename  String
+  fileType  String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [msgId], onDelete: Cascade)
+  
+  @@map("Attachments")
 }
 
 model GlobalMessage {

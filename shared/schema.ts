@@ -39,6 +39,24 @@ export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type Message = PrismaMessage;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
+export const insertAttachmentSchema = z.object({
+  messageId: z.number(),
+  url: z.string(),
+  filename: z.string(),
+  fileType: z.string(),
+});
+
+export type Attachment = {
+  id: number;
+  messageId: number;
+  url: string;
+  filename: string;
+  fileType: string;
+  createdAt: Date;
+};
+
+export type InsertAttachment = z.infer<typeof insertAttachmentSchema>;
+
 export const insertGlobalMessageSchema = z.object({
   senderId: z.number(),
   message: z.string().min(1),

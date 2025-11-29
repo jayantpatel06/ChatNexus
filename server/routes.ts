@@ -3,9 +3,21 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertMessageSchema, insertGlobalMessageSchema } from "@shared/schema";
+import { insertMessageSchema, insertGlobalMessageSchema, insertAttachmentSchema } from "@shared/schema";
 import { parse as parseCookie } from "cookie";
 import session from "express-session";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 interface AuthenticatedSocket {
   userId?: number;
@@ -14,6 +26,27 @@ interface AuthenticatedSocket {
 export function registerRoutes(app: Express): Server {
   // Setup authentication routes
   setupAuth(app);
+
+  // Serve uploaded files
+  app.use("/uploads", express.static("uploads"));
+
+  // File upload endpoint
+  app.post("/api/upload", upload.single("file"), (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      url: fileUrl,
+      filename: req.file.originalname,
+      fileType: req.file.mimetype,
+    });
+  });
 
   // Get online users
   app.get("/api/users/online", async (req, res, next) => {
@@ -94,7 +127,8 @@ export function registerRoutes(app: Express): Server {
         : ["http://localhost:5173", "http://localhost:5000"],
       methods: ["GET", "POST"],
       credentials: true
-    }
+    },
+    maxHttpBufferSize: 1e7 // 10MB limit for Base64 images
   });
 
   // Socket.IO middleware for authentication
@@ -149,14 +183,27 @@ export function registerRoutes(app: Express): Server {
     // Handle private messages
     socket.on('private_message', async (data) => {
       try {
-        if (authenticatedSocket.userId && data.receiverId && data.message) {
+        if (authenticatedSocket.userId && data.receiverId && (data.message || data.attachment)) {
           const validatedMessage = insertMessageSchema.parse({
             senderId: authenticatedSocket.userId,
             receiverId: data.receiverId,
-            message: data.message
+            message: data.message || "Sent an attachment"
           });
 
           const savedMessage = await storage.createMessage(validatedMessage);
+
+          // Handle attachment if present
+          if (data.attachment) {
+            const attachmentData = insertAttachmentSchema.parse({
+              messageId: savedMessage.msgId,
+              url: data.attachment.url,
+              filename: data.attachment.filename,
+              fileType: data.attachment.fileType
+            });
+            await storage.createAttachment(attachmentData);
+            // Attach to message object for client
+            (savedMessage as any).attachments = [attachmentData];
+          }
 
           // Send to receiver
           const receiverSockets = Array.from(io.sockets.sockets.values())
@@ -261,6 +308,27 @@ export function registerRoutes(app: Express): Server {
   setInterval(async () => {
     try {
       const now = Date.now();
+
+      // Cleanup old attachments (older than 5 minutes)
+      // DISABLED: User wants to keep attachments for now
+      /*
+      const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
+      const oldAttachments = await storage.getOldAttachments(fiveMinutesAgo);
+
+      for (const attachment of oldAttachments) {
+        // Delete file from disk
+        const filePath = path.join(process.cwd(), "uploads", path.basename(attachment.url));
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`Deleted expired attachment file: ${filePath}`);
+        }
+
+        // Delete from database
+        await storage.deleteAttachment(attachment.id);
+        console.log(`Deleted expired attachment record: ${attachment.id}`);
+      }
+      */
+
       const gracePeriod = 30 * 1000; // 30 seconds grace period
 
       // Get all currently connected socket user IDs
