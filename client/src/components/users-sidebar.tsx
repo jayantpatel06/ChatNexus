@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { User } from "@shared/schema";
 import { UserSettingsModal } from "@/components/user-settings-modal";
-import { Search, Settings, LogOut, User as UserIcon } from "lucide-react";
+import { Search, Settings, LogOut, User as UserIcon, Globe } from "lucide-react";
+import { Link } from "wouter";
 
 interface UsersSidebarProps {
   selectedUser: User | null;
@@ -113,6 +114,16 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
             data-testid="input-search-users"
           />
         </div>
+      </div>
+
+      {/* Global Chat Link */}
+      <div className="p-4 border-b border-border flex-shrink-0">
+        <Link href="/global-chat">
+          <Button variant="outline" className="w-full gap-2">
+            <Globe className="h-4 w-4" />
+            Global Chat
+          </Button>
+        </Link>
       </div>
 
       {/* Online Users List */}

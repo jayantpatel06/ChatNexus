@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertMessageSchema } from "@shared/schema";
+import { insertMessageSchema, insertGlobalMessageSchema } from "@shared/schema";
 import { parse as parseCookie } from "cookie";
 import session from "express-session";
 
@@ -53,15 +53,30 @@ export function registerRoutes(app: Express): Server {
 
       const { userId } = req.params;
       const otherUserId = parseInt(userId, 10);
-      
+
       if (isNaN(otherUserId)) {
         return res.status(400).json({ message: "Invalid user ID" });
       }
-      
+
       const messages = await storage.getMessagesBetweenUsers(req.user!.userId, otherUserId);
       res.json(messages);
     } catch (error) {
       console.error('Error fetching messages:', error);
+      next(error);
+    }
+  });
+
+  // Get global messages
+  app.get("/api/global-messages", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const messages = await storage.getGlobalMessages();
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching global messages:', error);
       next(error);
     }
   });
@@ -74,7 +89,7 @@ export function registerRoutes(app: Express): Server {
   // Setup Socket.IO server
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' 
+      origin: process.env.NODE_ENV === 'production'
         ? process.env.FRONTEND_URL || true // Allow same-origin in production
         : ["http://localhost:5173", "http://localhost:5000"],
       methods: ["GET", "POST"],
@@ -87,7 +102,7 @@ export function registerRoutes(app: Express): Server {
     try {
       const cookies = socket.handshake.headers.cookie ? parseCookie(socket.handshake.headers.cookie) : {};
       const sessionId = cookies['connect.sid'];
-      
+
       if (!sessionId) {
         console.log('Socket.IO connection rejected: No session cookie');
         return next(new Error('Authentication required'));
@@ -118,14 +133,14 @@ export function registerRoutes(app: Express): Server {
   io.on('connection', async (socket) => {
     const authenticatedSocket = socket as any;
     console.log('Socket.IO connection established');
-    
+
     // Mark user as online
     if (authenticatedSocket.userId) {
       await storage.updateUserOnlineStatus(authenticatedSocket.userId, true);
-      
+
       // Clear any pending deletion for this guest user
       guestDisconnectionTimes.delete(authenticatedSocket.userId);
-      
+
       // Broadcast updated online users list
       const onlineUsers = await storage.getOnlineUsers();
       io.emit('online_users_updated', { users: onlineUsers });
@@ -146,7 +161,7 @@ export function registerRoutes(app: Express): Server {
           // Send to receiver
           const receiverSockets = Array.from(io.sockets.sockets.values())
             .filter((s: any) => s.userId === data.receiverId);
-          
+
           receiverSockets.forEach((receiverSocket: any) => {
             receiverSocket.emit('new_message', { message: savedMessage });
           });
@@ -159,17 +174,36 @@ export function registerRoutes(app: Express): Server {
       }
     });
 
+    // Handle global messages
+    socket.on('global_message', async (data) => {
+      try {
+        if (authenticatedSocket.userId && data.message) {
+          const validatedMessage = insertGlobalMessageSchema.parse({
+            senderId: authenticatedSocket.userId,
+            message: data.message
+          });
+
+          const savedMessage = await storage.createGlobalMessage(validatedMessage);
+
+          // Broadcast to all connected clients
+          io.emit('global_message', { message: savedMessage });
+        }
+      } catch (error) {
+        console.error('Socket.IO global_message error:', error);
+      }
+    });
+
     // Handle typing indicators
     socket.on('typing_start', async (data) => {
       try {
         if (authenticatedSocket.userId && data.receiverId) {
           const receiverSockets = Array.from(io.sockets.sockets.values())
             .filter((s: any) => s.userId === data.receiverId);
-          
+
           receiverSockets.forEach((receiverSocket: any) => {
-            receiverSocket.emit('user_typing', { 
-              userId: authenticatedSocket.userId, 
-              isTyping: true 
+            receiverSocket.emit('user_typing', {
+              userId: authenticatedSocket.userId,
+              isTyping: true
             });
           });
         }
@@ -183,11 +217,11 @@ export function registerRoutes(app: Express): Server {
         if (authenticatedSocket.userId && data.receiverId) {
           const receiverSockets = Array.from(io.sockets.sockets.values())
             .filter((s: any) => s.userId === data.receiverId);
-          
+
           receiverSockets.forEach((receiverSocket: any) => {
-            receiverSocket.emit('user_typing', { 
-              userId: authenticatedSocket.userId, 
-              isTyping: false 
+            receiverSocket.emit('user_typing', {
+              userId: authenticatedSocket.userId,
+              isTyping: false
             });
           });
         }
@@ -202,11 +236,11 @@ export function registerRoutes(app: Express): Server {
       if (authenticatedSocket.userId) {
         // Get user info to check if they are a guest
         const user = await storage.getUser(authenticatedSocket.userId);
-        
+
         // Only update online status if user still exists
         if (user) {
           await storage.updateUserOnlineStatus(authenticatedSocket.userId, false);
-          
+
           // For guest users, track disconnection time for grace period
           if (user.isGuest) {
             guestDisconnectionTimes.set(authenticatedSocket.userId, Date.now());
@@ -215,7 +249,7 @@ export function registerRoutes(app: Express): Server {
         } else {
           console.log(`User ${authenticatedSocket.userId} no longer exists in database`);
         }
-        
+
         // Broadcast updated online users list
         const onlineUsers = await storage.getOnlineUsers();
         io.emit('online_users_updated', { users: onlineUsers });
@@ -228,7 +262,7 @@ export function registerRoutes(app: Express): Server {
     try {
       const now = Date.now();
       const gracePeriod = 30 * 1000; // 30 seconds grace period
-      
+
       // Get all currently connected socket user IDs
       const connectedUserIds = new Set<number>();
       io.sockets.sockets.forEach((socket: any) => {
@@ -236,17 +270,17 @@ export function registerRoutes(app: Express): Server {
           connectedUserIds.add(socket.userId);
         }
       });
-      
+
       // Check disconnected guest users for deletion
       const usersToDelete: number[] = [];
-      
+
       for (const [userId, disconnectionTime] of guestDisconnectionTimes.entries()) {
         // If user reconnected, remove from tracking
         if (connectedUserIds.has(userId)) {
           guestDisconnectionTimes.delete(userId);
           continue;
         }
-        
+
         // If grace period has passed, mark for deletion
         if (now - disconnectionTime >= gracePeriod) {
           const user = await storage.getUser(userId);
@@ -256,7 +290,7 @@ export function registerRoutes(app: Express): Server {
           guestDisconnectionTimes.delete(userId);
         }
       }
-      
+
       // Delete guest users who exceeded grace period
       for (const userId of usersToDelete) {
         const user = await storage.getUser(userId);
@@ -265,7 +299,7 @@ export function registerRoutes(app: Express): Server {
           console.log(`Deleted guest user ${user.username} (ID: ${userId}) after grace period`);
         }
       }
-      
+
       // Handle regular users - mark offline if disconnected
       const onlineUsers = await storage.getOnlineUsers();
       for (const user of onlineUsers) {
@@ -274,7 +308,7 @@ export function registerRoutes(app: Express): Server {
           console.log(`Marked user ${user.userId} (${user.username}) as offline due to no active connection`);
         }
       }
-      
+
       // Broadcast updated online users list if any changes were made
       if (usersToDelete.length > 0) {
         const updatedOnlineUsers = await storage.getOnlineUsers();

@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { SocketProvider } from "@/hooks/use-socket";
 import { ProtectedRoute } from "./lib/protected-route";
 import ChatDashboard from "@/pages/chat-dashboard";
+import GlobalChat from "@/pages/global-chat";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 import { ChatThemeProvider } from "@/hooks/use-chat-theme";
@@ -16,6 +17,7 @@ function Router() {
   return (
     <Switch>
       <ProtectedRoute path="/" component={ChatDashboard} />
+      <ProtectedRoute path="/global-chat" component={GlobalChat} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

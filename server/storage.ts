@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Message, type InsertMessage } from "@shared/schema";
+import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage } from "@shared/schema";
 import { prisma } from "./db";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
@@ -18,6 +18,8 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
+  createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage>;
+  getGlobalMessages(): Promise<GlobalMessage[]>;
   sessionStore: any;
 }
 
@@ -38,17 +40,17 @@ export class DatabaseStorage implements IStorage {
             connectTimeout: 10000,
           },
         });
-        
+
         redisClient.connect().catch(console.error);
-        
+
         redisClient.on('error', (err) => {
           console.error('Redis Client Error:', err);
         });
-        
+
         redisClient.on('connect', () => {
           console.log('✅ Redis connected for session storage');
         });
-        
+
         return new RedisStore({
           client: redisClient,
           prefix: 'chatnexus:sess:',
@@ -58,25 +60,25 @@ export class DatabaseStorage implements IStorage {
         return new session.MemoryStore();
       }
     }
-    
+
     // Development: Use MemoryStore
     if (process.env.NODE_ENV !== 'production') {
       console.log('🔧 Using MemoryStore for development');
       return new session.MemoryStore();
     }
-    
+
     // Production fallback: Use MemoryStore for serverless environments like Render
     // FileStore can be problematic in ephemeral environments
     if (process.env.RENDER || process.env.VERCEL || process.env.NETLIFY) {
       console.log('🧠 Using MemoryStore for serverless production environment');
       return new session.MemoryStore();
     }
-    
+
     // Traditional production: Use FileStore for persistence
     console.log('📁 Using FileStore for production session storage');
     const fs = require('fs');
     const path = require('path');
-    
+
     try {
       // Ensure sessions directory exists
       const sessionsDir = './sessions';
@@ -84,7 +86,7 @@ export class DatabaseStorage implements IStorage {
         fs.mkdirSync(sessionsDir, { recursive: true });
         console.log('Created sessions directory');
       }
-      
+
       const FileStoreSession = sessionFileStore(session);
       return new FileStoreSession({
         path: sessionsDir,
@@ -93,14 +95,14 @@ export class DatabaseStorage implements IStorage {
         factor: 1,
         minTimeout: 50,
         maxTimeout: 200,
-        logFn: () => {}, // Disable logging to reduce noise
+        logFn: () => { }, // Disable logging to reduce noise
       });
     } catch (error) {
       console.warn('⚠️ FileStore failed, falling back to MemoryStore:', error);
       return new session.MemoryStore();
     }
   }
-  
+
   async getUser(id: number): Promise<User | undefined> {
     if (!prisma) return undefined;
     try {
@@ -165,7 +167,7 @@ export class DatabaseStorage implements IStorage {
           ]
         }
       });
-      
+
       // Then delete the user
       await prisma.user.delete({
         where: { userId: id }
@@ -262,14 +264,42 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
   }
+
+  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
+    if (!prisma) throw new Error('Database not initialized');
+    try {
+      const createdMessage = await prisma.globalMessage.create({
+        data: message
+      });
+      return createdMessage;
+    } catch (error) {
+      console.error('Error creating global message:', error);
+      throw error;
+    }
+  }
+
+  async getGlobalMessages(): Promise<GlobalMessage[]> {
+    if (!prisma) return [];
+    try {
+      return await prisma.globalMessage.findMany({
+        orderBy: { timestamp: 'asc' },
+        take: 100 // Limit to last 100 messages
+      });
+    } catch (error) {
+      console.error('Error getting global messages:', error);
+      return [];
+    }
+  }
 }
 
 class InMemoryStorage implements IStorage {
   public sessionStore: any;
   private users: User[] = [] as unknown as User[];
   private messages: Message[] = [] as unknown as Message[];
+  private globalMessages: GlobalMessage[] = [] as unknown as GlobalMessage[];
   private userIdCounter = 1;
   private messageIdCounter = 1;
+  private globalMessageIdCounter = 1;
 
   constructor() {
     this.sessionStore = new session.MemoryStore();
@@ -311,9 +341,9 @@ class InMemoryStorage implements IStorage {
     if (userIndex !== -1) {
       this.users.splice(userIndex, 1);
     }
-    
+
     // Remove all messages associated with this user
-    this.messages = this.messages.filter((m) => 
+    this.messages = this.messages.filter((m) =>
       m.senderId !== id && m.receiverId !== id
     );
   }
@@ -363,6 +393,26 @@ class InMemoryStorage implements IStorage {
       .filter((m) => m.senderId === userId || m.receiverId === userId)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 50);
+  }
+
+  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
+    const id = this.globalMessageIdCounter++;
+    const timestamp = new Date();
+    const msg = {
+      id,
+      senderId: (message as any).senderId,
+      message: (message as any).message,
+      timestamp,
+    } as unknown as GlobalMessage;
+
+    this.globalMessages.push(msg);
+    return msg;
+  }
+
+  async getGlobalMessages(): Promise<GlobalMessage[]> {
+    return this.globalMessages
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      .slice(-100);
   }
 }
 

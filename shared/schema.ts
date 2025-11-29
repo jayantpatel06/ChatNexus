@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { User as PrismaUser, Message as PrismaMessage } from "@prisma/client";
+import type { User as PrismaUser, Message as PrismaMessage, GlobalMessage as PrismaGlobalMessage } from "@prisma/client";
 
 // Zod schemas for validation
 export const insertUserSchema = z.object({
@@ -38,3 +38,11 @@ export type LoginUser = z.infer<typeof loginUserSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type Message = PrismaMessage;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export const insertGlobalMessageSchema = z.object({
+  senderId: z.number(),
+  message: z.string().min(1),
+});
+
+export type GlobalMessage = PrismaGlobalMessage;
+export type InsertGlobalMessage = z.infer<typeof insertGlobalMessageSchema>;
