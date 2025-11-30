@@ -107,6 +107,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       const messages = await storage.getGlobalMessages();
+      console.log(`[API] Fetched ${messages.length} global messages`);
       res.json(messages);
     } catch (error) {
       console.error('Error fetching global messages:', error);
@@ -129,6 +130,61 @@ export function registerRoutes(app: Express): Server {
       credentials: true
     },
     maxHttpBufferSize: 1e7 // 10MB limit for Base64 images
+  });
+
+  // Update username
+  app.put("/api/user/username", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { username } = req.body;
+
+      if (!username || typeof username !== "string" || username.trim().length === 0) {
+        return res.status(400).json({ message: "Username is required" });
+      }
+
+      const trimmedUsername = username.trim();
+
+      if (trimmedUsername.length < 2) {
+        return res.status(400).json({ message: "Username must be at least 2 characters long" });
+      }
+
+      if (trimmedUsername.length > 20) {
+        return res.status(400).json({ message: "Username must be less than 20 characters" });
+      }
+
+      if (trimmedUsername === req.user!.username) {
+        return res.status(400).json({ message: "Please choose a different username" });
+      }
+
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(trimmedUsername);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      // Update the username
+      const updatedUser = await storage.updateUserUsername(req.user!.userId, trimmedUsername);
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to update username" });
+      }
+
+      console.log(`[API] Updated username for user ${req.user!.userId} to ${trimmedUsername}`);
+
+      // Broadcast updated online users list
+      const onlineUsers = await storage.getOnlineUsers();
+      const updatedUserInList = onlineUsers.find(u => u.userId === req.user!.userId);
+      console.log(`[API] Broadcasting online users. Updated user in list: ${updatedUserInList?.username}`);
+
+      io.emit('online_users_updated', { users: onlineUsers });
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating username:', error);
+      next(error);
+    }
   });
 
   // Socket.IO middleware for authentication
@@ -229,6 +285,7 @@ export function registerRoutes(app: Express): Server {
           });
 
           const savedMessage = await storage.createGlobalMessage(validatedMessage);
+          console.log(`[Socket] Created global message: ${savedMessage.id} from user ${authenticatedSocket.userId}`);
 
           // Broadcast to all connected clients
           io.emit('global_message', { message: savedMessage });

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage, type Attachment, type InsertAttachment } from "@shared/schema";
+import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage, type GlobalMessageWithSender, type Attachment, type InsertAttachment } from "@shared/schema";
 import { prisma } from "./db";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
@@ -18,8 +18,8 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
-  createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage>;
-  getGlobalMessages(): Promise<GlobalMessage[]>;
+  createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender>;
+  getGlobalMessages(): Promise<GlobalMessageWithSender[]>;
   createAttachment(attachment: InsertAttachment): Promise<Attachment>;
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
@@ -275,12 +275,14 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
+  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender> {
     if (!prisma) throw new Error('Database not initialized');
     try {
       const createdMessage = await prisma.globalMessage.create({
-        data: message
+        data: message,
+        include: { sender: true }
       });
+      console.log(`[Storage] Persisted global message: ${createdMessage.id}`);
       return createdMessage;
     } catch (error) {
       console.error('Error creating global message:', error);
@@ -288,12 +290,13 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getGlobalMessages(): Promise<GlobalMessage[]> {
+  async getGlobalMessages(): Promise<GlobalMessageWithSender[]> {
     if (!prisma) return [];
     try {
       return await prisma.globalMessage.findMany({
         orderBy: { timestamp: 'asc' },
-        take: 100 // Limit to last 100 messages
+        take: 100, // Limit to last 100 messages
+        include: { sender: true }
       });
     } catch (error) {
       console.error('Error getting global messages:', error);
@@ -445,24 +448,28 @@ class InMemoryStorage implements IStorage {
       .slice(0, 50);
   }
 
-  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
+  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender> {
     const id = this.globalMessageIdCounter++;
     const timestamp = new Date();
+    const sender = await this.getUser(message.senderId);
+    if (!sender) throw new Error("User not found");
+
     const msg = {
       id,
-      senderId: (message as any).senderId,
-      message: (message as any).message,
+      senderId: message.senderId,
+      message: message.message,
       timestamp,
-    } as unknown as GlobalMessage;
+      sender
+    } as unknown as GlobalMessageWithSender;
 
     this.globalMessages.push(msg);
     return msg;
   }
 
-  async getGlobalMessages(): Promise<GlobalMessage[]> {
+  async getGlobalMessages(): Promise<GlobalMessageWithSender[]> {
     return this.globalMessages
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      .slice(-100);
+      .slice(-100) as GlobalMessageWithSender[];
   }
 
   async createAttachment(attachment: InsertAttachment): Promise<Attachment> {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
-import { useQuery } from "@tanstack/react-query";
-import { GlobalMessage } from "@shared/schema";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { GlobalMessageWithSender } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,27 +12,26 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 
 export default function GlobalChat() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { socket } = useSocket();
   const [messageInput, setMessageInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<GlobalMessage[]>([]);
 
-  const { data: initialMessages } = useQuery<GlobalMessage[]>({
+  const { data: messages = [] } = useQuery<GlobalMessageWithSender[]>({
     queryKey: ["/api/global-messages"],
   });
 
   useEffect(() => {
-    if (initialMessages) {
-      setMessages(initialMessages);
-    }
-  }, [initialMessages]);
-
-  useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessage = (data: { message: GlobalMessage }) => {
-      setMessages((prev) => [...prev, data.message]);
+    const handleNewMessage = (data: { message: GlobalMessageWithSender }) => {
+      queryClient.setQueryData<GlobalMessageWithSender[]>(["/api/global-messages"], (old) => {
+        if (!old) return [data.message];
+        // Check if message already exists to prevent duplicates
+        if (old.some(m => m.id === data.message.id)) return old;
+        return [...old, data.message];
+      });
     };
 
     socket.on("global_message", handleNewMessage);
@@ -40,7 +39,7 @@ export default function GlobalChat() {
     return () => {
       socket.off("global_message", handleNewMessage);
     };
-  }, [socket]);
+  }, [socket, queryClient]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -74,36 +73,23 @@ export default function GlobalChat() {
         </div>
 
         <Card className="flex-1 flex flex-col h-[600px]">
-          <CardHeader className="border-b">
-            <CardTitle>Global Chatroom</CardTitle>
-          </CardHeader>
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-              <div className="space-y-4">
+              <div className="space-y-1">
                 {messages.map((msg) => {
                   const isMe = msg.senderId === user?.userId;
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                      className="flex items-baseline gap-2 py-1 hover:bg-muted/50 px-2 rounded"
                     >
-                      <div
-                        className={`max-w-[70%] rounded-lg p-3 ${
-                          isMe
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                      >
-                        {!isMe && (
-                          <div className="text-xs opacity-70 mb-1">
-                            User #{msg.senderId}
-                          </div>
-                        )}
-                        <p>{msg.message}</p>
-                        <div className="text-xs opacity-50 mt-1 text-right">
-                          {format(new Date(msg.timestamp), "HH:mm")}
-                        </div>
-                      </div>
+                      <span className={`font-bold text-sm whitespace-nowrap ${isMe ? "text-primary" : "text-foreground"}`}>
+                        {isMe ? "Me" : msg.sender.username} :
+                      </span>
+                      <span className="text-sm">{msg.message}</span>
+                      <span className="text-xs text-green-500 whitespace-nowrap ml-2">
+                        {format(new Date(msg.timestamp), "HH:mm")}
+                      </span>
                     </div>
                   );
                 })}

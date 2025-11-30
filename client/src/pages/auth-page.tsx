@@ -16,6 +16,7 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation, guestLoginMutation } = useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [guestUsername, setGuestUsername] = useState("");
 
   // Redirect if already logged in
   if (user) {
@@ -51,7 +52,8 @@ export default function AuthPage() {
   };
 
   const handleGuestLogin = () => {
-    guestLoginMutation.mutate();
+    if (!guestUsername.trim()) return;
+    guestLoginMutation.mutate(guestUsername);
   };
 
   return (
@@ -92,19 +94,34 @@ export default function AuthPage() {
             {/* Guest Login Section */}
             <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border">
               <h3 className="font-medium text-foreground mb-2 text-center">Quick Access</h3>
-              <p className="text-sm text-muted-foreground mb-3 text-center">Join instantly as a guest with a random username</p>
-              <Button 
-                variant="secondary" 
-                className="w-full hover:scale-105 transition-transform"
-                onClick={handleGuestLogin}
-                disabled={guestLoginMutation.isPending}
-                data-testid="button-guest-login"
-              >
-                {guestLoginMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : null}
-                Continue as Guest
-              </Button>
+              <p className="text-sm text-muted-foreground mb-3 text-center">Join instantly as a guest</p>
+              
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="guest-username" className="sr-only">Guest Username</Label>
+                  <Input
+                    id="guest-username"
+                    placeholder="Choose a guest username"
+                    value={guestUsername}
+                    onChange={(e) => setGuestUsername(e.target.value)}
+                    className="bg-background"
+                    data-testid="input-guest-username"
+                  />
+                </div>
+                
+                <Button 
+                  variant="secondary" 
+                  className="w-full hover:scale-105 transition-transform"
+                  onClick={handleGuestLogin}
+                  disabled={guestLoginMutation.isPending || !guestUsername.trim()}
+                  data-testid="button-guest-login"
+                >
+                  {guestLoginMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  Continue as Guest
+                </Button>
+              </div>
             </div>
 
             <div className="relative mb-6">

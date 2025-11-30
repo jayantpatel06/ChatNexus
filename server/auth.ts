@@ -9,7 +9,7 @@ import { User as SelectUser, registerUserSchema, loginUserSchema } from "@shared
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser { }
   }
 }
 
@@ -85,24 +85,40 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
-      done(null, user);
+      done(null, user || null);
     } catch (error) {
       done(error);
     }
   });
 
   // Guest login
+  // Guest login
   app.post("/api/guest-login", async (req, res, next) => {
     try {
-      let username = generateGuestUsername();
-      
+      const { username } = req.body;
+
+      if (!username || typeof username !== "string" || username.trim().length === 0) {
+        return res.status(400).json({ message: "Username is required" });
+      }
+
+      const trimmedUsername = username.trim();
+
+      if (trimmedUsername.length < 2) {
+        return res.status(400).json({ message: "Username must be at least 2 characters long" });
+      }
+
+      if (trimmedUsername.length > 20) {
+        return res.status(400).json({ message: "Username must be less than 20 characters" });
+      }
+
       // Ensure username is unique
-      while (await storage.getUserByUsername(username)) {
-        username = generateGuestUsername();
+      const existingUser = await storage.getUserByUsername(trimmedUsername);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
       }
 
       const user = await storage.createUser({
-        username,
+        username: trimmedUsername,
         isGuest: true,
         isOnline: true,
         gmail: null,
@@ -124,7 +140,7 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const validatedData = registerUserSchema.parse(req.body);
-      
+
       const existingUser = await storage.getUserByGmail(validatedData.gmail);
       if (existingUser) {
         return res.status(400).json({ message: "Email already exists" });
@@ -161,7 +177,7 @@ export function setupAuth(app: Express) {
   app.post("/api/login", async (req, res, next) => {
     try {
       const validatedData = loginUserSchema.parse(req.body);
-      
+
       passport.authenticate("local", async (err: any, user: SelectUser | false) => {
         if (err) return next(err);
         if (!user) {
@@ -170,7 +186,7 @@ export function setupAuth(app: Express) {
 
         // Update online status
         await storage.updateUserOnlineStatus(user.userId, true);
-        
+
         req.login(user, (loginErr) => {
           if (loginErr) return next(loginErr);
           res.status(200).json(user);
@@ -195,7 +211,7 @@ export function setupAuth(app: Express) {
           await storage.updateUserOnlineStatus(req.user.userId, false);
         }
       }
-      
+
       req.logout((err) => {
         if (err) return next(err);
         res.sendStatus(200);
@@ -208,67 +224,12 @@ export function setupAuth(app: Express) {
   app.get("/api/user", async (req, res, next) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
-      
+
       // Automatically mark user as online when they have a valid session
       await storage.updateUserOnlineStatus(req.user.userId, true);
-      
+
       res.json(req.user);
     } catch (error) {
-      next(error);
-    }
-  });
-
-  // Update username
-  app.put("/api/user/username", async (req, res, next) => {
-    try {
-      console.log('Username update request:', {
-        isAuthenticated: req.isAuthenticated(),
-        hasSession: !!req.session,
-        sessionId: req.sessionID,
-        user: req.user ? { userId: req.user.userId, username: req.user.username } : null,
-        cookies: req.headers.cookie
-      });
-      
-      if (!req.isAuthenticated()) {
-        console.log('User not authenticated for username update');
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-      
-      const { username } = req.body;
-      
-      if (!username || typeof username !== "string" || username.trim().length === 0) {
-        return res.status(400).json({ message: "Username is required" });
-      }
-      
-      const trimmedUsername = username.trim();
-      
-      if (trimmedUsername.length < 2) {
-        return res.status(400).json({ message: "Username must be at least 2 characters long" });
-      }
-      
-      if (trimmedUsername.length > 20) {
-        return res.status(400).json({ message: "Username must be less than 20 characters" });
-      }
-      
-      if (trimmedUsername === req.user.username) {
-        return res.status(400).json({ message: "Please choose a different username" });
-      }
-      
-      // Check if username already exists
-      const existingUser = await storage.getUserByUsername(trimmedUsername);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-      
-      // Update the username
-      const updatedUser = await storage.updateUserUsername(req.user.userId, trimmedUsername);
-      if (!updatedUser) {
-        return res.status(500).json({ message: "Failed to update username" });
-      }
-      
-      res.json(updatedUser);
-    } catch (error) {
-      console.error('Error updating username:', error);
       next(error);
     }
   });

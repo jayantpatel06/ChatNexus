@@ -63,4 +63,5 @@ export const insertGlobalMessageSchema = z.object({
 });
 
 export type GlobalMessage = PrismaGlobalMessage;
+export type GlobalMessageWithSender = GlobalMessage & { sender: User };
 export type InsertGlobalMessage = z.infer<typeof insertGlobalMessageSchema>;

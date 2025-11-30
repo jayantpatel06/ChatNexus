@@ -102,7 +102,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       socketIO.disconnect();
     };
-  }, [user]);
+  }, [user?.userId]);
 
   const sendMessage = (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => {
     if (socket && socket.connected) {

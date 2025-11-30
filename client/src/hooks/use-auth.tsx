@@ -15,7 +15,7 @@ type AuthContextType = {
   loginMutation: UseMutationResult<SelectUser, Error, LoginUser>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, RegisterUser>;
-  guestLoginMutation: UseMutationResult<SelectUser, Error, void>;
+  guestLoginMutation: UseMutationResult<SelectUser, Error, string>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const guestLoginMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/guest-login");
+    mutationFn: async (username: string) => {
+      const res = await apiRequest("POST", "/api/guest-login", { username });
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
