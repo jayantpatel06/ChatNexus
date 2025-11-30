@@ -172,6 +172,9 @@ export function registerRoutes(app: Express): Server {
     if (authenticatedSocket.userId) {
       await storage.updateUserOnlineStatus(authenticatedSocket.userId, true);
 
+      // Join user to their own room for O(1) messaging
+      socket.join(`user:${authenticatedSocket.userId}`);
+
       // Clear any pending deletion for this guest user
       guestDisconnectionTimes.delete(authenticatedSocket.userId);
 
@@ -205,13 +208,8 @@ export function registerRoutes(app: Express): Server {
             (savedMessage as any).attachments = [attachmentData];
           }
 
-          // Send to receiver
-          const receiverSockets = Array.from(io.sockets.sockets.values())
-            .filter((s: any) => s.userId === data.receiverId);
-
-          receiverSockets.forEach((receiverSocket: any) => {
-            receiverSocket.emit('new_message', { message: savedMessage });
-          });
+          // Send to receiver using rooms - O(1) lookup
+          io.to(`user:${data.receiverId}`).emit('new_message', { message: savedMessage });
 
           // Send back to sender for confirmation
           socket.emit('message_sent', { message: savedMessage });
@@ -244,14 +242,9 @@ export function registerRoutes(app: Express): Server {
     socket.on('typing_start', async (data) => {
       try {
         if (authenticatedSocket.userId && data.receiverId) {
-          const receiverSockets = Array.from(io.sockets.sockets.values())
-            .filter((s: any) => s.userId === data.receiverId);
-
-          receiverSockets.forEach((receiverSocket: any) => {
-            receiverSocket.emit('user_typing', {
-              userId: authenticatedSocket.userId,
-              isTyping: true
-            });
+          io.to(`user:${data.receiverId}`).emit('user_typing', {
+            userId: authenticatedSocket.userId,
+            isTyping: true
           });
         }
       } catch (error) {
@@ -262,14 +255,9 @@ export function registerRoutes(app: Express): Server {
     socket.on('typing_stop', async (data) => {
       try {
         if (authenticatedSocket.userId && data.receiverId) {
-          const receiverSockets = Array.from(io.sockets.sockets.values())
-            .filter((s: any) => s.userId === data.receiverId);
-
-          receiverSockets.forEach((receiverSocket: any) => {
-            receiverSocket.emit('user_typing', {
-              userId: authenticatedSocket.userId,
-              isTyping: false
-            });
+          io.to(`user:${data.receiverId}`).emit('user_typing', {
+            userId: authenticatedSocket.userId,
+            isTyping: false
           });
         }
       } catch (error) {

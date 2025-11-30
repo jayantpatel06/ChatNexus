@@ -22,6 +22,7 @@ model User {
   sentGlobalMessages GlobalMessage[]
 
   @@map("Users")
+  @@index([isOnline])
 }
 
 model Message {
@@ -35,6 +36,9 @@ model Message {
 
   attachments Attachment[]
   @@map("Messages")
+  @@index([senderId, receiverId])
+  @@index([receiverId, senderId])
+  @@index([timestamp])
 }
 
 model Attachment {
@@ -57,4 +61,5 @@ model GlobalMessage {
   sender    User     @relation(fields: [senderId], references: [userId])
 
   @@map("GlobalMessages")
+  @@index([timestamp])
 }

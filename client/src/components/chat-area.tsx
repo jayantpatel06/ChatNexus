@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +20,85 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+
+// Helper functions moved outside component to prevent recreation on render
+const getUserInitials = (username: string) => {
+  return username.slice(0, 2).toUpperCase();
+};
+
+const getAvatarColor = (username: string) => {
+  const colors = [
+    "from-blue-500 to-purple-500",
+    "from-green-500 to-teal-500",
+    "from-orange-500 to-red-500",
+    "from-purple-500 to-pink-500",
+    "from-indigo-500 to-blue-500",
+    "from-yellow-500 to-orange-500",
+  ];
+  const index = username.length % colors.length;
+  return colors[index];
+};
+
+// Helper component to render message content with media previews
+const MessageContent = ({ content }: { content: string }) => {
+  // Regex to detect URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  
+  // Split content by URLs
+  const parts = content.split(urlRegex);
+  
+  return (
+    <div className="whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+          const isImage = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(part);
+          const isVideo = /\.(mp4|webm)(\?.*)?$/i.test(part);
+          
+          if (isImage) {
+            return (
+              <div key={i} className="my-2 max-w-sm rounded-lg overflow-hidden border border-border">
+                <img 
+                  src={part} 
+                  alt="Preview" 
+                  className="w-full h-auto max-h-60 object-contain bg-black/5 cursor-pointer"
+                  onClick={() => window.open(part, '_blank')}
+                  loading="lazy"
+                />
+              </div>
+            );
+          }
+          
+          if (isVideo) {
+            return (
+              <div key={i} className="my-2 max-w-sm rounded-lg overflow-hidden border border-border">
+                <video 
+                  src={part} 
+                  controls 
+                  className="w-full h-auto max-h-60 bg-black"
+                />
+              </div>
+            );
+          }
+
+          return (
+            <a 
+              key={i} 
+              href={part} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-500 hover:underline break-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part}
+            </a>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </div>
+  );
+};
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -49,31 +128,34 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     enabled: !!selectedUser?.userId,
   });
 
-  // Combine fetched messages with real-time messages and deduplicate
-  const relevantRealtimeMessages = messages.filter(m => 
-    (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
-    (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
-  );
-  
-  // Create a map to deduplicate messages by msgId
-  const messageMap = new Map<number, Message>();
-  
-  // Add fetched messages first
-  (messageHistory || []).forEach(msg => {
-    messageMap.set(msg.msgId, msg);
-  });
-  
-  // Add real-time messages, but only if they're not already in the map
-  relevantRealtimeMessages.forEach(msg => {
-    if (!messageMap.has(msg.msgId)) {
+  // Memoize sorted messages calculation
+  const sortedMessages = useMemo(() => {
+    // Combine fetched messages with real-time messages and deduplicate
+    const relevantRealtimeMessages = messages.filter(m => 
+      (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
+      (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
+    );
+    
+    // Create a map to deduplicate messages by msgId
+    const messageMap = new Map<number, Message>();
+    
+    // Add fetched messages first
+    (messageHistory || []).forEach(msg => {
       messageMap.set(msg.msgId, msg);
-    }
-  });
-  
-  // Convert map back to array and sort by timestamp
-  const sortedMessages = Array.from(messageMap.values()).sort((a, b) => 
-    new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
-  );
+    });
+    
+    // Add real-time messages, but only if they're not already in the map
+    relevantRealtimeMessages.forEach(msg => {
+      if (!messageMap.has(msg.msgId)) {
+        messageMap.set(msg.msgId, msg);
+      }
+    });
+    
+    // Convert map back to array and sort by timestamp
+    return Array.from(messageMap.values()).sort((a, b) => 
+      new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+    );
+  }, [messages, messageHistory, user?.userId, selectedUser?.userId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -83,11 +165,19 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     scrollToBottom();
   }, [sortedMessages]);
 
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageText((prev) => prev + emojiData.emoji);
+    // Keep picker open for multiple emojis
+  };
+
   const handleSendMessage = () => {
     if (!selectedUser || !messageText.trim()) return;
 
     sendMessage(selectedUser.userId, messageText.trim());
     setMessageText("");
+    setShowEmojiPicker(false); // Close picker on send
     
     if (isTyping && selectedUser) {
       stopTyping(selectedUser.userId);
@@ -134,23 +224,6 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
         scrollToBottom();
       }, 300); // Small delay to allow keyboard to appear
     }
-  };
-
-  const getUserInitials = (username: string) => {
-    return username.slice(0, 2).toUpperCase();
-  };
-
-  const getAvatarColor = (username: string) => {
-    const colors = [
-      "from-blue-500 to-purple-500",
-      "from-green-500 to-teal-500",
-      "from-orange-500 to-red-500",
-      "from-purple-500 to-pink-500",
-      "from-indigo-500 to-blue-500",
-      "from-yellow-500 to-orange-500",
-    ];
-    const index = username.length % colors.length;
-    return colors[index];
   };
 
   const formatMessageTime = (timestamp: Date | string | null) => {
@@ -384,15 +457,15 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
                         </div>
                       ))}
                       {message.message && message.message !== "Sent an attachment" && (
-                        <p className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
-                          {message.message}
-                        </p>
+                        <div className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
+                          <MessageContent content={message.message} />
+                        </div>
                       )}
                     </div>
                   ) : (
-                    <p className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
-                      {message.message}
-                    </p>
+                    <div className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
+                      <MessageContent content={message.message} />
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -480,15 +553,29 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
             />
             
             {/* Emoji Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 bottom-1 h-10 w-10 flex items-center justify-center"
-              title="Add Emoji"
-              data-testid="button-emoji"
-            >
-              <Smile className="w-4 h-4 text-muted-foreground" />
-            </Button>
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 bottom-1 h-10 w-10 flex items-center justify-center"
+                title="Add Emoji"
+                data-testid="button-emoji"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              >
+                <Smile className="w-4 h-4 text-muted-foreground" />
+              </Button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 right-0 z-50 shadow-xl rounded-xl border border-border">
+                  <EmojiPicker 
+                    onEmojiClick={onEmojiClick}
+                    width={300}
+                    height={400}
+                    theme={["midnight", "forest", "sunset"].includes(currentTheme) ? 'dark' as any : 'light' as any}
+                    lazyLoadEmojis={true}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Send Button */}
