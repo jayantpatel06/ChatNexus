@@ -17,6 +17,11 @@ export interface IStorage {
   getOnlineUsers(): Promise<User[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
+  getMessagesBetweenUsersCursor(
+    user1Id: number,
+    user2Id: number,
+    opts: { limit: number; cursor?: { timestamp: string; msgId: number } }
+  ): Promise<{ messages: Message[]; nextCursor: { timestamp: string; msgId: number } | null }>;
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
   createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender>;
   getGlobalMessages(): Promise<GlobalMessageWithSender[]>;
@@ -24,6 +29,31 @@ export interface IStorage {
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
   sessionStore: any;
+}
+
+// Optional Redis client for caching recent direct messages (separate from session store)
+let messageCacheClient: ReturnType<typeof createClient> | null = null;
+if (process.env.REDIS_URL) {
+  try {
+    messageCacheClient = createClient({
+      url: process.env.REDIS_URL,
+      socket: {
+        connectTimeout: 5000,
+      },
+    });
+    messageCacheClient.connect().catch((err) => {
+      console.error('Redis message cache connection error:', err);
+      messageCacheClient = null;
+    });
+  } catch (err) {
+    console.error('Failed to initialize Redis message cache client:', err);
+    messageCacheClient = null;
+  }
+}
+
+function getConversationCacheKey(a: number, b: number) {
+  const [u1, u2] = a < b ? [a, b] : [b, a];
+  return `chatnexus:dm:${u1}:${u2}:recent`;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -227,8 +257,32 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) throw new Error('Database not initialized');
     try {
       const createdMessage = await prisma.message.create({
-        data: message
+        data: message as any,
       });
+
+      // Update fast-path caches (best-effort)
+      if (messageCacheClient) {
+        const { senderId, receiverId } = createdMessage as any;
+        if (senderId && receiverId) {
+          const [minId, maxId] = senderId < receiverId ? [senderId, receiverId] : [receiverId, senderId];
+          const conversationId = `${minId}:${maxId}`;
+
+          const lastKey = `chatnexus:conv:${conversationId}:last`;
+          try {
+            await messageCacheClient.set(lastKey, JSON.stringify(createdMessage), { EX: 60 });
+          } catch (err) {
+            console.error('Error writing last message cache:', err);
+          }
+
+          const unreadKey = `chatnexus:conv:${conversationId}:unread:${receiverId}`;
+          try {
+            await messageCacheClient.incr(unreadKey);
+          } catch (err) {
+            console.error('Error incrementing unread count cache:', err);
+          }
+        }
+      }
+
       return createdMessage;
     } catch (error) {
       console.error('Error creating message:', error);
@@ -239,19 +293,111 @@ export class DatabaseStorage implements IStorage {
   async getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]> {
     if (!prisma) return [];
     try {
+      const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+      const conversationId = `${minId}:${maxId}`;
+
       return await prisma.message.findMany({
         where: {
           OR: [
-            { senderId: user1Id, receiverId: user2Id },
-            { senderId: user2Id, receiverId: user1Id }
-          ]
-        },
+            { conversationId },
+            {
+              OR: [
+                { senderId: user1Id, receiverId: user2Id },
+                { senderId: user2Id, receiverId: user1Id },
+              ],
+            },
+          ],
+        } as any,
         orderBy: { timestamp: 'asc' },
-        include: { attachments: true } as any
+        include: { attachments: true } as any,
       });
     } catch (error) {
       console.error('Error getting messages between users:', error);
       return [];
+    }
+  }
+
+  async getMessagesBetweenUsersCursor(
+    user1Id: number,
+    user2Id: number,
+    opts: { limit: number; cursor?: { timestamp: string; msgId: number } }
+  ): Promise<{ messages: Message[]; nextCursor: { timestamp: string; msgId: number } | null }> {
+    if (!prisma) return { messages: [], nextCursor: null };
+
+    const { limit, cursor } = opts;
+    const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+    const conversationId = `${minId}:${maxId}`;
+    const where = {
+      OR: [
+        { conversationId },
+        {
+          OR: [
+            { senderId: user1Id, receiverId: user2Id },
+            { senderId: user2Id, receiverId: user1Id },
+          ],
+        },
+      ],
+    } as const;
+
+    // For the most recent page (no cursor), try Redis cache first
+    if (messageCacheClient && !cursor) {
+      try {
+        const cacheKey = getConversationCacheKey(user1Id, user2Id);
+        const cached = await messageCacheClient.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached) as {
+            messages: Message[];
+            nextCursor: { timestamp: string; msgId: number } | null;
+          };
+        }
+      } catch (err) {
+        console.error('Error reading from Redis message cache:', err);
+      }
+    }
+
+    try {
+      const raw = await prisma.message.findMany({
+        where: where as any,
+        orderBy: [
+          { timestamp: 'desc' },
+          { msgId: 'desc' },
+        ],
+        take: limit + 1,
+        cursor: cursor
+          ? ({
+              timestamp_msgId: {
+                timestamp: new Date(cursor.timestamp),
+                msgId: cursor.msgId,
+              },
+            } as any)
+          : undefined,
+        skip: cursor ? 1 : 0,
+        include: { attachments: true } as any,
+      });
+
+      const hasMore = raw.length > limit;
+      const messages = hasMore ? raw.slice(0, limit) : raw;
+      const last = messages[messages.length - 1];
+      const nextCursor = hasMore
+        ? { timestamp: last.timestamp.toISOString(), msgId: last.msgId }
+        : null;
+
+      // Cache only the most recent page
+      if (messageCacheClient && !cursor) {
+        try {
+          const cacheKey = getConversationCacheKey(user1Id, user2Id);
+          await messageCacheClient.set(cacheKey, JSON.stringify({ messages, nextCursor }), {
+            EX: 30,
+          });
+        } catch (err) {
+          console.error('Error writing to Redis message cache:', err);
+        }
+      }
+
+      return { messages, nextCursor };
+    } catch (error) {
+      console.error('Error getting paginated messages between users:', error);
+      return { messages: [], nextCursor: null };
     }
   }
 
@@ -439,6 +585,36 @@ class InMemoryStorage implements IStorage {
       (m.senderId === user1Id && m.receiverId === user2Id) ||
       (m.senderId === user2Id && m.receiverId === user1Id)
     );
+  }
+
+  async getMessagesBetweenUsersCursor(
+    user1Id: number,
+    user2Id: number,
+    opts: { limit: number; cursor?: { timestamp: string; msgId: number } }
+  ): Promise<{ messages: Message[]; nextCursor: { timestamp: string; msgId: number } | null }> {
+    const { limit, cursor } = opts;
+    const all = this.messages
+      .filter((m) =>
+        (m.senderId === user1Id && m.receiverId === user2Id) ||
+        (m.senderId === user2Id && m.receiverId === user1Id)
+      )
+      .sort((a, b) => new Date(b.timestamp as any).getTime() - new Date(a.timestamp as any).getTime());
+
+    let startIndex = 0;
+    if (cursor) {
+      const idx = all.findIndex((m) => m.msgId === cursor.msgId);
+      startIndex = idx >= 0 ? idx + 1 : 0;
+    }
+
+    const slice = all.slice(startIndex, startIndex + limit + 1);
+    const hasMore = slice.length > limit;
+    const messages = hasMore ? slice.slice(0, limit) : slice;
+    const last = messages[messages.length - 1];
+    const nextCursor = hasMore
+      ? { timestamp: (last.timestamp as any as Date).toISOString(), msgId: last.msgId }
+      : null;
+
+    return { messages, nextCursor };
   }
 
   async getRecentMessagesForUser(userId: number): Promise<Message[]> {

@@ -26,19 +26,22 @@ model User {
 }
 
 model Message {
-  msgId      Int      @id @default(autoincrement()) @map("msg_id")
-  senderId   Int      @map("sender_id")
-  receiverId Int      @map("receiver_id")
-  message    String
-  timestamp  DateTime @default(now())
-  receiver   User     @relation("Receiver", fields: [receiverId], references: [userId])
-  sender     User     @relation("Sender", fields: [senderId], references: [userId])
+  msgId          Int       @id @default(autoincrement()) @map("msg_id")
+  senderId       Int       @map("sender_id")
+  receiverId     Int       @map("receiver_id")
+  conversationId String?   @db.VarChar(64) @map("conversation_id")
+  message        String
+  timestamp      DateTime  @default(now())
+  receiver       User      @relation("Receiver", fields: [receiverId], references: [userId])
+  sender         User      @relation("Sender", fields: [senderId], references: [userId])
 
   attachments Attachment[]
   @@map("Messages")
   @@index([senderId, receiverId])
   @@index([receiverId, senderId])
   @@index([timestamp])
+  @@index([conversationId, timestamp, msgId])
+  @@unique([timestamp, msgId], name: "timestamp_msgId")
 }
 
 model Attachment {
