@@ -77,7 +77,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get messages between users
+  // Get messages between users (full history - legacy endpoint)
   app.get("/api/messages/:userId", async (req, res, next) => {
     try {
       if (!req.isAuthenticated()) {
@@ -95,6 +95,47 @@ export function registerRoutes(app: Express): Server {
       res.json(messages);
     } catch (error) {
       console.error('Error fetching messages:', error);
+      next(error);
+    }
+  });
+
+  // Get messages between users with cursor-based pagination (optimized for recent messages)
+  app.get("/api/messages/:userId/history", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const otherUserId = parseInt(req.params.userId, 10);
+      if (isNaN(otherUserId)) {
+        return res.status(400).json({ message: "Invalid user ID" });
+      }
+
+      const limit = Math.min(parseInt((req.query.limit as string) ?? "40", 10) || 40, 100);
+      const cursorParam = req.query.cursor as string | undefined;
+
+      let cursor: { timestamp: string; msgId: number } | undefined;
+      if (cursorParam) {
+        const [tsStr, idStr] = cursorParam.split("_");
+        const msgId = Number(idStr);
+        if (!Number.isNaN(msgId) && tsStr) {
+          cursor = { timestamp: new Date(Number(tsStr)).toISOString(), msgId };
+        }
+      }
+
+      const { messages, nextCursor } = await storage.getMessagesBetweenUsersCursor(
+        req.user!.userId,
+        otherUserId,
+        { limit, cursor }
+      );
+
+      const encodedNextCursor = nextCursor
+        ? `${new Date(nextCursor.timestamp).getTime()}_${nextCursor.msgId}`
+        : null;
+
+      res.json({ messages, nextCursor: encodedNextCursor });
+    } catch (error) {
+      console.error('Error fetching paginated messages:', error);
       next(error);
     }
   });
@@ -220,6 +261,17 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  let presenceBroadcastScheduled = false;
+  const broadcastOnlineUsers = async () => {
+    if (presenceBroadcastScheduled) return;
+    presenceBroadcastScheduled = true;
+    setTimeout(async () => {
+      presenceBroadcastScheduled = false;
+      const onlineUsers = await storage.getOnlineUsers();
+      io.emit('online_users_updated', { users: onlineUsers });
+    }, 200);
+  };
+
   io.on('connection', async (socket) => {
     const authenticatedSocket = socket as any;
     console.log('Socket.IO connection established');
@@ -234,9 +286,8 @@ export function registerRoutes(app: Express): Server {
       // Clear any pending deletion for this guest user
       guestDisconnectionTimes.delete(authenticatedSocket.userId);
 
-      // Broadcast updated online users list
-      const onlineUsers = await storage.getOnlineUsers();
-      io.emit('online_users_updated', { users: onlineUsers });
+      // Broadcast updated online users list (debounced)
+      await broadcastOnlineUsers();
     }
 
     // Handle private messages
@@ -267,8 +318,11 @@ export function registerRoutes(app: Express): Server {
           // Send to receiver using rooms - O(1) lookup
           io.to(`user:${data.receiverId}`).emit('new_message', { message: savedMessage });
 
-          // Send back to sender for confirmation
-          socket.emit('message_sent', { message: savedMessage });
+          // Send back to sender for confirmation, including optional clientMessageId
+          socket.emit('message_sent', {
+            message: savedMessage,
+            clientMessageId: data.clientMessageId,
+          });
         }
       } catch (error) {
         console.error('Socket.IO private_message error:', error);
@@ -342,9 +396,8 @@ export function registerRoutes(app: Express): Server {
           console.log(`User ${authenticatedSocket.userId} no longer exists in database`);
         }
 
-        // Broadcast updated online users list
-        const onlineUsers = await storage.getOnlineUsers();
-        io.emit('online_users_updated', { users: onlineUsers });
+        // Broadcast updated online users list (debounced)
+        await broadcastOnlineUsers();
       }
     });
   });
@@ -422,10 +475,9 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Broadcast updated online users list if any changes were made
+      // Broadcast updated online users list if any changes were made (debounced)
       if (usersToDelete.length > 0) {
-        const updatedOnlineUsers = await storage.getOnlineUsers();
-        io.emit('online_users_updated', { users: updatedOnlineUsers });
+        await broadcastOnlineUsers();
       }
     } catch (error) {
       console.error('Error during periodic cleanup:', error);

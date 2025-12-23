@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { User, Message } from "@shared/schema";
@@ -122,40 +122,64 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
   const currentTheme: ChatTheme = getThemeForUser(selectedUser?.userId ?? null);
   const themeClass = `chat-theme-${currentTheme}`;
 
-  // Fetch message history when user is selected
-  const { data: messageHistory } = useQuery<Message[]>({
-    queryKey: ["/api/messages", selectedUser?.userId],
-    enabled: !!selectedUser?.userId,
-  });
+  // Fetch message history when user is selected (cursor-based)
+  const {
+    data: pagedMessages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<{ messages: Message[]; nextCursor: string | null}>(
+    {
+      queryKey: ["/api/messages/history", selectedUser?.userId],
+      enabled: !!selectedUser?.userId,
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      queryFn: async ({ pageParam }) => {
+        if (!selectedUser?.userId) {
+          return { messages: [], nextCursor: null };
+        }
+        const cursorParam = pageParam ? `&cursor=${pageParam}` : "";
+        const res = await fetch(
+          `/api/messages/${selectedUser.userId}/history?limit=40${cursorParam}`,
+          { credentials: "include" }
+        );
+        if (!res.ok) {
+          throw new Error("Failed to fetch messages");
+        }
+        return res.json();
+      },
+    }
+  );
 
-  // Memoize sorted messages calculation
-  const sortedMessages = useMemo(() => {
-    // Combine fetched messages with real-time messages and deduplicate
-    const relevantRealtimeMessages = messages.filter(m => 
-      (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
-      (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
-    );
-    
-    // Create a map to deduplicate messages by msgId
-    const messageMap = new Map<number, Message>();
-    
-    // Add fetched messages first
-    (messageHistory || []).forEach(msg => {
-      messageMap.set(msg.msgId, msg);
-    });
-    
-    // Add real-time messages, but only if they're not already in the map
-    relevantRealtimeMessages.forEach(msg => {
-      if (!messageMap.has(msg.msgId)) {
-        messageMap.set(msg.msgId, msg);
-      }
-    });
-    
-    // Convert map back to array and sort by timestamp
-    return Array.from(messageMap.values()).sort((a, b) => 
+  // Sort history once (ascending) when pages change
+  const historyAsc: Message[] = useMemo(() => {
+    const flat = pagedMessages?.pages.flatMap((p) => p.messages) ?? [];
+    return [...flat].sort((a, b) =>
       new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
     );
-  }, [messages, messageHistory, user?.userId, selectedUser?.userId]);
+  }, [pagedMessages]);
+
+  // Live messages for this conversation only (keep arrival order)
+  const liveMessagesForConv: Message[] = useMemo(
+    () =>
+      messages.filter((m) =>
+        (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
+        (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
+      ),
+    [messages, user?.userId, selectedUser?.userId]
+  );
+
+  // Combine history and live into a single ordered list
+  const combinedMessages: Message[] = useMemo(
+    () => [...historyAsc, ...liveMessagesForConv],
+    [historyAsc, liveMessagesForConv]
+  );
+
+  // Windowing: only render the last N messages to keep DOM light for huge histories
+  const MESSAGE_WINDOW_SIZE = 200;
+  const displayedMessages: Message[] = useMemo(() => {
+    if (combinedMessages.length <= MESSAGE_WINDOW_SIZE) return combinedMessages;
+    return combinedMessages.slice(combinedMessages.length - MESSAGE_WINDOW_SIZE);
+  }, [combinedMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -163,7 +187,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
 
   useEffect(() => {
     scrollToBottom();
-  }, [sortedMessages]);
+  }, [displayedMessages]);
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -261,30 +285,41 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      
-      // Send message with attachment directly via socket
-      sendMessage(selectedUser.userId, "", {
-        url: base64,
-        filename: file.name,
-        fileType: file.type
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
       });
-      
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const uploaded = await res.json(); // { url, filename, fileType }
+
+      // Send message with attachment via socket, referencing uploaded URL
+      sendMessage(selectedUser.userId, "", {
+        url: uploaded.url,
+        filename: uploaded.filename,
+        fileType: uploaded.fileType,
+      });
+
       // Clear input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-    };
-    reader.onerror = () => {
+    } catch (error) {
+      console.error("Attachment upload failed", error);
       toast({
-        title: "Read failed",
-        description: "Failed to read file. Please try again.",
+        title: "Upload failed",
+        description: "Failed to upload file. Please try again.",
         variant: "destructive",
       });
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -371,6 +406,20 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
         }}
         data-testid="chat-messages-area"
       >
+        {/* Load older messages */}
+        {hasNextPage && (
+          <div className="flex justify-center my-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+            >
+              {isFetchingNextPage ? "Loading older messages..." : "Load older messages"}
+            </Button>
+          </div>
+        )}
+
         {/* System Message */}
         <div className="flex justify-center my-4">
           <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
@@ -381,7 +430,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           </div>
         </div>
 
-        {sortedMessages.map((message) => {
+        {displayedMessages.map((message) => {
           const isOwnMessage = message.senderId === user?.userId;
           const sender = isOwnMessage ? user : selectedUser;
           const attachments = (message as any).attachments || [];
