@@ -28,6 +28,7 @@ export interface IStorage {
   createAttachment(attachment: InsertAttachment): Promise<Attachment>;
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
+  getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>>;
   sessionStore: any;
 }
 
@@ -265,7 +266,7 @@ export class DatabaseStorage implements IStorage {
         const { senderId, receiverId } = createdMessage as any;
         if (senderId && receiverId) {
           const [minId, maxId] = senderId < receiverId ? [senderId, receiverId] : [receiverId, senderId];
-          const conversationId = `${minId}:${maxId}`;
+          const conversationId = (createdMessage as any).conversationId || `${minId}:${maxId}`;
 
           const lastKey = `chatnexus:conv:${conversationId}:last`;
           try {
@@ -297,17 +298,7 @@ export class DatabaseStorage implements IStorage {
       const conversationId = `${minId}:${maxId}`;
 
       return await prisma.message.findMany({
-        where: {
-          OR: [
-            { conversationId },
-            {
-              OR: [
-                { senderId: user1Id, receiverId: user2Id },
-                { senderId: user2Id, receiverId: user1Id },
-              ],
-            },
-          ],
-        } as any,
+        where: { conversationId } as any,
         orderBy: { timestamp: 'asc' },
         include: { attachments: true } as any,
       });
@@ -327,17 +318,7 @@ export class DatabaseStorage implements IStorage {
     const { limit, cursor } = opts;
     const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
     const conversationId = `${minId}:${maxId}`;
-    const where = {
-      OR: [
-        { conversationId },
-        {
-          OR: [
-            { senderId: user1Id, receiverId: user2Id },
-            { senderId: user2Id, receiverId: user1Id },
-          ],
-        },
-      ],
-    } as const;
+    const where = { conversationId } as const;
 
     // For the most recent page (no cursor), try Redis cache first
     if (messageCacheClient && !cursor) {
@@ -365,11 +346,11 @@ export class DatabaseStorage implements IStorage {
         take: limit + 1,
         cursor: cursor
           ? ({
-              timestamp_msgId: {
-                timestamp: new Date(cursor.timestamp),
-                msgId: cursor.msgId,
-              },
-            } as any)
+            timestamp_msgId: {
+              timestamp: new Date(cursor.timestamp),
+              msgId: cursor.msgId,
+            },
+          } as any)
           : undefined,
         skip: cursor ? 1 : 0,
         include: { attachments: true } as any,
@@ -489,6 +470,46 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
   }
+
+  async getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>> {
+    const result = new Map<number, { lastMessage: Message | null, unread: number }>();
+    if (!messageCacheClient || otherUserIds.length === 0) return result;
+
+    try {
+      // Prepare keys for mget
+      const keys: string[] = [];
+      const userMapping: { otherId: number, type: 'last' | 'unread' }[] = [];
+
+      for (const otherId of otherUserIds) {
+        const [minId, maxId] = userId < otherId ? [userId, otherId] : [otherId, userId];
+        const conversationId = `${minId}:${maxId}`;
+
+        const lastKey = `chatnexus:conv:${conversationId}:last`;
+        const unreadKey = `chatnexus:conv:${conversationId}:unread:${userId}`;
+
+        keys.push(lastKey, unreadKey);
+        userMapping.push({ otherId, type: 'last' }, { otherId, type: 'unread' });
+      }
+
+      const values = await messageCacheClient.mGet(keys);
+
+      for (let i = 0; i < values.length; i += 2) {
+        const lastVal = values[i];
+        const unreadVal = values[i + 1];
+        const { otherId } = userMapping[i]; // i corresponds to 'last', i+1 to 'unread'
+
+        const lastMessage = lastVal ? JSON.parse(lastVal) : null;
+        const unread = unreadVal ? parseInt(unreadVal, 10) : 0;
+
+        result.set(otherId, { lastMessage, unread });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error getting conversation stats from Redis:', error);
+      return result;
+    }
+  }
 }
 
 class InMemoryStorage implements IStorage {
@@ -573,6 +594,7 @@ class InMemoryStorage implements IStorage {
       senderId: (message as any).senderId,
       receiverId: (message as any).receiverId,
       message: (message as any).message,
+      conversationId: (message as any).conversationId,
       timestamp,
     } as unknown as Message;
 
@@ -667,6 +689,28 @@ class InMemoryStorage implements IStorage {
 
   async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
     return [];
+  }
+
+  async getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>> {
+    const result = new Map<number, { lastMessage: Message | null, unread: number }>();
+
+    for (const otherId of otherUserIds) {
+      const messages = this.messages
+        .filter(m =>
+          (m.senderId === userId && m.receiverId === otherId) ||
+          (m.senderId === otherId && m.receiverId === userId)
+        )
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()); // Sort ascending to get last message easily
+
+      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+
+      // For in-memory, we don't track read status, so unread is always 0.
+      const unread = 0; // Simplified for in-memory mock
+
+      result.set(otherId, { lastMessage, unread });
+    }
+
+    return result;
   }
 }
 

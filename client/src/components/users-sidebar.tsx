@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,21 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
     u.userId !== user?.userId && 
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Fetch conversation stats for visible users
+  const { data: conversationStats } = useQuery({
+    queryKey: ['conversations-stats', filteredUsers.map(u => u.userId).join(',')],
+    queryFn: async () => {
+      if (filteredUsers.length === 0) return {};
+      const ids = filteredUsers.map(u => u.userId).join(',');
+      const res = await fetch(`/api/conversations/stats?userIds=${ids}`);
+      if (!res.ok) return {};
+      return res.json() as Promise<Record<number, { lastMessage: any, unread: number }>>;
+    },
+    // Refresh often to show new messages/unread counts
+    refetchInterval: 5000, 
+    enabled: filteredUsers.length > 0,
+  });
 
   const getUserInitials = (username: string) => {
     return username.slice(0, 2).toUpperCase();
@@ -163,12 +179,26 @@ export function UsersSidebar({ selectedUser, onUserSelect }: UsersSidebarProps) 
                       {onlineUser.username}
                     </p>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      {onlineUser.isGuest && <UserIcon className="w-3 h-3" />}
                       <span>{onlineUser.isGuest ? 'Guest' : 'Online'}</span>
                     </div>
+                    {/* Last Message Preview */}
+                    {conversationStats?.[onlineUser.userId]?.lastMessage && (
+                       <p className="text-xs text-muted-foreground truncate mt-0.5 max-w-[150px] opacity-70">
+                         {conversationStats[onlineUser.userId].lastMessage.senderId === user?.userId ? 'You: ' : ''}
+                         {conversationStats[onlineUser.userId].lastMessage.message}
+                       </p>
+                    )}
                   </div>
-                  <div className={`${selectedUser?.userId === onlineUser.userId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
-                  </div>
+                  
+                  {/* Unread Badge */}
+                  {conversationStats?.[onlineUser.userId]?.unread ? (
+                    <Badge variant="destructive" className="h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] flex-shrink-0 animate-in zoom-in">
+                      {conversationStats[onlineUser.userId].unread > 9 ? '9+' : conversationStats[onlineUser.userId].unread}
+                    </Badge>
+                  ) : (
+                    <div className={`${selectedUser?.userId === onlineUser.userId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                    </div>
+                  )}
                 </Button>
               ))
             )}

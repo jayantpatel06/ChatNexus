@@ -10,6 +10,14 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
+import { signToken, verifyToken } from "./lib/jwt";
+import passport from "passport"; // Added for new Socket.IO middleware
+
+declare module 'socket.io' {
+  interface Socket {
+    userId: number;
+  }
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -18,10 +26,6 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
 });
-
-interface AuthenticatedSocket {
-  userId?: number;
-}
 
 export function registerRoutes(app: Express): Server {
   // Setup authentication routes
@@ -73,6 +77,30 @@ export function registerRoutes(app: Express): Server {
       res.json(messages);
     } catch (error) {
       console.error('Error fetching recent messages:', error);
+      next(error);
+    }
+  });
+
+  // Get JWT token for authenticated user
+  app.get("/api/auth/token", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const token = signToken(req.user!);
+    res.json({ token });
+  });
+
+  // Register new user (if allowed by auth strategy)
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      // This endpoint would typically handle new user registration,
+      // but the provided snippet only includes the authentication check.
+      // Assuming further logic would be here to create a new user.
+      res.status(501).json({ message: "Registration not fully implemented" });
+    } catch (error) {
       next(error);
     }
   });
@@ -228,37 +256,51 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Socket.IO middleware for authentication
-  io.use(async (socket, next) => {
-    try {
-      const cookies = socket.handshake.headers.cookie ? parseCookie(socket.handshake.headers.cookie) : {};
-      const sessionId = cookies['connect.sid'];
+  // Create a session middleware instance for Socket.IO
+  const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET || "supersecret",
+    resave: false,
+    saveUninitialized: false,
+    store: storage.sessionStore,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      sameSite: 'lax',
+    },
+  });
 
-      if (!sessionId) {
-        console.log('Socket.IO connection rejected: No session cookie');
-        return next(new Error('Authentication required'));
+  // Middleware to authenticate socket connections
+  io.use((socket, next) => {
+    // 1. Try JWT from handshake auth
+    const token = socket.handshake.auth.token;
+    if (token) {
+      const decoded = verifyToken(token);
+      if (decoded) {
+        socket.userId = decoded.userId;
+        return next();
       }
+      // If token is invalid, we could reject, but for now we fall back to session
+      // to support clients during transition or dual-mode.
+      // console.log("Invalid token, falling back to session");
+    }
 
-      // Get session from store
-      const sessionData = await new Promise<any>((resolve, reject) => {
-        storage.sessionStore.get(sessionId.split('.')[0].substring(2), (err: any, session: any) => {
-          if (err) reject(err);
-          else resolve(session);
+    // 2. Fallback to Session Cookie
+    const req = socket.request as any;
+    const res = {} as any;
+
+    sessionMiddleware(req, res, () => {
+      passport.initialize()(req, res, () => {
+        passport.session()(req, res, () => {
+          if (req.isAuthenticated()) {
+            socket.userId = req.user.userId;
+            next();
+          } else {
+            next(new Error("Authentication required"));
+          }
         });
       });
-
-      if (!sessionData || !sessionData.passport?.user) {
-        console.log('Socket.IO connection rejected: Invalid session');
-        return next(new Error('Authentication required'));
-      }
-
-      (socket as any).userId = sessionData.passport.user;
-      console.log(`Socket.IO authenticated for user: ${(socket as any).userId}`);
-      next();
-    } catch (error) {
-      console.error('Socket.IO authentication error:', error);
-      next(new Error('Authentication failed'));
-    }
+    });
   });
 
   let presenceBroadcastScheduled = false;
@@ -273,18 +315,17 @@ export function registerRoutes(app: Express): Server {
   };
 
   io.on('connection', async (socket) => {
-    const authenticatedSocket = socket as any;
     console.log('Socket.IO connection established');
 
     // Mark user as online
-    if (authenticatedSocket.userId) {
-      await storage.updateUserOnlineStatus(authenticatedSocket.userId, true);
+    if (socket.userId) {
+      await storage.updateUserOnlineStatus(socket.userId, true);
 
       // Join user to their own room for O(1) messaging
-      socket.join(`user:${authenticatedSocket.userId}`);
+      socket.join(`user:${socket.userId}`);
 
       // Clear any pending deletion for this guest user
-      guestDisconnectionTimes.delete(authenticatedSocket.userId);
+      guestDisconnectionTimes.delete(socket.userId);
 
       // Broadcast updated online users list (debounced)
       await broadcastOnlineUsers();
@@ -293,10 +334,15 @@ export function registerRoutes(app: Express): Server {
     // Handle private messages
     socket.on('private_message', async (data) => {
       try {
-        if (authenticatedSocket.userId && data.receiverId && (data.message || data.attachment)) {
+        if (socket.userId && data.receiverId && (data.message || data.attachment)) {
+          const minId = Math.min(socket.userId, data.receiverId);
+          const maxId = Math.max(socket.userId, data.receiverId);
+          const conversationId = `${minId}:${maxId}`;
+
           const validatedMessage = insertMessageSchema.parse({
-            senderId: authenticatedSocket.userId,
+            senderId: socket.userId,
             receiverId: data.receiverId,
+            conversationId,
             message: data.message || "Sent an attachment"
           });
 
@@ -332,14 +378,14 @@ export function registerRoutes(app: Express): Server {
     // Handle global messages
     socket.on('global_message', async (data) => {
       try {
-        if (authenticatedSocket.userId && data.message) {
+        if (socket.userId && data.message) {
           const validatedMessage = insertGlobalMessageSchema.parse({
-            senderId: authenticatedSocket.userId,
+            senderId: socket.userId,
             message: data.message
           });
 
           const savedMessage = await storage.createGlobalMessage(validatedMessage);
-          console.log(`[Socket] Created global message: ${savedMessage.id} from user ${authenticatedSocket.userId}`);
+          console.log(`[Socket] Created global message: ${savedMessage.id} from user ${socket.userId}`);
 
           // Broadcast to all connected clients
           io.emit('global_message', { message: savedMessage });
@@ -352,9 +398,9 @@ export function registerRoutes(app: Express): Server {
     // Handle typing indicators
     socket.on('typing_start', async (data) => {
       try {
-        if (authenticatedSocket.userId && data.receiverId) {
+        if (socket.userId && data.receiverId) {
           io.to(`user:${data.receiverId}`).emit('user_typing', {
-            userId: authenticatedSocket.userId,
+            userId: socket.userId,
             isTyping: true
           });
         }
@@ -365,9 +411,9 @@ export function registerRoutes(app: Express): Server {
 
     socket.on('typing_stop', async (data) => {
       try {
-        if (authenticatedSocket.userId && data.receiverId) {
+        if (socket.userId && data.receiverId) {
           io.to(`user:${data.receiverId}`).emit('user_typing', {
-            userId: authenticatedSocket.userId,
+            userId: socket.userId,
             isTyping: false
           });
         }
@@ -379,21 +425,21 @@ export function registerRoutes(app: Express): Server {
     // Handle disconnection
     socket.on('disconnect', async () => {
       console.log('Socket.IO client disconnected');
-      if (authenticatedSocket.userId) {
+      if (socket.userId) {
         // Get user info to check if they are a guest
-        const user = await storage.getUser(authenticatedSocket.userId);
+        const user = await storage.getUser(socket.userId);
 
         // Only update online status if user still exists
         if (user) {
-          await storage.updateUserOnlineStatus(authenticatedSocket.userId, false);
+          await storage.updateUserOnlineStatus(socket.userId, false);
 
           // For guest users, track disconnection time for grace period
           if (user.isGuest) {
-            guestDisconnectionTimes.set(authenticatedSocket.userId, Date.now());
-            console.log(`Guest user ${user.username} (ID: ${authenticatedSocket.userId}) disconnected, starting grace period`);
+            guestDisconnectionTimes.set(socket.userId, Date.now());
+            console.log(`Guest user ${user.username} (ID: ${socket.userId}) disconnected, starting grace period`);
           }
         } else {
-          console.log(`User ${authenticatedSocket.userId} no longer exists in database`);
+          console.log(`User ${socket.userId} no longer exists in database`);
         }
 
         // Broadcast updated online users list (debounced)
@@ -431,7 +477,7 @@ export function registerRoutes(app: Express): Server {
 
       // Get all currently connected socket user IDs
       const connectedUserIds = new Set<number>();
-      io.sockets.sockets.forEach((socket: any) => {
+      io.sockets.sockets.forEach((socket) => {
         if (socket.userId) {
           connectedUserIds.add(socket.userId);
         }

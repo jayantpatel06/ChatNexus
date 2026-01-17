@@ -10,20 +10,16 @@ interface SocketContextType {
   sendMessage: (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => void;
   startTyping: (receiverId: number) => void;
   stopTyping: (receiverId: number) => void;
-  messages: Message[];
-  addMessage: (message: Message) => void;
-  clearMessages: () => void;
   typingUsers: Set<number>;
 }
 
 const SocketContext = createContext<SocketContextType | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set());
 
   // Track last typing state per receiver to avoid redundant events
@@ -37,7 +33,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       }
       setIsConnected(false);
       setOnlineUsers([]);
-      setMessages([]);
       setTypingUsers(new Set());
       lastTypingStateRef.current = {};
       return;
@@ -48,25 +43,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       autoConnect: true,
       // Prefer WebSocket transport to avoid long polling where possible
       transports: ["websocket"],
+      auth: {
+        token
+      }
     });
-
-    // Micro-batching buffer for incoming messages
-    let incomingBuffer: Message[] = [];
-    let flushTimeout: any = null;
-
-    const flushIncoming = () => {
-      if (!incomingBuffer.length) return;
-      const batch = incomingBuffer;
-      incomingBuffer = [];
-      flushTimeout = null;
-
-      setMessages(prev => {
-        if (!batch.length) return prev;
-        const existingIds = new Set(prev.map(m => m.msgId));
-        const deduped = batch.filter(m => !existingIds.has(m.msgId));
-        return deduped.length ? [...prev, ...deduped] : prev;
-      });
-    };
 
     socketIO.on('connect', () => {
       setIsConnected(true);
@@ -75,50 +55,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     socketIO.on('online_users_updated', (data) => {
       setOnlineUsers(data.users);
-    });
-
-    socketIO.on('new_message', (data) => {
-      incomingBuffer.push(data.message);
-      if (!flushTimeout) {
-        flushTimeout = setTimeout(flushIncoming, 5);
-      }
-    });
-
-    socketIO.on('message_sent', (data) => {
-      const { message, clientMessageId } = data as any;
-
-      // First reconcile optimistic message, then batch final message if needed
-      setMessages(prev => {
-        // If we have an optimistic message with the same clientMessageId, replace it
-        if (clientMessageId) {
-          let replaced = false;
-          const next = prev.map(m => {
-            const mAny = m as any;
-            if (mAny.clientMessageId && mAny.clientMessageId === clientMessageId) {
-              replaced = true;
-              return { ...message } as Message;
-            }
-            return m;
-          });
-
-          if (replaced) {
-            return next;
-          }
-        }
-
-        // Fallback: Check if message already exists to prevent duplicates
-        const exists = prev.some(msg => msg.msgId === message.msgId);
-        if (exists) {
-          return prev;
-        }
-        return [...prev, message];
-      });
-
-      // Also push to buffer so any listeners relying purely on message list get consistent view
-      incomingBuffer.push(message);
-      if (!flushTimeout) {
-        flushTimeout = setTimeout(flushIncoming, 5);
-      }
     });
 
     socketIO.on('user_typing', (data) => {
@@ -146,7 +82,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(socketIO);
 
     return () => {
-      if (flushTimeout) clearTimeout(flushTimeout);
       socketIO.disconnect();
     };
   }, [user?.userId]);
@@ -157,19 +92,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const clientMessageId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
       ? globalThis.crypto.randomUUID()
       : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-    // Optimistic local message so the UI updates instantly
-    const optimistic = {
-      msgId: -Date.now(),
-      senderId: user.userId,
-      receiverId,
-      message: message || "Sent an attachment",
-      timestamp: new Date(),
-      clientMessageId,
-      status: "pending",
-    } as any as Message;
-
-    setMessages(prev => [...prev, optimistic]);
 
     socket.emit('private_message', {
       receiverId,
@@ -199,14 +121,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addMessage = (message: Message) => {
-    setMessages(prev => [...prev, message]);
-  };
-
-  const clearMessages = () => {
-    setMessages([]);
-  };
-
   return (
     <SocketContext.Provider value={{
       socket,
@@ -215,9 +129,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       sendMessage,
       startTyping,
       stopTyping,
-      messages,
-      addMessage,
-      clearMessages,
       typingUsers
     }}>
       {children}

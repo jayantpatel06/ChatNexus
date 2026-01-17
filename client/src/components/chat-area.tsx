@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
+import { useActiveChat } from "@/hooks/use-active-chat";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { User, Message } from "@shared/schema";
 import { Phone, Video, MoreVertical, Paperclip, Smile, Send, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
+import { MessageBubble } from "./message-bubble";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useChatTheme, ChatTheme } from "@/hooks/use-chat-theme";
@@ -22,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
-// Helper functions moved outside component to prevent recreation on render
+// Helper functions moved to message-bubble component
 const getUserInitials = (username: string) => {
   return username.slice(0, 2).toUpperCase();
 };
@@ -40,66 +42,6 @@ const getAvatarColor = (username: string) => {
   return colors[index];
 };
 
-// Helper component to render message content with media previews
-const MessageContent = ({ content }: { content: string }) => {
-  // Regex to detect URLs
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  
-  // Split content by URLs
-  const parts = content.split(urlRegex);
-  
-  return (
-    <div className="whitespace-pre-wrap break-words">
-      {parts.map((part, i) => {
-        if (part.match(urlRegex)) {
-          const isImage = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(part);
-          const isVideo = /\.(mp4|webm)(\?.*)?$/i.test(part);
-          
-          if (isImage) {
-            return (
-              <div key={i} className="my-2 max-w-sm rounded-lg overflow-hidden border border-border">
-                <img 
-                  src={part} 
-                  alt="Preview" 
-                  className="w-full h-auto max-h-60 object-contain bg-black/5 cursor-pointer"
-                  onClick={() => window.open(part, '_blank')}
-                  loading="lazy"
-                />
-              </div>
-            );
-          }
-          
-          if (isVideo) {
-            return (
-              <div key={i} className="my-2 max-w-sm rounded-lg overflow-hidden border border-border">
-                <video 
-                  src={part} 
-                  controls 
-                  className="w-full h-auto max-h-60 bg-black"
-                />
-              </div>
-            );
-          }
-
-          return (
-            <a 
-              key={i} 
-              href={part} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-blue-500 hover:underline break-all"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {part}
-            </a>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </div>
-  );
-};
-
 interface ChatAreaProps {
   selectedUser: User | null;
   onBack?: () => void;
@@ -108,7 +50,8 @@ interface ChatAreaProps {
 
 export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatAreaProps) {
   const { user } = useAuth();
-  const { sendMessage, startTyping, stopTyping, messages, isConnected, typingUsers } = useSocket();
+  const { sendMessage, startTyping, stopTyping, isConnected, typingUsers } = useSocket();
+  const { liveMessages } = useActiveChat();
   const isMobile = useIsMobile();
   const { keyboardHeight, isKeyboardVisible } = useKeyboardHeight();
   const [messageText, setMessageText] = useState("");
@@ -133,6 +76,7 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
       queryKey: ["/api/messages/history", selectedUser?.userId],
       enabled: !!selectedUser?.userId,
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      initialPageParam: null as string | null,
       queryFn: async ({ pageParam }) => {
         if (!selectedUser?.userId) {
           return { messages: [], nextCursor: null };
@@ -158,15 +102,8 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
     );
   }, [pagedMessages]);
 
-  // Live messages for this conversation only (keep arrival order)
-  const liveMessagesForConv: Message[] = useMemo(
-    () =>
-      messages.filter((m) =>
-        (m.senderId === user?.userId && m.receiverId === selectedUser?.userId) ||
-        (m.senderId === selectedUser?.userId && m.receiverId === user?.userId)
-      ),
-    [messages, user?.userId, selectedUser?.userId]
-  );
+  // Live messages from ActiveChatContext (already filtered for this conversation)
+  const liveMessagesForConv: Message[] = liveMessages;
 
   // Combine history and live into a single ordered list
   const combinedMessages: Message[] = useMemo(
@@ -436,105 +373,12 @@ export function ChatArea({ selectedUser, onBack, showBackButton = false }: ChatA
           const attachments = (message as any).attachments || [];
 
           return (
-            <div
+            <MessageBubble 
               key={message.msgId}
-              className={`flex items-start gap-3 ${isOwnMessage ? 'justify-end' : ''} message-bubble`}
-              data-testid={`message-${message.msgId}`}
-            >
-              {!isOwnMessage && (
-                <div className={`w-8 h-8 ${sender?.isGuest ? 'bg-gray-500' : `bg-gradient-to-br ${getAvatarColor(sender?.username || '')}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}>
-                  {sender?.isGuest ? 'G' : getUserInitials(sender?.username || '')}
-                </div>
-              )}
-              
-              <div className={`flex flex-col gap-1 max-w-xs lg:max-w-md ${isOwnMessage ? 'items-end' : ''}`}>
-                <div className={`${isOwnMessage ? 'bg-primary text-primary-foreground rounded-lg rounded-tr-none' : 'bg-card border border-border rounded-lg rounded-tl-none shadow-sm'} p-3`}>
-                  {attachments.length > 0 ? (
-                    <div className="space-y-2">
-                      {attachments.map((att: any) => (
-                        <div key={att.id} className="relative group">
-                          {att.fileType.startsWith('image/') ? (
-                            <div className="relative">
-                              <img 
-                                src={att.url} 
-                                alt={att.filename} 
-                                className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-95 transition-opacity"
-                                onClick={() => window.open(att.url, '_blank')}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                  (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-xs italic opacity-70">Image expired or deleted</span>';
-                                }}
-                              />
-                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                <Button
-                                  variant="secondary"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(att.url, '_blank');
-                                  }}
-                                  title="Open in new tab"
-                                >
-                                  <MoreVertical className="w-4 h-4 rotate-90" />
-                                </Button>
-                                <a 
-                                  href={att.url} 
-                                  download={att.filename}
-                                  className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm"
-                                  onClick={(e) => e.stopPropagation()}
-                                  title="Download"
-                                >
-                                  <ArrowLeft className="w-4 h-4 rotate-[-90deg]" />
-                                </a>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 p-2 bg-background/20 rounded border border-border/50">
-                              <Paperclip className="w-4 h-4" />
-                              <span className="text-sm truncate flex-1">{att.filename}</span>
-                              <a 
-                                href={att.url} 
-                                download={att.filename}
-                                className="p-1 hover:bg-black/10 rounded"
-                                title="Download"
-                              >
-                                <ArrowLeft className="w-4 h-4 rotate-[-90deg]" />
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {message.message && message.message !== "Sent an attachment" && (
-                        <div className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
-                          <MessageContent content={message.message} />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className={`text-sm ${isOwnMessage ? 'text-primary-foreground' : 'text-foreground'}`}>
-                      <MessageContent content={message.message} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>
-                    {formatMessageTime(message.timestamp)}
-                  </span>
-                  {isOwnMessage && (
-                    <span className="flex items-center text-muted-foreground">
-                        ✓
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {isOwnMessage && (
-                <div className={`w-8 h-8 ${user?.isGuest ? 'bg-gray-500' : 'bg-primary'} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}>
-                  {user?.isGuest ? 'G' : getUserInitials(user?.username || '')}
-                </div>
-              )}
-            </div>
+              message={message}
+              isOwnMessage={isOwnMessage}
+              sender={sender}
+            />
           );
         })}
 

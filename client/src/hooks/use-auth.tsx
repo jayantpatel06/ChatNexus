@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import {
   useQuery,
   useMutation,
@@ -14,6 +14,7 @@ type AuthContextType = {
   error: Error | null;
   loginMutation: UseMutationResult<SelectUser, Error, LoginUser>;
   logoutMutation: UseMutationResult<void, Error, void>;
+  token: string | null;
   registerMutation: UseMutationResult<SelectUser, Error, RegisterUser>;
   guestLoginMutation: UseMutationResult<SelectUser, Error, string>;
 };
@@ -22,13 +23,34 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [token, setToken] = useState<string | null>(null);
+
   const {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | undefined, Error>({
+  } = useQuery<SelectUser | null, Error>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async () => {
+       const res = await fetch("/api/user");
+       if (res.status === 401 || res.status === 403) return null;
+       if (!res.ok) throw new Error("Failed to fetch user");
+       const userData = await res.json();
+       
+       // If we have a user, also fetch the token
+       if (userData) {
+         try {
+           const tokenRes = await fetch("/api/auth/token");
+           if (tokenRes.ok) {
+             const tokenData = await tokenRes.json();
+             setToken(tokenData.token);
+           }
+         } catch (e) {
+           console.error("Failed to fetch auth token", e);
+         }
+       }
+       return userData;
+    },
   });
 
   const loginMutation = useMutation({
@@ -123,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        token,
         guestLoginMutation,
       }}
     >

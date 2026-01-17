@@ -28,6 +28,7 @@ export const registerUserSchema = z.object({
 export const insertMessageSchema = z.object({
   senderId: z.number(),
   receiverId: z.number(),
+  conversationId: z.string().optional(),
   message: z.string().min(1),
 });
 
