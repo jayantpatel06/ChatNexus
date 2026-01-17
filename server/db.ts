@@ -14,10 +14,10 @@ const createPrismaClient = () => {
       );
       return null;
     }
-    
+
     console.log('Initializing Prisma client...');
     console.log('Database URL host:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown');
-    
+
     return new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
       datasources: {
@@ -43,16 +43,26 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// Test database connection on startup
+// Test database connection on startup with retry logic
 if (prisma) {
-  prisma.$connect()
-    .then(() => {
+  const connectWithRetry = async (retries = 5, delay = 2000) => {
+    try {
+      if (!prisma) return;
+      await prisma.$connect();
       console.log('✅ Database connected successfully');
-    })
-    .catch((error) => {
-      console.error('❌ Database connection failed on startup:', error.message);
-      console.error('Database URL (masked):', process.env.DATABASE_URL?.replace(/:[^:]*@/, ':***@') || 'not set');
-    });
+    } catch (error: any) {
+      if (retries === 0) {
+        console.error('❌ Database connection failed on startup after multiple attempts:', error.message);
+        console.error('Database URL (masked):', process.env.DATABASE_URL?.replace(/:[^:]*@/, ':***@') || 'not set');
+        // Don't exit process, allow partial functionality if possible, or let top-level handlers deal with it
+      } else {
+        console.warn(`⚠️ Database connection failed. Retrying in ${delay / 1000}s... (${retries} retries left)`);
+        setTimeout(() => connectWithRetry(retries - 1, delay * 1.5), delay);
+      }
+    }
+  };
+
+  connectWithRetry();
 }
 
 // Initialize Supabase client
@@ -64,7 +74,7 @@ const createSupabaseClient = () => {
       );
       return null;
     }
-    
+
     return createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
