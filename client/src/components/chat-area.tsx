@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
 import { useActiveChat } from "@/hooks/use-active-chat";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { getStoredToken } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { User, Message } from "@shared/schema";
@@ -131,10 +132,13 @@ export function ChatArea({
       if (!selectedUser?.userId) {
         return { messages: [], nextCursor: null };
       }
+      const token = getStoredToken();
       const cursorParam = pageParam ? `&cursor=${pageParam}` : "";
       const res = await fetch(
         `/api/messages/${selectedUser.userId}/history?limit=40${cursorParam}`,
-        { credentials: "include" },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
       );
       if (!res.ok) {
         throw new Error("Failed to fetch messages");
@@ -451,10 +455,11 @@ export function ChatArea({
         prev.map((p) => (p.id === attachmentId ? { ...p, progress: 50 } : p)),
       );
 
+      const token = getStoredToken();
       const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
-        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!res.ok) {
@@ -649,7 +654,7 @@ export function ChatArea({
                   Loading older messages...
                 </>
               ) : (
-                "Load older messages"
+                "Load More..."
               )}
             </Button>
           </div>

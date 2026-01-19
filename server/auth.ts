@@ -1,17 +1,10 @@
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
-import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, registerUserSchema, loginUserSchema } from "@shared/schema";
-
-declare global {
-  namespace Express {
-    interface User extends SelectUser { }
-  }
-}
+import { registerUserSchema, loginUserSchema } from "@shared/schema";
+import { signToken } from "./lib/jwt";
+import { jwtAuth } from "./middleware/jwt-auth";
 
 const scryptAsync = promisify(scrypt);
 
@@ -28,71 +21,11 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-function generateGuestUsername(): string {
-  const randomNum = Math.floor(Math.random() * 999) + 1;
-  return `Guest${randomNum}`;
-}
-
 export function setupAuth(app: Express) {
-  let sessionSecret = process.env.SESSION_SECRET;
-  if (!sessionSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error("SESSION_SECRET environment variable is required for security");
-    }
-    // In development, generate a short-lived secret to avoid crashing the server.
-    // This is insecure and only intended for local development.
-    console.warn('SESSION_SECRET not set. Using a generated development secret. Do NOT use in production.');
-    sessionSecret = `dev-${Math.random().toString(36).slice(2)}`;
-  }
-
-  const sessionSettings: session.SessionOptions = {
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    store: storage.sessionStore,
-    cookie: {
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    },
-  };
-
+  // Trust proxy for production environments behind reverse proxies
   app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
 
-  passport.use(
-    new LocalStrategy(
-      { usernameField: "gmail" },
-      async (gmail, password, done) => {
-        try {
-          const user = await storage.getUserByGmail(gmail);
-          if (!user || !user.passwordHash || !(await comparePasswords(password, user.passwordHash))) {
-            return done(null, false);
-          } else {
-            return done(null, user);
-          }
-        } catch (error) {
-          return done(error);
-        }
-      }
-    )
-  );
-
-  passport.serializeUser((user, done) => done(null, user.userId));
-  passport.deserializeUser(async (id: number, done) => {
-    try {
-      const user = await storage.getUser(id);
-      done(null, user || null);
-    } catch (error) {
-      done(error);
-    }
-  });
-
-  // Guest login
-  // Guest login
+  // Guest login - returns JWT token directly
   app.post("/api/guest-login", async (req, res, next) => {
     try {
       const { username } = req.body;
@@ -127,16 +60,16 @@ export function setupAuth(app: Express) {
         gender: null,
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(user);
-      });
+      // Generate JWT token
+      const token = signToken(user);
+
+      res.status(201).json({ user, token });
     } catch (error) {
       next(error);
     }
   });
 
-  // Member registration
+  // Member registration - returns JWT token directly
   app.post("/api/register", async (req, res, next) => {
     try {
       const validatedData = registerUserSchema.parse(req.body);
@@ -161,10 +94,10 @@ export function setupAuth(app: Express) {
         isOnline: true,
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(user);
-      });
+      // Generate JWT token
+      const token = signToken(user);
+
+      res.status(201).json({ user, token });
     } catch (error: any) {
       if (error.name === "ZodError") {
         return res.status(400).json({ message: "Invalid input data" });
@@ -173,25 +106,23 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Member login
+  // Member login - returns JWT token directly
   app.post("/api/login", async (req, res, next) => {
     try {
       const validatedData = loginUserSchema.parse(req.body);
 
-      passport.authenticate("local", async (err: any, user: SelectUser | false) => {
-        if (err) return next(err);
-        if (!user) {
-          return res.status(401).json({ message: "Invalid email or password" });
-        }
+      const user = await storage.getUserByGmail(validatedData.gmail);
+      if (!user || !user.passwordHash || !(await comparePasswords(validatedData.password, user.passwordHash))) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
 
-        // Update online status
-        await storage.updateUserOnlineStatus(user.userId, true);
+      // Update online status
+      await storage.updateUserOnlineStatus(user.userId, true);
 
-        req.login(user, (loginErr) => {
-          if (loginErr) return next(loginErr);
-          res.status(200).json(user);
-        });
-      })(req, res, next);
+      // Generate JWT token
+      const token = signToken(user);
+
+      res.status(200).json({ user, token });
     } catch (error: any) {
       if (error.name === "ZodError") {
         return res.status(400).json({ message: "Invalid input data" });
@@ -200,35 +131,49 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/logout", async (req, res, next) => {
+  // Logout - requires JWT auth
+  app.post("/api/logout", jwtAuth, async (req, res, next) => {
     try {
-      if (req.user) {
-        if (req.user.isGuest) {
-          // If it's a guest user, delete them from the database
-          await storage.deleteUser(req.user.userId);
-        } else {
-          // For regular users, just update online status
-          await storage.updateUserOnlineStatus(req.user.userId, false);
-        }
+      const user = req.jwtUser!;
+
+      if (user.isGuest) {
+        // If it's a guest user, delete them from the database
+        await storage.deleteUser(user.userId);
+      } else {
+        // For regular users, just update online status
+        await storage.updateUserOnlineStatus(user.userId, false);
       }
 
-      req.logout((err) => {
-        if (err) return next(err);
-        res.sendStatus(200);
-      });
+      // JWT tokens are stateless - client should delete the token from localStorage
+      res.sendStatus(200);
     } catch (error) {
       next(error);
     }
   });
 
-  app.get("/api/user", async (req, res, next) => {
+  // Get current user - requires JWT auth
+  app.get("/api/user", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) return res.sendStatus(401);
+      const user = req.jwtUser!;
 
-      // Automatically mark user as online when they have a valid session
-      await storage.updateUserOnlineStatus(req.user.userId, true);
+      // Automatically mark user as online when they have a valid token
+      await storage.updateUserOnlineStatus(user.userId, true);
 
-      res.json(req.user);
+      res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Refresh token endpoint - get a new token before the old one expires
+  app.post("/api/auth/refresh", jwtAuth, async (req, res, next) => {
+    try {
+      const user = req.jwtUser!;
+      
+      // Generate a fresh token
+      const token = signToken(user);
+      
+      res.json({ token, user });
     } catch (error) {
       next(error);
     }

@@ -4,14 +4,12 @@ import { Server as SocketIOServer } from "socket.io";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertMessageSchema, insertGlobalMessageSchema, insertAttachmentSchema } from "@shared/schema";
-import { parse as parseCookie } from "cookie";
-import session from "express-session";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
 import { signToken, verifyToken } from "./lib/jwt";
-import passport from "passport"; // Added for new Socket.IO middleware
+import { jwtAuth } from "./middleware/jwt-auth";
 
 declare module 'socket.io' {
   interface Socket {
@@ -34,12 +32,8 @@ export function registerRoutes(app: Express): Server {
   // Serve uploaded files
   app.use("/uploads", express.static("uploads"));
 
-  // File upload endpoint
-  app.post("/api/upload", upload.single("file"), (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-
+  // File upload endpoint - requires JWT auth
+  app.post("/api/upload", jwtAuth, upload.single("file"), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
@@ -52,13 +46,9 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get online users
-  app.get("/api/users/online", async (req, res, next) => {
+  // Get online users - requires JWT auth
+  app.get("/api/users/online", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
       const onlineUsers = await storage.getOnlineUsers();
       res.json(onlineUsers);
     } catch (error) {
@@ -66,14 +56,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get all recent messages for current user
-  app.get("/api/messages", async (req, res, next) => {
+  // Get all recent messages for current user - requires JWT auth
+  app.get("/api/messages", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const messages = await storage.getRecentMessagesForUser(req.user!.userId);
+      const messages = await storage.getRecentMessagesForUser(req.jwtUser!.userId);
       res.json(messages);
     } catch (error) {
       console.error('Error fetching recent messages:', error);
@@ -81,37 +67,9 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get JWT token for authenticated user
-  app.get("/api/auth/token", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    const token = signToken(req.user!);
-    res.json({ token });
-  });
-
-  // Register new user (if allowed by auth strategy)
-  app.post("/api/register", async (req, res, next) => {
+  // Get messages between users (full history - legacy endpoint) - requires JWT auth
+  app.get("/api/messages/:userId", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-      // This endpoint would typically handle new user registration,
-      // but the provided snippet only includes the authentication check.
-      // Assuming further logic would be here to create a new user.
-      res.status(501).json({ message: "Registration not fully implemented" });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get messages between users (full history - legacy endpoint)
-  app.get("/api/messages/:userId", async (req, res, next) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
       const { userId } = req.params;
       const otherUserId = parseInt(userId, 10);
 
@@ -119,7 +77,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "Invalid user ID" });
       }
 
-      const messages = await storage.getMessagesBetweenUsers(req.user!.userId, otherUserId);
+      const messages = await storage.getMessagesBetweenUsers(req.jwtUser!.userId, otherUserId);
       res.json(messages);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -127,13 +85,9 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get messages between users with cursor-based pagination (optimized for recent messages)
-  app.get("/api/messages/:userId/history", async (req, res, next) => {
+  // Get messages between users with cursor-based pagination - requires JWT auth
+  app.get("/api/messages/:userId/history", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
       const otherUserId = parseInt(req.params.userId, 10);
       if (isNaN(otherUserId)) {
         return res.status(400).json({ message: "Invalid user ID" });
@@ -152,7 +106,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       const { messages, nextCursor } = await storage.getMessagesBetweenUsersCursor(
-        req.user!.userId,
+        req.jwtUser!.userId,
         otherUserId,
         { limit, cursor }
       );
@@ -168,13 +122,9 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get global messages
-  app.get("/api/global-messages", async (req, res, next) => {
+  // Get global messages - requires JWT auth
+  app.get("/api/global-messages", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
       const messages = await storage.getGlobalMessages();
       console.log(`[API] Fetched ${messages.length} global messages`);
       res.json(messages);
@@ -201,13 +151,10 @@ export function registerRoutes(app: Express): Server {
     maxHttpBufferSize: 1e7 // 10MB limit for Base64 images
   });
 
-  // Update username
-  app.put("/api/user/username", async (req, res, next) => {
+  // Update username - requires JWT auth
+  app.put("/api/user/username", jwtAuth, async (req, res, next) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
+      const user = req.jwtUser!;
       const { username } = req.body;
 
       if (!username || typeof username !== "string" || username.trim().length === 0) {
@@ -224,7 +171,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "Username must be less than 20 characters" });
       }
 
-      if (trimmedUsername === req.user!.username) {
+      if (trimmedUsername === user.username) {
         return res.status(400).json({ message: "Please choose a different username" });
       }
 
@@ -235,72 +182,44 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Update the username
-      const updatedUser = await storage.updateUserUsername(req.user!.userId, trimmedUsername);
+      const updatedUser = await storage.updateUserUsername(user.userId, trimmedUsername);
       if (!updatedUser) {
         return res.status(500).json({ message: "Failed to update username" });
       }
 
-      console.log(`[API] Updated username for user ${req.user!.userId} to ${trimmedUsername}`);
+      console.log(`[API] Updated username for user ${user.userId} to ${trimmedUsername}`);
 
       // Broadcast updated online users list
       const onlineUsers = await storage.getOnlineUsers();
-      const updatedUserInList = onlineUsers.find(u => u.userId === req.user!.userId);
+      const updatedUserInList = onlineUsers.find(u => u.userId === user.userId);
       console.log(`[API] Broadcasting online users. Updated user in list: ${updatedUserInList?.username}`);
 
       io.emit('online_users_updated', { users: onlineUsers });
 
-      res.json(updatedUser);
+      // Return updated user along with a new token (since username changed)
+      const newToken = signToken(updatedUser);
+      res.json({ user: updatedUser, token: newToken });
     } catch (error) {
       console.error('Error updating username:', error);
       next(error);
     }
   });
 
-  // Create a session middleware instance for Socket.IO
-  const sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET || "supersecret",
-    resave: false,
-    saveUninitialized: false,
-    store: storage.sessionStore,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      sameSite: 'lax',
-    },
-  });
-
-  // Middleware to authenticate socket connections
+  // JWT-only Socket.IO authentication middleware
   io.use((socket, next) => {
-    // 1. Try JWT from handshake auth
     const token = socket.handshake.auth.token;
-    if (token) {
-      const decoded = verifyToken(token);
-      if (decoded) {
-        socket.userId = decoded.userId;
-        return next();
-      }
-      // If token is invalid, we could reject, but for now we fall back to session
-      // to support clients during transition or dual-mode.
-      // console.log("Invalid token, falling back to session");
+    
+    if (!token) {
+      return next(new Error("Authentication required: No token provided"));
     }
 
-    // 2. Fallback to Session Cookie
-    const req = socket.request as any;
-    const res = {} as any;
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return next(new Error("Authentication required: Invalid or expired token"));
+    }
 
-    sessionMiddleware(req, res, () => {
-      passport.initialize()(req, res, () => {
-        passport.session()(req, res, () => {
-          if (req.isAuthenticated()) {
-            socket.userId = req.user.userId;
-            next();
-          } else {
-            next(new Error("Authentication required"));
-          }
-        });
-      });
-    });
+    socket.userId = decoded.userId;
+    next();
   });
 
   let presenceBroadcastScheduled = false;

@@ -115,7 +115,6 @@ export function UserSettingsModal({ open, onOpenChange }: UserSettingsModalProps
           </DialogTitle>
           <DialogDescription>
             Update your profile settings and preferences.
-            <p>Note: Refresh the page after changing your username to see the update.</p>
           </DialogDescription>
         </DialogHeader>
 

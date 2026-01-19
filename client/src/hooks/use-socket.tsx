@@ -49,13 +49,22 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Don't connect if we don't have a token (JWT required)
+    if (!token) {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      setIsConnected(false);
+      return;
+    }
+
     const socketIO = io(window.location.origin, {
-      withCredentials: true,
       autoConnect: true,
       // Prefer WebSocket transport to avoid long polling where possible
       transports: ["websocket"],
       auth: {
-        token,
+        token, // JWT token for authentication
       },
       // Reconnection optimizations
       reconnection: true,
@@ -75,13 +84,37 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setOnlineUsers(data.users);
     });
 
+    // Track typing timeouts to auto-clear stale indicators
+    const typingTimeouts = new Map<number, NodeJS.Timeout>();
+
     socketIO.on("user_typing", (data) => {
       setTypingUsers((prev) => {
         const newSet = new Set(prev);
         if (data.isTyping) {
           newSet.add(data.userId);
+
+          // Clear any existing timeout for this user
+          const existingTimeout = typingTimeouts.get(data.userId);
+          if (existingTimeout) clearTimeout(existingTimeout);
+
+          // Auto-clear typing indicator after 3 seconds (safety net)
+          const timeout = setTimeout(() => {
+            setTypingUsers((current) => {
+              const updated = new Set(current);
+              updated.delete(data.userId);
+              return updated;
+            });
+            typingTimeouts.delete(data.userId);
+          }, 3000);
+          typingTimeouts.set(data.userId, timeout);
         } else {
           newSet.delete(data.userId);
+          // Clear timeout when we receive explicit stop
+          const existingTimeout = typingTimeouts.get(data.userId);
+          if (existingTimeout) {
+            clearTimeout(existingTimeout);
+            typingTimeouts.delete(data.userId);
+          }
         }
         return newSet;
       });
@@ -89,6 +122,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     socketIO.on("disconnect", () => {
       setIsConnected(false);
+      // Clear all typing timeouts on disconnect
+      typingTimeouts.forEach((timeout) => clearTimeout(timeout));
+      typingTimeouts.clear();
       console.log("Socket.IO disconnected");
     });
 
@@ -102,7 +138,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       socketIO.disconnect();
     };
-  }, [user?.userId]);
+  }, [user?.userId, token]); // Reconnect when token changes to use JWT auth
 
   const sendMessage = (
     receiverId: number,
@@ -128,7 +164,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (socket && socket.connected) {
       if (lastTypingStateRef.current[receiverId] === true) return;
       lastTypingStateRef.current[receiverId] = true;
-      // Use volatile for typing - OK to drop if network busy
+      // Use volatile for typing_start - OK to drop if network busy
       socket.volatile.emit("typing_start", {
         receiverId,
       });
@@ -139,8 +175,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (socket && socket.connected) {
       if (lastTypingStateRef.current[receiverId] === false) return;
       lastTypingStateRef.current[receiverId] = false;
-      // Use volatile for typing - OK to drop if network busy
-      socket.volatile.emit("typing_stop", {
+      // Use reliable emit for typing_stop - must be delivered
+      socket.emit("typing_stop", {
         receiverId,
       });
     }
