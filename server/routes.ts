@@ -339,35 +339,58 @@ export function registerRoutes(app: Express): Server {
           const maxId = Math.max(socket.userId, data.receiverId);
           const conversationId = `${minId}:${maxId}`;
 
-          const validatedMessage = insertMessageSchema.parse({
+          // Create a temporary message object for immediate delivery
+          const tempMessage = {
+            msgId: Date.now(), // Temporary ID, will be replaced
             senderId: socket.userId,
             receiverId: data.receiverId,
             conversationId,
-            message: data.message || "Sent an attachment"
-          });
-
-          const savedMessage = await storage.createMessage(validatedMessage);
-
-          // Handle attachment if present
-          if (data.attachment) {
-            const attachmentData = insertAttachmentSchema.parse({
-              messageId: savedMessage.msgId,
+            message: data.message || "Sent an attachment",
+            timestamp: new Date(),
+            attachments: data.attachment ? [{
+              id: Date.now(),
               url: data.attachment.url,
               filename: data.attachment.filename,
-              fileType: data.attachment.fileType
-            });
-            await storage.createAttachment(attachmentData);
-            // Attach to message object for client
-            (savedMessage as any).attachments = [attachmentData];
-          }
+              fileType: data.attachment.fileType,
+            }] : [],
+          };
 
-          // Send to receiver using rooms - O(1) lookup
-          io.to(`user:${data.receiverId}`).emit('new_message', { message: savedMessage });
+          // 🚀 IMMEDIATELY send to receiver (before DB save)
+          io.to(`user:${data.receiverId}`).emit('new_message', { message: tempMessage });
 
-          // Send back to sender for confirmation, including optional clientMessageId
+          // 🚀 IMMEDIATELY confirm to sender
           socket.emit('message_sent', {
-            message: savedMessage,
+            message: tempMessage,
             clientMessageId: data.clientMessageId,
+          });
+
+          // Now save to database asynchronously (non-blocking)
+          setImmediate(async () => {
+            try {
+              const validatedMessage = insertMessageSchema.parse({
+                senderId: socket.userId,
+                receiverId: data.receiverId,
+                conversationId,
+                message: data.message || "Sent an attachment"
+              });
+
+              const savedMessage = await storage.createMessage(validatedMessage);
+
+              // Handle attachment if present
+              if (data.attachment) {
+                const attachmentData = insertAttachmentSchema.parse({
+                  messageId: savedMessage.msgId,
+                  url: data.attachment.url,
+                  filename: data.attachment.filename,
+                  fileType: data.attachment.fileType
+                });
+                await storage.createAttachment(attachmentData);
+              }
+            } catch (dbError) {
+              console.error('Error saving message to database:', dbError);
+              // Optionally notify sender of save failure
+              socket.emit('message_save_error', { clientMessageId: data.clientMessageId });
+            }
           });
         }
       } catch (error) {

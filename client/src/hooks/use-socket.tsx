@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  ReactNode,
+} from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./use-auth";
 import { User, Message } from "@shared/schema";
@@ -7,7 +14,11 @@ interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
   onlineUsers: User[];
-  sendMessage: (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => void;
+  sendMessage: (
+    receiverId: number,
+    message: string,
+    attachment?: { url: string; filename: string; fileType: string },
+  ) => void;
   startTyping: (receiverId: number) => void;
   stopTyping: (receiverId: number) => void;
   typingUsers: Set<number>;
@@ -44,21 +55,28 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       // Prefer WebSocket transport to avoid long polling where possible
       transports: ["websocket"],
       auth: {
-        token
-      }
+        token,
+      },
+      // Reconnection optimizations
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      // Reduce ping interval for faster disconnect detection
+      timeout: 10000,
     });
 
-    socketIO.on('connect', () => {
+    socketIO.on("connect", () => {
       setIsConnected(true);
-      console.log('Socket.IO connected');
+      console.log("Socket.IO connected");
     });
 
-    socketIO.on('online_users_updated', (data) => {
+    socketIO.on("online_users_updated", (data) => {
       setOnlineUsers(data.users);
     });
 
-    socketIO.on('user_typing', (data) => {
-      setTypingUsers(prev => {
+    socketIO.on("user_typing", (data) => {
+      setTypingUsers((prev) => {
         const newSet = new Set(prev);
         if (data.isTyping) {
           newSet.add(data.userId);
@@ -69,13 +87,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    socketIO.on('disconnect', () => {
+    socketIO.on("disconnect", () => {
       setIsConnected(false);
-      console.log('Socket.IO disconnected');
+      console.log("Socket.IO disconnected");
     });
 
-    socketIO.on('connect_error', (error) => {
-      console.error('Socket.IO connection error:', error);
+    socketIO.on("connect_error", (error) => {
+      console.error("Socket.IO connection error:", error);
       setIsConnected(false);
     });
 
@@ -86,14 +104,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.userId]);
 
-  const sendMessage = (receiverId: number, message: string, attachment?: { url: string, filename: string, fileType: string }) => {
+  const sendMessage = (
+    receiverId: number,
+    message: string,
+    attachment?: { url: string; filename: string; fileType: string },
+  ) => {
     if (!socket || !socket.connected || !user) return;
 
-    const clientMessageId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
-      ? globalThis.crypto.randomUUID()
-      : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const clientMessageId =
+      globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+        ? globalThis.crypto.randomUUID()
+        : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    socket.emit('private_message', {
+    socket.emit("private_message", {
       receiverId,
       message,
       attachment,
@@ -105,8 +128,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (socket && socket.connected) {
       if (lastTypingStateRef.current[receiverId] === true) return;
       lastTypingStateRef.current[receiverId] = true;
-      socket.emit('typing_start', {
-        receiverId
+      // Use volatile for typing - OK to drop if network busy
+      socket.volatile.emit("typing_start", {
+        receiverId,
       });
     }
   };
@@ -115,22 +139,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (socket && socket.connected) {
       if (lastTypingStateRef.current[receiverId] === false) return;
       lastTypingStateRef.current[receiverId] = false;
-      socket.emit('typing_stop', {
-        receiverId
+      // Use volatile for typing - OK to drop if network busy
+      socket.volatile.emit("typing_stop", {
+        receiverId,
       });
     }
   };
 
   return (
-    <SocketContext.Provider value={{
-      socket,
-      isConnected,
-      onlineUsers,
-      sendMessage,
-      startTyping,
-      stopTyping,
-      typingUsers
-    }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        onlineUsers,
+        sendMessage,
+        startTyping,
+        stopTyping,
+        typingUsers,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

@@ -281,6 +281,14 @@ export class DatabaseStorage implements IStorage {
           } catch (err) {
             console.error('Error incrementing unread count cache:', err);
           }
+
+          // Invalidate the recent messages cache so next fetch gets fresh data
+          const dmCacheKey = getConversationCacheKey(senderId, receiverId);
+          try {
+            await messageCacheClient.del(dmCacheKey);
+          } catch (err) {
+            console.error('Error invalidating DM cache:', err);
+          }
         }
       }
 
@@ -368,7 +376,7 @@ export class DatabaseStorage implements IStorage {
         try {
           const cacheKey = getConversationCacheKey(user1Id, user2Id);
           await messageCacheClient.set(cacheKey, JSON.stringify({ messages, nextCursor }), {
-            EX: 30,
+            EX: 120, // Cache for 2 minutes (increased from 30s)
           });
         } catch (err) {
           console.error('Error writing to Redis message cache:', err);
