@@ -1,12 +1,18 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { createServer as createViteServer, createLogger } from "vite";
+import { createServer as createViteServer, createLogger, type UserConfigExport } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
+
+async function resolveViteConfig(config: UserConfigExport) {
+  return typeof config === 'function'
+    ? await config({ command: 'serve', mode: process.env.NODE_ENV ?? 'development' })
+    : config;
+}
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -26,7 +32,7 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  const resolvedViteConfig = await viteConfig();
+  const resolvedViteConfig = await resolveViteConfig(viteConfig);
 
   const vite = await createViteServer({
     ...resolvedViteConfig,

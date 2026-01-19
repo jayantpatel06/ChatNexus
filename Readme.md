@@ -4,7 +4,7 @@ Website : https://chatnexus-8vh2.onrender.com/
 
 ## Project Overview
 
-ChatNexus is a modern full-stack real-time chat web application built with React, Express, Socket.IO, and Supabase. It features a dual user system supporting both guest users (temporary random usernames) and registered members (with email/password authentication). The application provides instant messaging, user presence tracking, typing indicators, and persistent chat history with a robust PostgreSQL database backend.
+ChatNexus is a modern full-stack real-time chat web application built with React, Express, Socket.IO, and Supabase. It features a dual user system supporting both guest users (temporary random usernames) and registered members (with email/password authentication). The application provides instant messaging, user presence tracking, typing indicators, sending attachments with preview and persistent chat history with a robust PostgreSQL database backend.
 
 ## Development Commands
 
@@ -259,3 +259,48 @@ NODE_ENV=development
 - Environment variable protection for sensitive credentials
 - SQL injection prevention through Prisma's prepared statements
 - XSS protection through proper data sanitization
+
+## Deployment (Render)
+
+### Prerequisites
+
+- Code pushed to GitHub
+- Supabase project created with credentials ready
+- All environment variables from `.env` file
+
+### Render Setup
+
+1. Go to [render.com](https://render.com) and sign up with GitHub
+2. Click **"New +"** → **"Web Service"**
+3. Connect your GitHub repo
+4. Configure:
+   - **Name**: chatnexus
+   - **Environment**: Node
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+
+### Environment Variables (Add in Render Dashboard)
+
+```
+NODE_ENV=production
+SESSION_SECRET=your_session_secret_here
+DATABASE_URL=your_supabase_database_url
+DIRECT_URL=your_supabase_database_url
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+### Post-Deployment Checklist
+
+- [ ] Homepage loads at your Render URL
+- [ ] Guest and member login/registration works
+- [ ] Real-time chat and online status works
+- [ ] Chat history persists after refresh
+
+### Troubleshooting
+
+1. **Check Render Logs** in the service dashboard
+2. **Verify Environment Variables** are set correctly
+3. **Test Supabase** connection is accessible
+4. **Test locally** first with `npm run build && npm start`
