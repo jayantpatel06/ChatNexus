@@ -18,10 +18,12 @@ interface SocketContextType {
     receiverId: number,
     message: string,
     attachment?: { url: string; filename: string; fileType: string },
+    clientMessageId?: string,
   ) => void;
   startTyping: (receiverId: number) => void;
   stopTyping: (receiverId: number) => void;
   typingUsers: Set<number>;
+  forceReconnect: () => void;
 }
 
 const SocketContext = createContext<SocketContextType | null>(null);
@@ -35,6 +37,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   // Track last typing state per receiver to avoid redundant events
   const lastTypingStateRef = useRef<Record<number, boolean>>({});
+
+  // Counter to force socket reconnection (incremented by forceReconnect)
+  const [reconnectCounter, setReconnectCounter] = useState(0);
 
   useEffect(() => {
     if (!user) {
@@ -66,14 +71,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       auth: {
         token, // JWT token for authentication
       },
-      // Reconnection optimizations
+      // Reconnection optimizations for mobile (phone sleep/wake)
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity, // Keep trying indefinitely
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000, // Max 10 seconds between retries
       // Reduce ping interval for faster disconnect detection
-      timeout: 10000,
+      timeout: 20000, // Increase timeout for slow network on wake
+      // Allow transport fallback
+      upgrade: true,
     });
+
+    // Handle visibility change (phone screen on/off)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !socketIO.connected) {
+        console.log("App became visible, attempting to reconnect...");
+        socketIO.connect();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     socketIO.on("connect", () => {
       setIsConnected(true);
@@ -120,12 +136,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    socketIO.on("disconnect", () => {
+    socketIO.on("disconnect", (reason) => {
       setIsConnected(false);
       // Clear all typing timeouts on disconnect
       typingTimeouts.forEach((timeout) => clearTimeout(timeout));
       typingTimeouts.clear();
-      console.log("Socket.IO disconnected");
+      console.log("Socket.IO disconnected:", reason);
+
+      // If server disconnected us, try to reconnect
+      if (reason === "io server disconnect") {
+        socketIO.connect();
+      }
     });
 
     socketIO.on("connect_error", (error) => {
@@ -136,27 +157,37 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(socketIO);
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       socketIO.disconnect();
     };
-  }, [user?.userId, token]); // Reconnect when token changes to use JWT auth
+  }, [user?.userId, token, reconnectCounter]); // Reconnect when token changes or forceReconnect is called
+
+  // Function to force socket reconnection (e.g., after username change)
+  const forceReconnect = () => {
+    console.log("Forcing socket reconnection...");
+    setReconnectCounter((c) => c + 1);
+  };
 
   const sendMessage = (
     receiverId: number,
     message: string,
     attachment?: { url: string; filename: string; fileType: string },
+    clientMessageId?: string,
   ) => {
     if (!socket || !socket.connected || !user) return;
 
-    const clientMessageId =
-      globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+    // Use provided clientMessageId or generate one
+    const msgClientId =
+      clientMessageId ??
+      (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
         ? globalThis.crypto.randomUUID()
-        : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
     socket.emit("private_message", {
       receiverId,
       message,
       attachment,
-      clientMessageId,
+      clientMessageId: msgClientId,
     });
   };
 
@@ -192,6 +223,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         startTyping,
         stopTyping,
         typingUsers,
+        forceReconnect,
       }}
     >
       {children}

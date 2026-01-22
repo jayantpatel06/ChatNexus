@@ -233,11 +233,23 @@ export function registerRoutes(app: Express): Server {
     }, 200);
   };
 
+  // Track pending offline updates to handle reconnection race conditions
+  // (e.g., when user changes username and socket reconnects with new token)
+  const pendingOfflineUpdates = new Map<number, NodeJS.Timeout>();
+
   io.on('connection', async (socket) => {
     console.log('Socket.IO connection established');
 
     // Mark user as online
     if (socket.userId) {
+      // Clear any pending offline update for this user (reconnection scenario)
+      const pendingOffline = pendingOfflineUpdates.get(socket.userId);
+      if (pendingOffline) {
+        clearTimeout(pendingOffline);
+        pendingOfflineUpdates.delete(socket.userId);
+        console.log(`Cleared pending offline update for user ${socket.userId} (reconnected)`);
+      }
+
       await storage.updateUserOnlineStatus(socket.userId, true);
 
       // Join user to their own room for O(1) messaging
@@ -368,24 +380,34 @@ export function registerRoutes(app: Express): Server {
     socket.on('disconnect', async () => {
       console.log('Socket.IO client disconnected');
       if (socket.userId) {
-        // Get user info to check if they are a guest
-        const user = await storage.getUser(socket.userId);
+        const userId = socket.userId;
+        
+        // Delay offline update to handle reconnection scenarios (e.g., token refresh)
+        // This prevents brief "offline" flashes when user is just reconnecting
+        const offlineTimeout = setTimeout(async () => {
+          pendingOfflineUpdates.delete(userId);
+          
+          // Get user info to check if they are a guest
+          const user = await storage.getUser(userId);
 
-        // Only update online status if user still exists
-        if (user) {
-          await storage.updateUserOnlineStatus(socket.userId, false);
+          // Only update online status if user still exists
+          if (user) {
+            await storage.updateUserOnlineStatus(userId, false);
 
-          // For guest users, track disconnection time for grace period
-          if (user.isGuest) {
-            guestDisconnectionTimes.set(socket.userId, Date.now());
-            console.log(`Guest user ${user.username} (ID: ${socket.userId}) disconnected, starting grace period`);
+            // For guest users, track disconnection time for grace period
+            if (user.isGuest) {
+              guestDisconnectionTimes.set(userId, Date.now());
+              console.log(`Guest user ${user.username} (ID: ${userId}) disconnected, starting grace period`);
+            }
+          } else {
+            console.log(`User ${userId} no longer exists in database`);
           }
-        } else {
-          console.log(`User ${socket.userId} no longer exists in database`);
-        }
 
-        // Broadcast updated online users list (debounced)
-        await broadcastOnlineUsers();
+          // Broadcast updated online users list (debounced)
+          await broadcastOnlineUsers();
+        }, 2000); // 2 second grace period for reconnection
+        
+        pendingOfflineUpdates.set(userId, offlineTimeout);
       }
     });
   });

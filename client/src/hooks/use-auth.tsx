@@ -32,6 +32,7 @@ type AuthContextType = {
   >;
   logoutMutation: UseMutationResult<void, Error, void>;
   token: string | null;
+  updateToken: (token: string | null) => void;
   registerMutation: UseMutationResult<
     { user: SelectUser; token: string },
     Error,
@@ -72,23 +73,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedToken = getStoredToken();
       if (!storedToken) return null;
 
-      const res = await fetch("/api/user", {
-        headers: {
-          Authorization: `Bearer ${storedToken}`,
-        },
-      });
+      try {
+        const res = await fetch("/api/user", {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
 
-      if (res.status === 401 || res.status === 403) {
-        // Token is invalid or expired, clear it
-        updateToken(null);
+        if (res.status === 401 || res.status === 403) {
+          // Token is invalid or expired, clear it
+          updateToken(null);
+          return null;
+        }
+
+        if (!res.ok) throw new Error("Failed to fetch user");
+        return await res.json();
+      } catch (error) {
+        // Network error - don't clear token, just return cached user or null
+        // This prevents logout on temporary network issues (e.g., phone waking up)
+        console.warn("Network error fetching user, keeping existing session");
         return null;
       }
-
-      if (!res.ok) throw new Error("Failed to fetch user");
-      return await res.json();
     },
-    // Re-run when token changes
-    enabled: true,
+    // Prevent refetching on window focus (e.g., phone screen turning on)
+    refetchOnWindowFocus: false,
+    // Don't refetch on mount if we already have data
+    refetchOnMount: false,
+    // Keep cached data indefinitely
+    staleTime: Infinity,
+    // Don't retry on failure - prevents logout loop
+    retry: false,
+    // Keep previous data while refetching
+    placeholderData: (previousData) => previousData,
   });
 
   const loginMutation = useMutation({
@@ -214,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logoutMutation,
         registerMutation,
         token,
+        updateToken,
         guestLoginMutation,
       }}
     >

@@ -276,14 +276,6 @@ function MessageBubbleComponent({
           )}
         </div>
       </div>
-
-      {isOwnMessage && (
-        <div
-          className={`w-8 h-8 ${sender?.isGuest ? "bg-gray-500" : "bg-primary"} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
-        >
-          {sender?.isGuest ? "G" : getUserInitials(sender?.username || "")}
-        </div>
-      )}
     </div>
   );
 }
