@@ -20,26 +20,42 @@ export default function ChatDashboard() {
 
   return (
     <ActiveChatProvider>
-      <ChatDashboardContent selectedUser={selectedUser} onUserSelect={handleUserSelect} onBack={handleBackToSidebar} />
+      <ChatDashboardContent
+        selectedUser={selectedUser}
+        onUserSelect={handleUserSelect}
+        onBack={handleBackToSidebar}
+      />
     </ActiveChatProvider>
   );
 }
 
-function ChatDashboardContent({ selectedUser, onUserSelect, onBack }: { selectedUser: User | null, onUserSelect: (u: User) => void, onBack: () => void }) {
+function ChatDashboardContent({
+  selectedUser,
+  onUserSelect,
+  onBack,
+}: {
+  selectedUser: User | null;
+  onUserSelect: (u: User) => void;
+  onBack: () => void;
+}) {
   const { setActiveUserId } = useActiveChat();
   const isMobile = useIsMobile();
-  
+
   useEffect(() => {
     setActiveUserId(selectedUser?.userId ?? null);
   }, [selectedUser, setActiveUserId]);
 
   if (isMobile) {
     // On mobile, show either sidebar or chat area, not both
+    // Use h-[100dvh] for proper mobile viewport height (accounts for browser chrome)
     if (selectedUser) {
       return (
-        <div className="h-screen bg-background" data-testid="chat-dashboard">
-          <ChatArea 
-            selectedUser={selectedUser} 
+        <div
+          className="h-[100dvh] bg-background flex flex-col overflow-hidden"
+          data-testid="chat-dashboard"
+        >
+          <ChatArea
+            selectedUser={selectedUser}
             onBack={onBack}
             showBackButton={true}
           />
@@ -47,8 +63,11 @@ function ChatDashboardContent({ selectedUser, onUserSelect, onBack }: { selected
       );
     } else {
       return (
-        <div className="h-screen bg-background" data-testid="chat-dashboard">
-          <UsersSidebar selectedUser={selectedUser} onUserSelect={onUserSelect} />
+        <div className="h-[100dvh] bg-background" data-testid="chat-dashboard">
+          <UsersSidebar
+            selectedUser={selectedUser}
+            onUserSelect={onUserSelect}
+          />
         </div>
       );
     }
@@ -58,8 +77,8 @@ function ChatDashboardContent({ selectedUser, onUserSelect, onBack }: { selected
   return (
     <div className="h-screen bg-background flex" data-testid="chat-dashboard">
       <UsersSidebar selectedUser={selectedUser} onUserSelect={onUserSelect} />
-      <ChatArea 
-        selectedUser={selectedUser} 
+      <ChatArea
+        selectedUser={selectedUser}
         onBack={onBack}
         showBackButton={true}
       />

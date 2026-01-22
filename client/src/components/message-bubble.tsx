@@ -33,7 +33,10 @@ const MessageContent = ({ content }: { content: string }) => {
   const parts = content.split(urlRegex);
 
   return (
-    <div className="whitespace-pre-wrap break-words">
+    <div
+      className="whitespace-pre-wrap break-words overflow-hidden"
+      style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+    >
       {parts.map((part, i) => {
         if (part.match(urlRegex)) {
           const isImage = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(part);
@@ -135,10 +138,10 @@ function MessageBubbleComponent({
       )}
 
       <div
-        className={`flex flex-col gap-1 max-w-xs lg:max-w-md ${isOwnMessage ? "items-end" : ""}`}
+        className={`flex flex-col gap-1 max-w-[75%] sm:max-w-xs lg:max-w-md min-w-0 ${isOwnMessage ? "items-end" : ""}`}
       >
         <div
-          className={`${isOwnMessage ? "bg-primary text-primary-foreground rounded-lg rounded-tr-none" : "bg-card border border-border rounded-lg rounded-tl-none shadow-sm"} p-3`}
+          className={`${isOwnMessage ? "bg-primary text-primary-foreground rounded-lg rounded-tr-none" : "bg-card border border-border rounded-lg rounded-tl-none shadow-sm"} p-3 overflow-hidden`}
         >
           {/* Show pending attachment preview */}
           {pendingAttachment && (

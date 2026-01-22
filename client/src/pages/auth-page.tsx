@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MessageCircle, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,17 +19,13 @@ import { registerUserSchema, loginUserSchema } from "@shared/schema";
 import { z } from "zod";
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation, guestLoginMutation } = useAuth();
+  const { user, loginMutation, registerMutation, guestLoginMutation } =
+    useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [guestUsername, setGuestUsername] = useState("");
 
-  // Redirect if already logged in
-  if (user) {
-    setLocation("/");
-    return null;
-  }
-
+  // All hooks must be called before any conditional returns
   const loginForm = useForm<z.infer<typeof loginUserSchema>>({
     resolver: zodResolver(loginUserSchema),
     defaultValues: {
@@ -42,6 +44,18 @@ export default function AuthPage() {
       gender: undefined,
     },
   });
+
+  // Redirect if already logged in - use useEffect to avoid calling setLocation during render
+  useEffect(() => {
+    if (user) {
+      setLocation("/");
+    }
+  }, [user, setLocation]);
+
+  // Show nothing while redirecting
+  if (user) {
+    return null;
+  }
 
   const handleLogin = (data: z.infer<typeof loginUserSchema>) => {
     loginMutation.mutate(data);
@@ -93,12 +107,18 @@ export default function AuthPage() {
 
             {/* Guest Login Section */}
             <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border">
-              <h3 className="font-medium text-foreground mb-2 text-center">Quick Access</h3>
-              <p className="text-sm text-muted-foreground mb-3 text-center">Join instantly as a guest</p>
-              
+              <h3 className="font-medium text-foreground mb-2 text-center">
+                Quick Access
+              </h3>
+              <p className="text-sm text-muted-foreground mb-3 text-center">
+                Join instantly as a guest
+              </p>
+
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="guest-username" className="sr-only">Guest Username</Label>
+                  <Label htmlFor="guest-username" className="sr-only">
+                    Guest Username
+                  </Label>
                   <Input
                     id="guest-username"
                     placeholder="Choose a guest username"
@@ -108,12 +128,14 @@ export default function AuthPage() {
                     data-testid="input-guest-username"
                   />
                 </div>
-                
-                <Button 
-                  variant="secondary" 
+
+                <Button
+                  variant="secondary"
                   className="w-full hover:scale-105 transition-transform"
                   onClick={handleGuestLogin}
-                  disabled={guestLoginMutation.isPending || !guestUsername.trim()}
+                  disabled={
+                    guestLoginMutation.isPending || !guestUsername.trim()
+                  }
                   data-testid="button-guest-login"
                 >
                   {guestLoginMutation.isPending ? (
@@ -129,13 +151,19 @@ export default function AuthPage() {
                 <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-card px-4 text-muted-foreground">or continue with account</span>
+                <span className="bg-card px-4 text-muted-foreground">
+                  or continue with account
+                </span>
               </div>
             </div>
 
             {/* Login Form */}
             {activeTab === "login" && (
-              <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4" data-testid="form-login">
+              <form
+                onSubmit={loginForm.handleSubmit(handleLogin)}
+                className="space-y-4"
+                data-testid="form-login"
+              >
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <Input
@@ -146,7 +174,9 @@ export default function AuthPage() {
                     data-testid="input-login-email"
                   />
                   {loginForm.formState.errors.gmail && (
-                    <p className="text-sm text-destructive">{loginForm.formState.errors.gmail.message}</p>
+                    <p className="text-sm text-destructive">
+                      {loginForm.formState.errors.gmail.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -159,11 +189,13 @@ export default function AuthPage() {
                     data-testid="input-login-password"
                   />
                   {loginForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>
+                    <p className="text-sm text-destructive">
+                      {loginForm.formState.errors.password.message}
+                    </p>
                   )}
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full hover:scale-105 transition-transform"
                   disabled={loginMutation.isPending}
                   data-testid="button-login-submit"
@@ -178,7 +210,11 @@ export default function AuthPage() {
 
             {/* Register Form */}
             {activeTab === "register" && (
-              <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4" data-testid="form-register">
+              <form
+                onSubmit={registerForm.handleSubmit(handleRegister)}
+                className="space-y-4"
+                data-testid="form-register"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="register-username">Username</Label>
@@ -189,7 +225,9 @@ export default function AuthPage() {
                       data-testid="input-register-username"
                     />
                     {registerForm.formState.errors.username && (
-                      <p className="text-sm text-destructive">{registerForm.formState.errors.username.message}</p>
+                      <p className="text-sm text-destructive">
+                        {registerForm.formState.errors.username.message}
+                      </p>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -204,7 +242,9 @@ export default function AuthPage() {
                       data-testid="input-register-age"
                     />
                     {registerForm.formState.errors.age && (
-                      <p className="text-sm text-destructive">{registerForm.formState.errors.age.message}</p>
+                      <p className="text-sm text-destructive">
+                        {registerForm.formState.errors.age.message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -218,12 +258,19 @@ export default function AuthPage() {
                     data-testid="input-register-email"
                   />
                   {registerForm.formState.errors.gmail && (
-                    <p className="text-sm text-destructive">{registerForm.formState.errors.gmail.message}</p>
+                    <p className="text-sm text-destructive">
+                      {registerForm.formState.errors.gmail.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="register-gender">Gender</Label>
-                  <Select onValueChange={(value) => registerForm.setValue("gender", value as any)} data-testid="select-register-gender">
+                  <Select
+                    onValueChange={(value) =>
+                      registerForm.setValue("gender", value as any)
+                    }
+                    data-testid="select-register-gender"
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
@@ -234,7 +281,9 @@ export default function AuthPage() {
                     </SelectContent>
                   </Select>
                   {registerForm.formState.errors.gender && (
-                    <p className="text-sm text-destructive">{registerForm.formState.errors.gender.message}</p>
+                    <p className="text-sm text-destructive">
+                      {registerForm.formState.errors.gender.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -247,11 +296,13 @@ export default function AuthPage() {
                     data-testid="input-register-password"
                   />
                   {registerForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">{registerForm.formState.errors.password.message}</p>
+                    <p className="text-sm text-destructive">
+                      {registerForm.formState.errors.password.message}
+                    </p>
                   )}
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full hover:scale-105 transition-transform"
                   disabled={registerMutation.isPending}
                   data-testid="button-register-submit"

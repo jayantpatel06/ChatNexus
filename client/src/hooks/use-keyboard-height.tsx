@@ -1,22 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function useKeyboardHeight() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Use ref to track initial height so it can be updated on orientation change
+  const initialViewportHeightRef = useRef(
+    typeof window !== "undefined"
+      ? window.visualViewport?.height || window.innerHeight
+      : 0,
+  );
 
   useEffect(() => {
     // Only run on mobile devices
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (!isMobile) return;
 
-    let initialViewportHeight =
+    // Update initial height reference
+    initialViewportHeightRef.current =
       window.visualViewport?.height || window.innerHeight;
 
     const handleViewportChange = () => {
       if (!window.visualViewport) return;
 
       const currentViewportHeight = window.visualViewport.height;
-      const heightDifference = initialViewportHeight - currentViewportHeight;
+      const heightDifference =
+        initialViewportHeightRef.current - currentViewportHeight;
 
       // Consider keyboard visible if viewport height decreased by more than 150px
       if (heightDifference > 150) {
@@ -32,12 +41,25 @@ export function useKeyboardHeight() {
       }
     };
 
+    // Handle orientation change - reset baseline height
+    const handleOrientationChange = () => {
+      // Wait for orientation change to complete
+      setTimeout(() => {
+        initialViewportHeightRef.current =
+          window.visualViewport?.height || window.innerHeight;
+        // Reset keyboard state after orientation change
+        setKeyboardHeight(0);
+        setIsKeyboardVisible(false);
+        document.body.classList.remove("keyboard-open");
+      }, 100);
+    };
+
     // Fallback for devices without visualViewport support
     const handleResize = () => {
       if (window.visualViewport) return; // Skip if visualViewport is available
 
       const currentHeight = window.innerHeight;
-      const heightDifference = initialViewportHeight - currentHeight;
+      const heightDifference = initialViewportHeightRef.current - currentHeight;
 
       if (heightDifference > 150) {
         setKeyboardHeight(heightDifference);
@@ -53,10 +75,14 @@ export function useKeyboardHeight() {
     // Use Visual Viewport API if available (better support)
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleViewportChange);
+      window.visualViewport.addEventListener("scroll", handleViewportChange);
     } else {
       // Fallback to window resize
       window.addEventListener("resize", handleResize);
     }
+
+    // Listen for orientation changes
+    window.addEventListener("orientationchange", handleOrientationChange);
 
     // Cleanup
     return () => {
@@ -65,10 +91,15 @@ export function useKeyboardHeight() {
           "resize",
           handleViewportChange,
         );
+        window.visualViewport.removeEventListener(
+          "scroll",
+          handleViewportChange,
+        );
       } else {
         window.removeEventListener("resize", handleResize);
       }
-      // Make sure to remove class on cleanup
+      window.removeEventListener("orientationchange", handleOrientationChange);
+      // Reset state and remove class on cleanup
       document.body.classList.remove("keyboard-open");
     };
   }, []);

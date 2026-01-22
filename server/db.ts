@@ -45,24 +45,36 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Test database connection on startup with retry logic
 if (prisma) {
-  const connectWithRetry = async (retries = 5, delay = 2000) => {
-    try {
-      if (!prisma) return;
-      await prisma.$connect();
-      console.log('✅ Database connected successfully');
-    } catch (error: any) {
-      if (retries === 0) {
-        console.error('❌ Database connection failed on startup after multiple attempts:', error.message);
-        console.error('Database URL (masked):', process.env.DATABASE_URL?.replace(/:[^:]*@/, ':***@') || 'not set');
-        // Don't exit process, allow partial functionality if possible, or let top-level handlers deal with it
-      } else {
-        console.warn(`⚠️ Database connection failed. Retrying in ${delay / 1000}s... (${retries} retries left)`);
-        setTimeout(() => connectWithRetry(retries - 1, delay * 1.5), delay);
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const connectWithRetry = async (maxRetries = 5, initialDelay = 2000): Promise<void> => {
+    let delay = initialDelay;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await prisma.$connect();
+        console.log('✅ Database connected successfully');
+        return; // Resolve on success
+      } catch (error: any) {
+        const isLastAttempt = attempt === maxRetries;
+        
+        if (isLastAttempt) {
+          console.error('❌ Database connection failed after', maxRetries, 'attempts:', error.message);
+          console.error('Database URL (masked):', process.env.DATABASE_URL?.replace(/:[^:]*@/, ':***@') || 'not set');
+          throw new Error(`Database connection failed after ${maxRetries} attempts: ${error.message}`);
+        }
+        
+        console.warn(`⚠️ Database connection failed (attempt ${attempt}/${maxRetries}). Retrying in ${delay / 1000}s...`);
+        await sleep(delay);
+        delay = Math.min(delay * 1.5, 30000); // Exponential backoff, max 30s
       }
     }
   };
 
-  connectWithRetry();
+  connectWithRetry().catch((error) => {
+    console.error('Database connection ultimately failed:', error.message);
+    // Don't exit process, allow partial functionality if possible
+  });
 }
 
 // Initialize Supabase client

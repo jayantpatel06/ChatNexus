@@ -274,16 +274,24 @@ export function ChatArea({
       !isLoadingOlderRef.current &&
       lastMessageId !== prevLastMessageId;
 
-    if (prevCount === 0) {
-      // Initial load - scroll to bottom instantly
-      scrollToBottom("auto");
+    if (prevCount === 0 && currentCount > 0) {
+      // Initial load or first message in new chat - scroll to bottom after DOM updates
+      // Use requestAnimationFrame + setTimeout to ensure DOM has painted
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          scrollToBottom("auto");
+        }, 50);
+      });
     } else if (isNewMessage) {
       // New message received or sent
       const isOwnMessage = lastMessage?.senderId === user?.userId;
 
       if (userSentMessageRef.current || isOwnMessage) {
         // User sent a message - always scroll to bottom (Instagram behavior)
-        scrollToBottom("smooth");
+        // Use slight delay to ensure message is rendered
+        requestAnimationFrame(() => {
+          scrollToBottom("smooth");
+        });
         userSentMessageRef.current = false;
       } else if (isAtBottom) {
         // Received message while at bottom - auto scroll smoothly
@@ -558,26 +566,22 @@ export function ChatArea({
   };
 
   return (
-    <div className={cn("flex-1 flex flex-col h-full relative", themeClass)}>
+    <div
+      className={cn(
+        "flex-1 flex flex-col h-full relative overflow-hidden",
+        themeClass,
+      )}
+    >
       {/* Chat Header */}
-      <div
-        className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0"
-        style={{
-          position: "sticky" as any,
-          top: 0,
-          zIndex: 40,
-          // Ensure header is opaque when layered above messages
-          backdropFilter: "saturate(180%) blur(4px)",
-        }}
-      >
-        <div className="flex items-center gap-3">
+      <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Back button for mobile */}
           {(showBackButton || isMobile) && onBack && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onBack}
-              className="p-2"
+              className="p-2 flex-shrink-0"
               title="Back to users"
               data-testid="button-back-to-users"
             >
@@ -585,7 +589,7 @@ export function ChatArea({
             </Button>
           )}
 
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <div
               className={`w-10 h-10 ${selectedUser.isGuest ? "bg-gray-500" : "bg-gradient-to-br " + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}
             >
@@ -594,9 +598,9 @@ export function ChatArea({
                 : getUserInitials(selectedUser.username)}
             </div>
           </div>
-          <div>
+          <div className="min-w-0">
             <h3
-              className="font-semibold text-foreground"
+              className="font-semibold text-foreground truncate"
               data-testid={`text-chat-username-${selectedUser.userId}`}
             >
               {selectedUser.username}
@@ -614,7 +618,7 @@ export function ChatArea({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -667,7 +671,7 @@ export function ChatArea({
       {/* Messages Area */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0 relative"
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0 relative overscroll-contain"
         onScroll={handleScroll}
         style={
           {
@@ -781,7 +785,7 @@ export function ChatArea({
       <div
         className="bg-card border-t border-border p-3 flex-shrink-0"
         style={{
-          paddingBottom: isMobile && isKeyboardVisible ? `72px` : "12px",
+          paddingBottom: "12px",
         }}
       >
         <div className="flex items-end gap-2">
