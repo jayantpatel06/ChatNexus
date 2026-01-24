@@ -46,30 +46,3 @@ export async function jwtAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ message: 'Authentication failed' });
   }
 }
-
-/**
- * Optional JWT Authentication Middleware
- * Attaches user to request if token is valid, but doesn't block if no token
- */
-export async function optionalJwtAuth(req: Request, res: Response, next: NextFunction) {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const decoded = verifyToken(token);
-
-      if (decoded) {
-        const user = await storage.getUser(decoded.userId);
-        if (user) {
-          req.jwtUser = user;
-        }
-      }
-    }
-    
-    next();
-  } catch (error) {
-    // Silently continue without user
-    next();
-  }
-}

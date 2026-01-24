@@ -152,13 +152,10 @@ export function setupAuth(app: Express) {
   });
 
   // Get current user - requires JWT auth
+  // Note: Online status is managed by Socket.io connection, not by this endpoint
   app.get("/api/user", jwtAuth, async (req, res, next) => {
     try {
       const user = req.jwtUser!;
-
-      // Automatically mark user as online when they have a valid token
-      await storage.updateUserOnlineStatus(user.userId, true);
-
       res.json(user);
     } catch (error) {
       next(error);

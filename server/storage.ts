@@ -1,11 +1,18 @@
-import { type User, type InsertUser, type Message, type InsertMessage, type GlobalMessage, type InsertGlobalMessage, type GlobalMessageWithSender, type Attachment, type InsertAttachment } from "@shared/schema";
-import { prisma } from "./db";
-import session from "express-session";
-import { RedisStore } from "connect-redis";
-import sessionFileStore from "session-file-store";
-import { createClient } from "redis";
+import {
+  type User,
+  type InsertUser,
+  type Message,
+  type InsertMessage,
+  type GlobalMessage,
+  type InsertGlobalMessage,
+  type GlobalMessageWithSender,
+  type Attachment,
+  type InsertAttachment,
+} from '@shared/schema';
+import { prisma } from './db';
+import { createClient, type RedisClientType } from 'redis';
 
-
+// Storage interface - defines all database operations
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -16,7 +23,6 @@ export interface IStorage {
   updateUserUsername(id: number, username: string): Promise<User | undefined>;
   getOnlineUsers(): Promise<User[]>;
   createMessage(message: InsertMessage): Promise<Message>;
-  getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
   getMessagesBetweenUsersCursor(
     user1Id: number,
     user2Id: number,
@@ -28,122 +34,69 @@ export interface IStorage {
   createAttachment(attachment: InsertAttachment): Promise<Attachment>;
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
-  getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>>;
-  sessionStore: any;
+  getConversationStats(
+    userId: number,
+    otherUserIds: number[]
+  ): Promise<Map<number, { lastMessage: Message | null; unread: number }>>;
 }
 
-// Optional Redis client for caching recent direct messages (separate from session store)
-let messageCacheClient: ReturnType<typeof createClient> | null = null;
-if (process.env.REDIS_URL) {
+// Cache key generators
+const CacheKeys = {
+  conversation: (a: number, b: number) => {
+    const [u1, u2] = a < b ? [a, b] : [b, a];
+    return `chatnexus:dm:${u1}:${u2}:recent`;
+  },
+  conversationLast: (conversationId: string) => `chatnexus:conv:${conversationId}:last`,
+  conversationUnread: (conversationId: string, userId: number) =>
+    `chatnexus:conv:${conversationId}:unread:${userId}`,
+  globalMessages: () => 'chatnexus:global:recent',
+};
+
+// Cache TTL constants (in seconds)
+const CacheTTL = {
+  CONVERSATION: 120, // 2 minutes
+  LAST_MESSAGE: 60,
+  GLOBAL_MESSAGES: 60,
+};
+
+// Optional Redis client for caching
+let cacheClient: RedisClientType | null = null;
+
+async function initializeCache(): Promise<void> {
+  if (!process.env.REDIS_URL) return;
+
   try {
-    messageCacheClient = createClient({
+    cacheClient = createClient({
       url: process.env.REDIS_URL,
-      socket: {
-        connectTimeout: 5000,
-      },
+      socket: { connectTimeout: 5000 },
     });
-    messageCacheClient.connect().catch((err) => {
-      console.error('Redis message cache connection error:', err);
-      messageCacheClient = null;
+
+    cacheClient.on('error', (err) => {
+      console.error('Redis cache error:', err);
     });
+
+    await cacheClient.connect();
+    console.log('✅ Redis cache connected');
   } catch (err) {
-    console.error('Failed to initialize Redis message cache client:', err);
-    messageCacheClient = null;
+    console.error('Failed to initialize Redis cache:', err);
+    cacheClient = null;
   }
 }
 
-function getConversationCacheKey(a: number, b: number) {
-  const [u1, u2] = a < b ? [a, b] : [b, a];
-  return `chatnexus:dm:${u1}:${u2}:recent`;
-}
+// Initialize cache on module load
+initializeCache();
 
-export class DatabaseStorage implements IStorage {
-  public sessionStore: any;
-  constructor() {
-    this.sessionStore = this.createSessionStore();
-  }
-
-  private createSessionStore() {
-    // Production: Use Redis if REDIS_URL is available
-    if (process.env.NODE_ENV === 'production' && process.env.REDIS_URL) {
-      try {
-        console.log('🔗 Connecting to Redis for session storage...');
-        const redisClient = createClient({
-          url: process.env.REDIS_URL,
-          socket: {
-            connectTimeout: 10000,
-          },
-        });
-
-        redisClient.connect().catch(console.error);
-
-        redisClient.on('error', (err) => {
-          console.error('Redis Client Error:', err);
-        });
-
-        redisClient.on('connect', () => {
-          console.log('✅ Redis connected for session storage');
-        });
-
-        return new RedisStore({
-          client: redisClient,
-          prefix: 'chatnexus:sess:',
-        });
-      } catch (error) {
-        console.warn('⚠️ Redis connection failed, falling back to MemoryStore:', error);
-        return new session.MemoryStore();
-      }
-    }
-
-    // Development: Use MemoryStore
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔧 Using MemoryStore for development');
-      return new session.MemoryStore();
-    }
-
-    // Production fallback: Use MemoryStore for serverless environments like Render
-    // FileStore can be problematic in ephemeral environments
-    if (process.env.RENDER || process.env.VERCEL || process.env.NETLIFY) {
-      console.log('🧠 Using MemoryStore for serverless production environment');
-      return new session.MemoryStore();
-    }
-
-    // Traditional production: Use FileStore for persistence
-    console.log('📁 Using FileStore for production session storage');
-    const fs = require('fs');
-    const path = require('path');
-
-    try {
-      // Ensure sessions directory exists
-      const sessionsDir = './sessions';
-      if (!fs.existsSync(sessionsDir)) {
-        fs.mkdirSync(sessionsDir, { recursive: true });
-        console.log('Created sessions directory');
-      }
-
-      const FileStoreSession = sessionFileStore(session);
-      return new FileStoreSession({
-        path: sessionsDir,
-        ttl: 86400, // 24 hours
-        retries: 2, // Reduce retries to avoid spam
-        factor: 1,
-        minTimeout: 50,
-        maxTimeout: 200,
-        logFn: () => { }, // Disable logging to reduce noise
-      });
-    } catch (error) {
-      console.warn('⚠️ FileStore failed, falling back to MemoryStore:', error);
-      return new session.MemoryStore();
-    }
-  }
-
+/**
+ * Database Storage Implementation using Prisma
+ */
+class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
     if (!prisma) return undefined;
     try {
       const user = await prisma.user.findUnique({
-        where: { userId: id }
+        where: { userId: id },
       });
-      return user || undefined;
+      return user ?? undefined;
     } catch (error) {
       console.error('Error getting user:', error);
       return undefined;
@@ -154,9 +107,9 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) return undefined;
     try {
       const user = await prisma.user.findFirst({
-        where: { username }
+        where: { username },
       });
-      return user || undefined;
+      return user ?? undefined;
     } catch (error) {
       console.error('Error getting user by username:', error);
       return undefined;
@@ -167,9 +120,9 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) return undefined;
     try {
       const user = await prisma.user.findUnique({
-        where: { gmail }
+        where: { gmail },
       });
-      return user || undefined;
+      return user ?? undefined;
     } catch (error) {
       console.error('Error getting user by email:', error);
       return undefined;
@@ -179,10 +132,9 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     if (!prisma) throw new Error('Database not initialized');
     try {
-      const user = await prisma.user.create({
-        data: insertUser
+      return await prisma.user.create({
+        data: insertUser,
       });
-      return user;
     } catch (error) {
       console.error('Error creating user:', error);
       throw error;
@@ -192,24 +144,20 @@ export class DatabaseStorage implements IStorage {
   async deleteUser(id: number): Promise<void> {
     if (!prisma) return;
     try {
-      // First delete all messages associated with this user
+      // Delete in order: attachments → messages → global messages → user
+      // Prisma handles cascading but being explicit is safer
       await prisma.message.deleteMany({
         where: {
-          OR: [
-            { senderId: id },
-            { receiverId: id }
-          ]
-        }
+          OR: [{ senderId: id }, { receiverId: id }],
+        },
       });
 
-      // Delete global messages sent by this user
       await prisma.globalMessage.deleteMany({
-        where: { senderId: id }
+        where: { senderId: id },
       });
 
-      // Then delete the user
       await prisma.user.delete({
-        where: { userId: id }
+        where: { userId: id },
       });
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -221,7 +169,7 @@ export class DatabaseStorage implements IStorage {
     try {
       await prisma.user.update({
         where: { userId: id },
-        data: { isOnline }
+        data: { isOnline },
       });
     } catch (error) {
       console.error('Error updating user online status:', error);
@@ -231,11 +179,10 @@ export class DatabaseStorage implements IStorage {
   async updateUserUsername(id: number, username: string): Promise<User | undefined> {
     if (!prisma) return undefined;
     try {
-      const updatedUser = await prisma.user.update({
+      return await prisma.user.update({
         where: { userId: id },
-        data: { username }
+        data: { username },
       });
-      return updatedUser;
     } catch (error) {
       console.error('Error updating username:', error);
       return undefined;
@@ -246,7 +193,7 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) return [];
     try {
       return await prisma.user.findMany({
-        where: { isOnline: true }
+        where: { isOnline: true },
       });
     } catch (error) {
       console.error('Error getting online users:', error);
@@ -258,39 +205,13 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) throw new Error('Database not initialized');
     try {
       const createdMessage = await prisma.message.create({
-        data: message as any,
+        data: message,
       });
 
-      // Update fast-path caches (best-effort)
-      if (messageCacheClient) {
-        const { senderId, receiverId } = createdMessage as any;
-        if (senderId && receiverId) {
-          const [minId, maxId] = senderId < receiverId ? [senderId, receiverId] : [receiverId, senderId];
-          const conversationId = (createdMessage as any).conversationId || `${minId}:${maxId}`;
-
-          const lastKey = `chatnexus:conv:${conversationId}:last`;
-          try {
-            await messageCacheClient.set(lastKey, JSON.stringify(createdMessage), { EX: 60 });
-          } catch (err) {
-            console.error('Error writing last message cache:', err);
-          }
-
-          const unreadKey = `chatnexus:conv:${conversationId}:unread:${receiverId}`;
-          try {
-            await messageCacheClient.incr(unreadKey);
-          } catch (err) {
-            console.error('Error incrementing unread count cache:', err);
-          }
-
-          // Invalidate the recent messages cache so next fetch gets fresh data
-          const dmCacheKey = getConversationCacheKey(senderId, receiverId);
-          try {
-            await messageCacheClient.del(dmCacheKey);
-          } catch (err) {
-            console.error('Error invalidating DM cache:', err);
-          }
-        }
-      }
+      // Update caches (best-effort, non-blocking)
+      this.updateMessageCaches(createdMessage).catch((err) =>
+        console.error('Cache update error:', err)
+      );
 
       return createdMessage;
     } catch (error) {
@@ -299,21 +220,30 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]> {
-    if (!prisma) return [];
-    try {
-      const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
-      const conversationId = `${minId}:${maxId}`;
+  private async updateMessageCaches(message: Message): Promise<void> {
+    if (!cacheClient) return;
 
-      return await prisma.message.findMany({
-        where: { conversationId } as any,
-        orderBy: { timestamp: 'asc' },
-        include: { attachments: true } as any,
-      });
-    } catch (error) {
-      console.error('Error getting messages between users:', error);
-      return [];
-    }
+    const { senderId, receiverId, conversationId } = message;
+    if (!senderId || !receiverId) return;
+
+    const convId = conversationId || this.getConversationId(senderId, receiverId);
+
+    // Update last message cache
+    const lastKey = CacheKeys.conversationLast(convId);
+    await cacheClient.set(lastKey, JSON.stringify(message), { EX: CacheTTL.LAST_MESSAGE });
+
+    // Increment unread count for receiver
+    const unreadKey = CacheKeys.conversationUnread(convId, receiverId);
+    await cacheClient.incr(unreadKey);
+
+    // Invalidate conversation cache
+    const dmCacheKey = CacheKeys.conversation(senderId, receiverId);
+    await cacheClient.del(dmCacheKey);
+  }
+
+  private getConversationId(user1: number, user2: number): string {
+    const [minId, maxId] = user1 < user2 ? [user1, user2] : [user2, user1];
+    return `${minId}:${maxId}`;
   }
 
   async getMessagesBetweenUsersCursor(
@@ -324,44 +254,35 @@ export class DatabaseStorage implements IStorage {
     if (!prisma) return { messages: [], nextCursor: null };
 
     const { limit, cursor } = opts;
-    const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
-    const conversationId = `${minId}:${maxId}`;
-    const where = { conversationId } as const;
+    const conversationId = this.getConversationId(user1Id, user2Id);
 
-    // For the most recent page (no cursor), try Redis cache first
-    if (messageCacheClient && !cursor) {
+    // Try cache for first page
+    if (cacheClient && !cursor) {
       try {
-        const cacheKey = getConversationCacheKey(user1Id, user2Id);
-        const cached = await messageCacheClient.get(cacheKey);
+        const cached = await cacheClient.get(CacheKeys.conversation(user1Id, user2Id));
         if (cached) {
-          return JSON.parse(cached) as {
-            messages: Message[];
-            nextCursor: { timestamp: string; msgId: number } | null;
-          };
+          return JSON.parse(cached);
         }
       } catch (err) {
-        console.error('Error reading from Redis message cache:', err);
+        console.error('Cache read error:', err);
       }
     }
 
     try {
       const raw = await prisma.message.findMany({
-        where: where as any,
-        orderBy: [
-          { timestamp: 'desc' },
-          { msgId: 'desc' },
-        ],
+        where: { conversationId },
+        orderBy: [{ timestamp: 'desc' }, { msgId: 'desc' }],
         take: limit + 1,
         cursor: cursor
-          ? ({
-            timestamp_msgId: {
-              timestamp: new Date(cursor.timestamp),
-              msgId: cursor.msgId,
-            },
-          } as any)
+          ? {
+              timestamp_msgId: {
+                timestamp: new Date(cursor.timestamp),
+                msgId: cursor.msgId,
+              },
+            }
           : undefined,
         skip: cursor ? 1 : 0,
-        include: { attachments: true } as any,
+        include: { attachments: true },
       });
 
       const hasMore = raw.length > limit;
@@ -371,21 +292,19 @@ export class DatabaseStorage implements IStorage {
         ? { timestamp: last.timestamp.toISOString(), msgId: last.msgId }
         : null;
 
-      // Cache only the most recent page
-      if (messageCacheClient && !cursor) {
-        try {
-          const cacheKey = getConversationCacheKey(user1Id, user2Id);
-          await messageCacheClient.set(cacheKey, JSON.stringify({ messages, nextCursor }), {
-            EX: 120, // Cache for 2 minutes (increased from 30s)
-          });
-        } catch (err) {
-          console.error('Error writing to Redis message cache:', err);
-        }
+      // Cache first page only
+      if (cacheClient && !cursor && messages.length > 0) {
+        const cacheKey = CacheKeys.conversation(user1Id, user2Id);
+        await cacheClient
+          .set(cacheKey, JSON.stringify({ messages, nextCursor }), {
+            EX: CacheTTL.CONVERSATION,
+          })
+          .catch((err) => console.error('Cache write error:', err));
       }
 
       return { messages, nextCursor };
     } catch (error) {
-      console.error('Error getting paginated messages between users:', error);
+      console.error('Error getting paginated messages:', error);
       return { messages: [], nextCursor: null };
     }
   }
@@ -395,17 +314,14 @@ export class DatabaseStorage implements IStorage {
     try {
       return await prisma.message.findMany({
         where: {
-          OR: [
-            { senderId: userId },
-            { receiverId: userId }
-          ]
+          OR: [{ senderId: userId }, { receiverId: userId }],
         },
         orderBy: { timestamp: 'desc' },
-        take: 50, // Get last 50 messages
-        include: { attachments: true } as any
+        take: 50,
+        include: { attachments: true },
       });
     } catch (error) {
-      console.error('Error getting recent messages for user:', error);
+      console.error('Error getting recent messages:', error);
       return [];
     }
   }
@@ -415,8 +331,14 @@ export class DatabaseStorage implements IStorage {
     try {
       const createdMessage = await prisma.globalMessage.create({
         data: message,
-        include: { sender: true }
+        include: { sender: true },
       });
+
+      // Invalidate global messages cache
+      if (cacheClient) {
+        await cacheClient.del(CacheKeys.globalMessages()).catch(() => {});
+      }
+
       console.log(`[Storage] Persisted global message: ${createdMessage.id}`);
       return createdMessage;
     } catch (error) {
@@ -427,12 +349,36 @@ export class DatabaseStorage implements IStorage {
 
   async getGlobalMessages(): Promise<GlobalMessageWithSender[]> {
     if (!prisma) return [];
+
+    // Try cache first
+    if (cacheClient) {
+      try {
+        const cached = await cacheClient.get(CacheKeys.globalMessages());
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (err) {
+        console.error('Cache read error:', err);
+      }
+    }
+
     try {
-      return await prisma.globalMessage.findMany({
+      const messages = await prisma.globalMessage.findMany({
         orderBy: { timestamp: 'asc' },
-        take: 100, // Limit to last 100 messages
-        include: { sender: true }
+        take: 100,
+        include: { sender: true },
       });
+
+      // Cache the result
+      if (cacheClient && messages.length > 0) {
+        await cacheClient
+          .set(CacheKeys.globalMessages(), JSON.stringify(messages), {
+            EX: CacheTTL.GLOBAL_MESSAGES,
+          })
+          .catch(() => {});
+      }
+
+      return messages;
     } catch (error) {
       console.error('Error getting global messages:', error);
       return [];
@@ -442,10 +388,9 @@ export class DatabaseStorage implements IStorage {
   async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
     if (!prisma) throw new Error('Database not initialized');
     try {
-      const createdAttachment = await (prisma as any).attachment.create({
-        data: attachment
+      return await prisma.attachment.create({
+        data: attachment,
       });
-      return createdAttachment;
     } catch (error) {
       console.error('Error creating attachment:', error);
       throw error;
@@ -455,8 +400,8 @@ export class DatabaseStorage implements IStorage {
   async deleteAttachment(id: number): Promise<void> {
     if (!prisma) return;
     try {
-      await (prisma as any).attachment.delete({
-        where: { id }
+      await prisma.attachment.delete({
+        where: { id },
       });
     } catch (error) {
       console.error('Error deleting attachment:', error);
@@ -466,12 +411,10 @@ export class DatabaseStorage implements IStorage {
   async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
     if (!prisma) return [];
     try {
-      return await (prisma as any).attachment.findMany({
+      return await prisma.attachment.findMany({
         where: {
-          createdAt: {
-            lt: olderThan
-          }
-        }
+          createdAt: { lt: olderThan },
+        },
       });
     } catch (error) {
       console.error('Error getting old attachments:', error);
@@ -479,247 +422,46 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>> {
-    const result = new Map<number, { lastMessage: Message | null, unread: number }>();
-    if (!messageCacheClient || otherUserIds.length === 0) return result;
+  async getConversationStats(
+    userId: number,
+    otherUserIds: number[]
+  ): Promise<Map<number, { lastMessage: Message | null; unread: number }>> {
+    const result = new Map<number, { lastMessage: Message | null; unread: number }>();
+    if (!cacheClient || otherUserIds.length === 0) return result;
 
     try {
-      // Prepare keys for mget
       const keys: string[] = [];
-      const userMapping: { otherId: number, type: 'last' | 'unread' }[] = [];
+      const userMapping: { otherId: number; type: 'last' | 'unread' }[] = [];
 
       for (const otherId of otherUserIds) {
-        const [minId, maxId] = userId < otherId ? [userId, otherId] : [otherId, userId];
-        const conversationId = `${minId}:${maxId}`;
-
-        const lastKey = `chatnexus:conv:${conversationId}:last`;
-        const unreadKey = `chatnexus:conv:${conversationId}:unread:${userId}`;
-
-        keys.push(lastKey, unreadKey);
+        const conversationId = this.getConversationId(userId, otherId);
+        keys.push(
+          CacheKeys.conversationLast(conversationId),
+          CacheKeys.conversationUnread(conversationId, userId)
+        );
         userMapping.push({ otherId, type: 'last' }, { otherId, type: 'unread' });
       }
 
-      const values = await messageCacheClient.mGet(keys);
+      const values = await cacheClient.mGet(keys);
 
       for (let i = 0; i < values.length; i += 2) {
         const lastVal = values[i];
         const unreadVal = values[i + 1];
-        const { otherId } = userMapping[i]; // i corresponds to 'last', i+1 to 'unread'
+        const { otherId } = userMapping[i];
 
-        const lastMessage = lastVal ? JSON.parse(lastVal) : null;
-        const unread = unreadVal ? parseInt(unreadVal, 10) : 0;
-
-        result.set(otherId, { lastMessage, unread });
+        result.set(otherId, {
+          lastMessage: lastVal ? JSON.parse(lastVal) : null,
+          unread: unreadVal ? parseInt(unreadVal, 10) : 0,
+        });
       }
 
       return result;
     } catch (error) {
-      console.error('Error getting conversation stats from Redis:', error);
+      console.error('Error getting conversation stats:', error);
       return result;
     }
   }
 }
 
-class InMemoryStorage implements IStorage {
-  public sessionStore: any;
-  private users: User[] = [] as unknown as User[];
-  private messages: Message[] = [] as unknown as Message[];
-  private globalMessages: GlobalMessage[] = [] as unknown as GlobalMessage[];
-  private userIdCounter = 1;
-  private messageIdCounter = 1;
-  private globalMessageIdCounter = 1;
-
-  constructor() {
-    this.sessionStore = new session.MemoryStore();
-  }
-
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.find((u) => u.userId === id) as User | undefined;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return this.users.find((u) => u.username === username) as User | undefined;
-  }
-
-  async getUserByGmail(gmail: string): Promise<User | undefined> {
-    if (gmail === null || gmail === undefined) return undefined;
-    return this.users.find((u) => u.gmail === gmail) as User | undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const userId = this.userIdCounter++;
-    const user = {
-      userId,
-      gmail: (insertUser as any).gmail ?? null,
-      passwordHash: (insertUser as any).passwordHash ?? null,
-      username: (insertUser as any).username ?? `guest_${userId}`,
-      age: (insertUser as any).age ?? null,
-      gender: (insertUser as any).gender ?? null,
-      isOnline: (insertUser as any).isOnline ?? false,
-      isGuest: (insertUser as any).isGuest ?? false,
-    } as unknown as User;
-
-    this.users.push(user);
-    return user;
-  }
-
-  async deleteUser(id: number): Promise<void> {
-    // Remove user from users array
-    const userIndex = this.users.findIndex((u) => u.userId === id);
-    if (userIndex !== -1) {
-      this.users.splice(userIndex, 1);
-    }
-
-    // Remove all messages associated with this user
-    this.messages = this.messages.filter((m) =>
-      m.senderId !== id && m.receiverId !== id
-    );
-  }
-
-  async updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void> {
-    const u = this.users.find((x) => x.userId === id);
-    if (u) u.isOnline = isOnline as any;
-  }
-
-  async updateUserUsername(id: number, username: string): Promise<User | undefined> {
-    const userIndex = this.users.findIndex((u) => u.userId === id);
-    if (userIndex !== -1) {
-      this.users[userIndex].username = username;
-      return this.users[userIndex] as User;
-    }
-    return undefined;
-  }
-
-  async getOnlineUsers(): Promise<User[]> {
-    return this.users.filter((u) => u.isOnline) as User[];
-  }
-
-  async createMessage(message: InsertMessage): Promise<Message> {
-    const msgId = this.messageIdCounter++;
-    const timestamp = new Date();
-    const msg = {
-      msgId,
-      senderId: (message as any).senderId,
-      receiverId: (message as any).receiverId,
-      message: (message as any).message,
-      conversationId: (message as any).conversationId,
-      timestamp,
-    } as unknown as Message;
-
-    this.messages.push(msg);
-    return msg;
-  }
-
-  async getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]> {
-    return this.messages.filter((m) =>
-      (m.senderId === user1Id && m.receiverId === user2Id) ||
-      (m.senderId === user2Id && m.receiverId === user1Id)
-    );
-  }
-
-  async getMessagesBetweenUsersCursor(
-    user1Id: number,
-    user2Id: number,
-    opts: { limit: number; cursor?: { timestamp: string; msgId: number } }
-  ): Promise<{ messages: Message[]; nextCursor: { timestamp: string; msgId: number } | null }> {
-    const { limit, cursor } = opts;
-    const all = this.messages
-      .filter((m) =>
-        (m.senderId === user1Id && m.receiverId === user2Id) ||
-        (m.senderId === user2Id && m.receiverId === user1Id)
-      )
-      .sort((a, b) => new Date(b.timestamp as any).getTime() - new Date(a.timestamp as any).getTime());
-
-    let startIndex = 0;
-    if (cursor) {
-      const idx = all.findIndex((m) => m.msgId === cursor.msgId);
-      startIndex = idx >= 0 ? idx + 1 : 0;
-    }
-
-    const slice = all.slice(startIndex, startIndex + limit + 1);
-    const hasMore = slice.length > limit;
-    const messages = hasMore ? slice.slice(0, limit) : slice;
-    const last = messages[messages.length - 1];
-    const nextCursor = hasMore
-      ? { timestamp: (last.timestamp as any as Date).toISOString(), msgId: last.msgId }
-      : null;
-
-    return { messages, nextCursor };
-  }
-
-  async getRecentMessagesForUser(userId: number): Promise<Message[]> {
-    return this.messages
-      .filter((m) => m.senderId === userId || m.receiverId === userId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 50);
-  }
-
-  async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender> {
-    const id = this.globalMessageIdCounter++;
-    const timestamp = new Date();
-    const sender = await this.getUser(message.senderId);
-    if (!sender) throw new Error("User not found");
-
-    const msg = {
-      id,
-      senderId: message.senderId,
-      message: message.message,
-      timestamp,
-      sender
-    } as unknown as GlobalMessageWithSender;
-
-    this.globalMessages.push(msg);
-    return msg;
-  }
-
-  async getGlobalMessages(): Promise<GlobalMessageWithSender[]> {
-    return this.globalMessages
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      .slice(-100) as GlobalMessageWithSender[];
-  }
-
-  async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
-    const id = Math.floor(Math.random() * 10000);
-    const newAttachment: Attachment = {
-      id,
-      messageId: attachment.messageId,
-      url: attachment.url,
-      filename: attachment.filename,
-      fileType: attachment.fileType,
-      createdAt: new Date()
-    };
-    return newAttachment;
-  }
-
-  async deleteAttachment(id: number): Promise<void> {
-    // No-op for in-memory
-  }
-
-  async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
-    return [];
-  }
-
-  async getConversationStats(userId: number, otherUserIds: number[]): Promise<Map<number, { lastMessage: Message | null, unread: number }>> {
-    const result = new Map<number, { lastMessage: Message | null, unread: number }>();
-
-    for (const otherId of otherUserIds) {
-      const messages = this.messages
-        .filter(m =>
-          (m.senderId === userId && m.receiverId === otherId) ||
-          (m.senderId === otherId && m.receiverId === userId)
-        )
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()); // Sort ascending to get last message easily
-
-      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-
-      // For in-memory, we don't track read status, so unread is always 0.
-      const unread = 0; // Simplified for in-memory mock
-
-      result.set(otherId, { lastMessage, unread });
-    }
-
-    return result;
-  }
-}
-
-export const storage: IStorage = prisma ? new DatabaseStorage() : new InMemoryStorage();
+// Export singleton storage instance
+export const storage: IStorage = new DatabaseStorage();

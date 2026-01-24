@@ -1,8 +1,9 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { User } from '@shared/schema';
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dev_secret_key_123';
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d'; // 7 days default for better UX
+// JWT expiry in seconds (7 days = 604800 seconds)
+const JWT_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
 
 interface AppJwtPayload {
     sub: number;
@@ -13,7 +14,8 @@ interface AppJwtPayload {
 }
 
 export function signToken(user: User): string {
-    // Sign a token with user ID, username, and guest status
+    const options: SignOptions = { expiresIn: JWT_EXPIRY_SECONDS };
+    
     return jwt.sign(
         { 
             sub: user.userId, 
@@ -21,7 +23,7 @@ export function signToken(user: User): string {
             isGuest: user.isGuest 
         },
         JWT_SECRET,
-        { expiresIn: JWT_EXPIRY }
+        options
     );
 }
 
