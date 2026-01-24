@@ -112,8 +112,10 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/global-messages', jwtAuth, async (req, res, next) => {
     try {
-      const messages = await storage.getGlobalMessages();
-      console.log(`[API] Fetched ${messages.length} global messages`);
+      // Limit global messages to prevent fetching thousands
+      const limit = Math.min(parseInt((req.query.limit as string) ?? '100', 10) || 100, 500);
+      const messages = await storage.getGlobalMessages(limit);
+      console.log(`[API] Fetched ${messages.length} global messages (limit: ${limit})`);
       res.json(messages);
     } catch (error) {
       console.error('Error fetching global messages:', error);

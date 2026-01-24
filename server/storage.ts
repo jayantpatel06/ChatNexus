@@ -30,7 +30,7 @@ export interface IStorage {
   ): Promise<{ messages: Message[]; nextCursor: { timestamp: string; msgId: number } | null }>;
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
   createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender>;
-  getGlobalMessages(): Promise<GlobalMessageWithSender[]>;
+  getGlobalMessages(limit?: number): Promise<GlobalMessageWithSender[]>;
   createAttachment(attachment: InsertAttachment): Promise<Attachment>;
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
@@ -347,13 +347,15 @@ class DatabaseStorage implements IStorage {
     }
   }
 
-  async getGlobalMessages(): Promise<GlobalMessageWithSender[]> {
+  async getGlobalMessages(limit: number = 100): Promise<GlobalMessageWithSender[]> {
     if (!prisma) return [];
 
-    // Try cache first
-    if (cacheClient) {
+    // Only use cache for default limit (cache has 100 messages)
+    const cache = limit === 100 ? cacheClient : null;
+    
+    if (cache) {
       try {
-        const cached = await cacheClient.get(CacheKeys.globalMessages());
+        const cached = await cache.get(CacheKeys.globalMessages());
         if (cached) {
           return JSON.parse(cached);
         }
@@ -365,13 +367,13 @@ class DatabaseStorage implements IStorage {
     try {
       const messages = await prisma.globalMessage.findMany({
         orderBy: { timestamp: 'asc' },
-        take: 100,
+        take: Math.min(limit, 500), // Hard cap at 500
         include: { sender: true },
       });
 
-      // Cache the result
-      if (cacheClient && messages.length > 0) {
-        await cacheClient
+      // Cache only default limit results
+      if (cache && messages.length > 0) {
+        await cache
           .set(CacheKeys.globalMessages(), JSON.stringify(messages), {
             EX: CacheTTL.GLOBAL_MESSAGES,
           })

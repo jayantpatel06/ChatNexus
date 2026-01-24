@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { registerUserSchema, loginUserSchema } from "@shared/schema";
 import { signToken } from "./lib/jwt";
 import { jwtAuth } from "./middleware/jwt-auth";
+import { authRateLimiter, guestLoginRateLimiter } from "./middleware/rate-limit";
 
 const scryptAsync = promisify(scrypt);
 
@@ -25,8 +26,8 @@ export function setupAuth(app: Express) {
   // Trust proxy for production environments behind reverse proxies
   app.set("trust proxy", 1);
 
-  // Guest login - returns JWT token directly
-  app.post("/api/guest-login", async (req, res, next) => {
+  // Guest login - returns JWT token directly (rate limited to prevent abuse)
+  app.post("/api/guest-login", guestLoginRateLimiter, async (req, res, next) => {
     try {
       const { username } = req.body;
 
@@ -69,8 +70,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Member registration - returns JWT token directly
-  app.post("/api/register", async (req, res, next) => {
+  // Member registration - returns JWT token directly (rate limited)
+  app.post("/api/register", authRateLimiter, async (req, res, next) => {
     try {
       const validatedData = registerUserSchema.parse(req.body);
 
@@ -106,8 +107,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Member login - returns JWT token directly
-  app.post("/api/login", async (req, res, next) => {
+  // Member login - returns JWT token directly (rate limited)
+  app.post("/api/login", authRateLimiter, async (req, res, next) => {
     try {
       const validatedData = loginUserSchema.parse(req.body);
 

@@ -131,6 +131,11 @@ async function handlePrivateMessage(
       return;
     }
 
+    // Reject if no message and no attachment
+    if (!data.message && !data.attachment?.url) {
+      return;
+    }
+
     const minId = Math.min(socket.userId, data.receiverId);
     const maxId = Math.max(socket.userId, data.receiverId);
     const conversationId = `${minId}:${maxId}`;
@@ -143,7 +148,7 @@ async function handlePrivateMessage(
       conversationId,
       message: data.message || 'Sent an attachment',
       timestamp: new Date(),
-      attachments: data.attachment ? [{
+      attachments: data.attachment?.url ? [{
         id: Date.now(),
         url: data.attachment.url,
         filename: data.attachment.filename,
