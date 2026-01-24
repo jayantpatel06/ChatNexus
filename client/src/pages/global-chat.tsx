@@ -1,51 +1,44 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GlobalMessageWithSender } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, ArrowLeft, Globe, ChevronDown, Smile } from "lucide-react";
+import { Send, ArrowLeft, Globe, Smile, Loader2 } from "lucide-react";
 import { Link } from "wouter";
-import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSmartScroll } from "@/hooks/use-smart-scroll";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
-
-// Helper functions
-const getUserInitials = (username: string) => {
-  return username.slice(0, 2).toUpperCase();
-};
-
-const getAvatarColor = (username: string) => {
-  const colors = [
-    "from-blue-500 to-purple-500",
-    "from-green-500 to-teal-500",
-    "from-orange-500 to-red-500",
-    "from-purple-500 to-pink-500",
-    "from-indigo-500 to-blue-500",
-    "from-yellow-500 to-orange-500",
-  ];
-  const index = username.length % colors.length;
-  return colors[index];
-};
+import { QUERY_KEYS } from "@/lib/utils";
+import { MessageListItem } from "@/components/message-list-item";
+import { NewMessageIndicator } from "@/components/new-message-indicator";
 
 export default function GlobalChat() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { socket } = useSocket();
   const [messageInput, setMessageInput] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  // Instagram-style scroll tracking
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [showNewMessageIndicator, setShowNewMessageIndicator] = useState(false);
-  const userSentMessageRef = useRef(false);
+  // Use shared smart scroll hook
+  const {
+    containerRef: messagesContainerRef,
+    endRef: messagesEndRef,
+    showNewMessageIndicator,
+    markUserSentMessage,
+    scrollToBottom,
+    handleScroll,
+    handleMessagesChange,
+  } = useSmartScroll({ currentUserId: user?.userId });
 
-  const { data: messages = [] } = useQuery<GlobalMessageWithSender[]>({
-    queryKey: ["/api/global-messages"],
+  const {
+    data: messages = [],
+    isLoading,
+    error,
+  } = useQuery<GlobalMessageWithSender[]>({
+    queryKey: [QUERY_KEYS.GLOBAL_MESSAGES],
   });
 
   useEffect(() => {
@@ -53,7 +46,7 @@ export default function GlobalChat() {
 
     const handleNewMessage = (data: { message: GlobalMessageWithSender }) => {
       queryClient.setQueryData<GlobalMessageWithSender[]>(
-        ["/api/global-messages"],
+        [QUERY_KEYS.GLOBAL_MESSAGES],
         (old) => {
           if (!old) return [data.message];
           // Check if message already exists to prevent duplicates
@@ -70,63 +63,11 @@ export default function GlobalChat() {
     };
   }, [socket, queryClient]);
 
-  // Smart scroll - only scroll to bottom for new messages
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-    setShowNewMessageIndicator(false);
-    setIsAtBottom(true);
-  }, []);
-
-  // Track scroll position
-  const handleScroll = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const atBottom = distanceFromBottom < 150;
-
-    setIsAtBottom(atBottom);
-
-    if (atBottom) {
-      setShowNewMessageIndicator(false);
-    }
-  }, []);
-
-  // Instagram-style scroll behavior for new messages
-  const prevMessageCountRef = useRef(0);
-
+  // Handle scroll behavior when messages change
   useEffect(() => {
-    const currentCount = messages.length;
-    const prevCount = prevMessageCountRef.current;
     const lastMessage = messages[messages.length - 1];
-
-    const isNewMessage = currentCount > prevCount;
-
-    if (prevCount === 0 && currentCount > 0) {
-      // Initial load - scroll to bottom
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          scrollToBottom("auto");
-        }, 50);
-      });
-    } else if (isNewMessage) {
-      const isOwnMessage = lastMessage?.senderId === user?.userId;
-
-      if (userSentMessageRef.current || isOwnMessage) {
-        requestAnimationFrame(() => {
-          scrollToBottom("smooth");
-        });
-        userSentMessageRef.current = false;
-      } else if (isAtBottom) {
-        scrollToBottom("smooth");
-      } else {
-        setShowNewMessageIndicator(true);
-      }
-    }
-
-    prevMessageCountRef.current = currentCount;
-  }, [messages, scrollToBottom, isAtBottom, user?.userId]);
+    handleMessagesChange(messages, lastMessage?.id);
+  }, [messages, handleMessagesChange]);
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
     setMessageInput((prev) => prev + emojiData.emoji);
@@ -135,11 +76,10 @@ export default function GlobalChat() {
   const handleSendMessage = useCallback(() => {
     if (!messageInput.trim() || !socket) return;
 
-    userSentMessageRef.current = true;
+    markUserSentMessage();
 
     socket.emit("global_message", {
       message: messageInput,
-      receiverId: 0,
     });
 
     setMessageInput("");
@@ -164,15 +104,7 @@ export default function GlobalChat() {
   return (
     <div className="h-[100dvh] bg-background flex flex-col">
       {/* Chat Header */}
-      <div
-        className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0"
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          backdropFilter: "saturate(180%) blur(4px)",
-        }}
-      >
+      <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
         <div className="flex items-center gap-3">
           <Link href="/">
             <Button
@@ -199,7 +131,7 @@ export default function GlobalChat() {
       {/* Messages Area */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0 relative"
+        className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-background min-h-0 relative"
         onScroll={handleScroll}
       >
         {/* System Message */}
@@ -212,57 +144,53 @@ export default function GlobalChat() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          {messages.map((msg) => {
-            const isMe = msg.senderId === user?.userId;
-            const sender = msg.sender;
-            return (
-              <div
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading messages...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <p className="text-sm text-destructive">Failed to load messages</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <Globe className="w-12 h-12 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              No messages yet. Start the conversation!
+            </p>
+          </div>
+        )}
+
+        {/* Messages */}
+        {!isLoading && !error && messages.length > 0 && (
+          <div className="space-y-3">
+            {messages.map((msg) => (
+              <MessageListItem
                 key={msg.id}
-                className="flex items-start gap-2 py-1 hover:bg-muted/50 px-2 rounded"
-              >
-                <div
-                  className={`w-6 h-6 bg-gradient-to-br ${getAvatarColor(sender?.username || "")} text-white rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5`}
-                >
-                  {getUserInitials(sender?.username || "")}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span
-                      className={`font-semibold text-sm ${isMe ? "text-primary" : "text-foreground"}`}
-                    >
-                      {isMe ? "Me" : sender?.username}
-                    </span>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <span className="text-sm break-words min-w-0 flex-1 text-foreground">
-                      {msg.message}
-                    </span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(msg.timestamp), "HH:mm")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                messageId={msg.id}
+                message={msg.message}
+                timestamp={msg.timestamp}
+                senderUsername={msg.sender?.username || "Unknown"}
+                isCurrentUser={msg.senderId === user?.userId}
+              />
+            ))}
+          </div>
+        )}
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* New Message Indicator - Instagram style */}
       {showNewMessageIndicator && (
-        <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 z-50">
-          <Button
-            onClick={() => scrollToBottom("smooth")}
-            className="rounded-full px-4 py-2 shadow-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
-            size="sm"
-          >
-            <ChevronDown className="w-4 h-4" />
-            New message
-          </Button>
-        </div>
+        <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
       )}
 
       {/* Message Input Area */}

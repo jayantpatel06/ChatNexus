@@ -16,14 +16,13 @@ import {
   Send,
   ArrowLeft,
   Loader2,
-  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { MessageBubble } from "./message-bubble";
+import { NewMessageIndicator } from "./new-message-indicator";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useChatTheme, ChatTheme } from "@/hooks/use-chat-theme";
-import { cn } from "@/lib/utils";
+import { cn, getUserInitials, getAvatarColor, QUERY_KEYS } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -51,24 +50,6 @@ interface PendingAttachment {
   status: "uploading" | "sending" | "error";
 }
 
-// Helper functions moved to message-bubble component
-const getUserInitials = (username: string) => {
-  return username.slice(0, 2).toUpperCase();
-};
-
-const getAvatarColor = (username: string) => {
-  const colors = [
-    "from-blue-500 to-purple-500",
-    "from-green-500 to-teal-500",
-    "from-orange-500 to-red-500",
-    "from-purple-500 to-pink-500",
-    "from-indigo-500 to-blue-500",
-    "from-yellow-500 to-orange-500",
-  ];
-  const index = username.length % colors.length;
-  return colors[index];
-};
-
 interface ChatAreaProps {
   selectedUser: User | null;
   onBack?: () => void;
@@ -81,18 +62,11 @@ export function ChatArea({
   showBackButton = false,
 }: ChatAreaProps) {
   const { user } = useAuth();
-  const {
-    sendMessage,
-    startTyping,
-    stopTyping,
-    isConnected,
-    typingUsers,
-    onlineUsers,
-  } = useSocket();
+  const { sendMessage, startTyping, stopTyping, typingUsers, onlineUsers } =
+    useSocket();
   const { liveMessages, addOptimisticMessage, removeOptimisticMessage } =
     useActiveChat();
   const isMobile = useIsMobile();
-  const { keyboardHeight, isKeyboardVisible } = useKeyboardHeight();
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -673,14 +647,6 @@ export function ChatArea({
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0 relative overscroll-contain"
         onScroll={handleScroll}
-        style={
-          {
-            // When keyboard is visible on mobile, add padding equal to keyboard height plus
-            // the input bar area so messages are not hidden. Previously code subtracted a
-            // magic number which caused excessive empty space. Use addition to avoid that.
-            // paddingBottom: isMobile && isKeyboardVisible ? `${Math.max(keyboardHeight , 0)}px` : '0px',
-          }
-        }
         data-testid="chat-messages-area"
       >
         {/* Load older messages */}
@@ -769,16 +735,7 @@ export function ChatArea({
 
       {/* New Message Indicator - Instagram style */}
       {showNewMessageIndicator && (
-        <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 z-50">
-          <Button
-            onClick={() => scrollToBottom("smooth")}
-            className="rounded-full px-4 py-2 shadow-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
-            size="sm"
-          >
-            <ChevronDown className="w-4 h-4" />
-            New message
-          </Button>
-        </div>
+        <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
       )}
 
       {/* Message Input Area */}
