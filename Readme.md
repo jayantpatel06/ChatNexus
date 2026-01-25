@@ -1,6 +1,7 @@
 # ChatNexus - Real-time Chat Application
 
-Website: https://chatnexus-8vh2.onrender.com/
+Website(slow): https://chatnexus.up.railway.app
+Website(fast): http://13.127.203.99:80
 
 ## Overview
 
