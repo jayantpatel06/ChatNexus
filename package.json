@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "pm2:start": "pm2 start dist/index.js --name chatnexus"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
