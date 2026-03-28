@@ -1,0 +1,245 @@
+/* ═══════════════════════════════════════════════════════════
+   ChatNexus Premium Design Tokens & Shared Effects
+   Glassmorphism · 3D Motion · Micro-interactions
+   ═══════════════════════════════════════════════════════════ */
+
+/* ──── Design Tokens (Centralized Theme) ──── */
+:root {
+  /* You can easily change the ENTIRE app's theme here */
+  --brand-bg: #161a19;
+  --brand-card: #232826;
+  --brand-card-glass: rgba(35, 40, 38, 0.55);
+  --brand-primary: #d6ff38;
+  --brand-primary-hover: #c4f224;
+  --brand-accent: #eaff80;
+  --brand-text: #ffffff;
+  --brand-muted: #a1a7a4;
+  --brand-border: rgba(255, 255, 255, 0.05);
+
+  --brand-glow-primary: rgba(214, 255, 56, 0.35);
+  --brand-glow-accent: rgba(234, 255, 128, 0.25);
+  --brand-glow-dark: rgba(0, 0, 0, 0.6);
+  
+  /* Legacy mapped variables (will be refactored) */
+  --ln-bg: var(--brand-bg);
+  --ln-card: var(--brand-card);
+  --ln-card-glass: var(--brand-card-glass);
+  --ln-primary: var(--brand-primary);
+  --ln-accent: var(--brand-primary); /* unify accents */
+  --ln-text: var(--brand-text);
+  --ln-muted: var(--brand-muted);
+  --ln-border: var(--brand-border);
+  --ln-glow-purple: var(--brand-glow-primary);
+  --ln-glow-cyan: var(--brand-glow-accent);
+}
+
+/* ──── Root Reset ──── */
+.landing-root {
+  position: relative;
+  min-height: 100vh;
+  background: var(--ln-bg);
+  color: var(--ln-text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* Hide default cursor on all interactive elements too */
+.landing-root *,
+.landing-root a,
+.landing-root button,
+.landing-root input,
+.landing-root select,
+.landing-root textarea {
+  cursor: none;
+}
+
+/* Hide scrollbar but keep scrolling */
+.landing-root {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.landing-root::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+html:has(.landing-root) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html:has(.landing-root)::-webkit-scrollbar {
+  display: none;
+}
+
+/* ═══════ Custom Cursor ═══════ */
+.cursor-glow,
+.cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.cursor-glow {
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(
+    circle,
+    rgba(130, 57, 255, 0.07) 0%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+}
+.cursor-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ln-accent);
+  box-shadow: 0 0 12px 3px var(--ln-glow-cyan);
+}
+/* hide custom cursor on touch / small screens — restore default */
+@media (hover: none), (max-width: 768px) {
+  .cursor-glow,
+  .cursor-dot {
+    display: none;
+  }
+  .landing-root,
+  .landing-root *,
+  .landing-root a,
+  .landing-root button,
+  .landing-root input,
+  .landing-root select,
+  .landing-root textarea {
+    cursor: auto;
+  }
+}
+
+/* ═══════ Preloader ═══════ */
+.preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--ln-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preloader-ring {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--ln-primary);
+  border-right-color: var(--ln-accent);
+  animation: spin 1s linear infinite, pulse-glow 1.6s ease-in-out infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 18px var(--ln-glow-purple), 0 0 40px var(--ln-glow-cyan);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--ln-glow-purple), 0 0 60px var(--ln-glow-cyan);
+  }
+}
+
+/* ═══════ Ambient Parallax Orbs ═══════ */
+.ambient-orbs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  will-change: transform;
+}
+.orb-purple {
+  width: 520px;
+  height: 520px;
+  background: var(--ln-glow-purple);
+  top: 15%;
+  left: 20%;
+  opacity: 0.5;
+}
+.orb-cyan {
+  width: 400px;
+  height: 400px;
+  background: var(--ln-glow-cyan);
+  top: 55%;
+  left: 70%;
+  opacity: 0.35;
+}
+.orb-small {
+  width: 200px;
+  height: 200px;
+  background: rgba(130, 57, 255, 0.2);
+  top: 75%;
+  left: 15%;
+  opacity: 0.45;
+}
+
+/* ──── Glassmorphic Tilt Card ──── */
+.tilt-card {
+  position: relative;
+  border-radius: 20px;
+  background: var(--ln-card-glass);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--ln-border);
+  overflow: hidden;
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+  will-change: transform;
+}
+.tilt-card:hover {
+  box-shadow: 0 8px 40px rgba(130, 57, 255, 0.12),
+    0 0 0 1px rgba(130, 57, 255, 0.1);
+  border-color: rgba(130, 57, 255, 0.18);
+}
+.tilt-card-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+  transition: background 0.3s;
+}
+
+/* ═══════ Scroll Reveal System ═══════ */
+.reveal-item {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-item.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══════ Auth Page Overrides ═══════ */
+.auth-input {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: var(--ln-text) !important;
+  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s !important;
+}
+.auth-input:focus {
+  border-color: var(--ln-accent) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 0 0 2px rgba(0, 198, 251, 0.2) !important;
+}
+.auth-label {
+  color: var(--ln-muted);
+}

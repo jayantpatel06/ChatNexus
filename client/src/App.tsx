@@ -1,3 +1,4 @@
+import "@/styles/effects.css";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -10,13 +11,15 @@ import ChatDashboard from "@/pages/chat-dashboard";
 import GlobalChat from "@/pages/global-chat";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
+import LandingPage from "@/pages/landing-page";
 import { ChatThemeProvider } from "@/hooks/use-chat-theme";
 import DotGrid from "./DotGrid";
 
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={ChatDashboard} />
+      <Route path="/" component={LandingPage} />
+      <ProtectedRoute path="/dashboard" component={ChatDashboard} />
       <ProtectedRoute path="/global-chat" component={GlobalChat} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />

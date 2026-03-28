@@ -1,10 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
+import {
+  CustomCursor,
+  PagePreloader,
+  AmbientOrbs,
+  TiltCard,
+  MagneticWrap,
+  useParallax,
+} from "@/components/effects";
+import gsap from "gsap";
 import {
   Select,
   SelectContent,
@@ -12,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MessageCircle, Loader2 } from "lucide-react";
+import { MessageCircle, Loader2, KeyRound, Mail, User, ArrowLeft } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerUserSchema, loginUserSchema } from "@shared/schema";
@@ -24,6 +33,21 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [guestUsername, setGuestUsername] = useState("");
+  const [showGuestCard, setShowGuestCard] = useState(false);
+  
+  const scrollY = useParallax();
+  const [loaded, setLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Animate form in once preloader completes
+  useEffect(() => {
+    if (!loaded || !containerRef.current) return;
+    gsap.fromTo(
+      containerRef.current,
+      { y: 40, opacity: 0, scale: 0.95 },
+      { y: 0, opacity: 1, scale: 1, duration: 0.8, ease: "power3.out", delay: 0.2 }
+    );
+  }, [loaded]);
 
   // All hooks must be called before any conditional returns
   const loginForm = useForm<z.infer<typeof loginUserSchema>>({
@@ -48,7 +72,7 @@ export default function AuthPage() {
   // Redirect if already logged in - use useEffect to avoid calling setLocation during render
   useEffect(() => {
     if (user) {
-      setLocation("/");
+      setLocation("/dashboard");
     }
   }, [user, setLocation]);
 
@@ -71,22 +95,38 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo/Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
-            <MessageCircle className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-white">ChatNexus</h1>
-          <p className="text-white">Connect and chat in real-time</p>
+    <>
+      <PagePreloader onComplete={() => setLoaded(true)} />
+      <div className="landing-root min-h-screen flex items-center justify-center p-4">
+        <CustomCursor />
+        <AmbientOrbs scrollY={scrollY} />
+
+        {/* Floating Back Button */}
+        <div className="fixed top-6 left-6 z-50">
+          <MagneticWrap>
+            <Link href="/">
+              <Button variant="ghost" className="text-white hover:bg-white/10 rounded-full gap-2 px-4 shadow-[0_0_15px_rgba(255,255,255,0.05)] border border-white/10 backdrop-blur-md">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Home
+              </Button>
+            </Link>
+          </MagneticWrap>
         </div>
 
-        {/* Auth Card */}
-        <Card className="shadow-lg">
+        <div ref={containerRef} className="w-full max-w-md relative z-10" style={{ opacity: 0 }}>
+          {/* Logo/Brand */}
+          <div className="text-center mb-4">
+            <h1 className="text-4xl font-extrabold text-white tracking-tight mb-2">ChatNexus</h1>
+            <p className="text-white/70 text-base">
+              Connect and Chat in Real-time with Strangers
+            </p>
+          </div>
+
+          {/* Auth Card */}
+          <TiltCard className="w-full shadow-2xl">
           <CardContent className="p-6">
             {/* Tab Navigation */}
-            <div className="flex mb-6 bg-secondary rounded-lg p-1">
+            <div className="flex bg-secondary rounded-lg p-1">
               <Button
                 variant={activeTab === "login" ? "default" : "ghost"}
                 className={`flex-1 ${activeTab === "login" ? "bg-card text-foreground shadow-sm" : "text-white"}`}
@@ -105,55 +145,66 @@ export default function AuthPage() {
               </Button>
             </div>
 
-            {/* Guest Login Section */}
-            <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border">
-              <h3 className="font-medium text-foreground mb-2 text-center">
-                Quick Access
-              </h3>
-              <p className="text-sm text-muted-foreground mb-3 text-center">
-                Join instantly as a guest
-              </p>
-
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="guest-username" className="sr-only">
-                    Guest Username
-                  </Label>
-                  <Input
-                    id="guest-username"
-                    placeholder="Choose a guest username"
-                    value={guestUsername}
-                    onChange={(e) => setGuestUsername(e.target.value)}
-                    className="bg-background"
-                    data-testid="input-guest-username"
-                  />
-                </div>
-
-                <Button
-                  variant="secondary"
-                  className="w-full hover:scale-105 transition-transform"
-                  onClick={handleGuestLogin}
-                  disabled={
-                    guestLoginMutation.isPending || !guestUsername.trim()
-                  }
-                  data-testid="button-guest-login"
-                >
-                  {guestLoginMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Continue as Guest
-                </Button>
-              </div>
+            {/* Guest Login Link and Card */}
+            <div className="flex flex-col items-center">
+              <Button
+                type="button"
+                variant={undefined}
+                className="w-full mt-2 bg-black hover:bg-neutral-900 text-white"
+                onClick={() => setShowGuestCard(true)}
+                data-testid="link-guest-login"
+              >
+                Login as Guest
+              </Button>
             </div>
+            {showGuestCard && (
+              <div className="mb-4 p-4 bg-muted/50 rounded-lg border border-border animate-fade-in">
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="guest-username" className="sr-only">
+                      Guest Username
+                    </Label>
+                    <Input
+                      id="guest-username"
+                      placeholder="Choose a guest username"
+                      value={guestUsername}
+                      onChange={(e) => setGuestUsername(e.target.value)}
+                      className="bg-background"
+                      data-testid="input-guest-username"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      className="w-full hover:scale-105 transition-transform"
+                      onClick={handleGuestLogin}
+                      disabled={
+                        guestLoginMutation.isPending || !guestUsername.trim()
+                      }
+                      data-testid="button-guest-login"
+                    >
+                      {guestLoginMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Continue as Guest
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="flex-0"
+                      onClick={() => setShowGuestCard(false)}
+                      data-testid="button-guest-cancel"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="relative mb-6">
+            <div className="relative mb-6 ">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-border"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-card px-4 text-muted-foreground">
-                  or continue with account
-                </span>
               </div>
             </div>
 
@@ -165,10 +216,11 @@ export default function AuthPage() {
                 data-testid="form-login"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+                  <Label htmlFor="login-email" className="auth-label">Email</Label>
                   <Input
                     id="login-email"
                     type="email"
+                    className="auth-input"
                     placeholder="Enter your Gmail address"
                     {...loginForm.register("gmail")}
                     data-testid="input-login-email"
@@ -180,10 +232,11 @@ export default function AuthPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
+                  <Label htmlFor="login-password" className="auth-label">Password</Label>
                   <Input
                     id="login-password"
                     type="password"
+                    className="auth-input"
                     placeholder="Enter your password"
                     {...loginForm.register("password")}
                     data-testid="input-login-password"
@@ -194,17 +247,19 @@ export default function AuthPage() {
                     </p>
                   )}
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full hover:scale-105 transition-transform"
-                  disabled={loginMutation.isPending}
-                  data-testid="button-login-submit"
-                >
-                  {loginMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Sign In
-                </Button>
+                <MagneticWrap className="w-full mt-2">
+                  <button
+                    type="submit"
+                    className="hero-btn-primary w-full justify-center"
+                    disabled={loginMutation.isPending}
+                    data-testid="button-login-submit"
+                  >
+                    {loginMutation.isPending ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : null}
+                    <span>Sign In</span>
+                  </button>
+                </MagneticWrap>
               </form>
             )}
 
@@ -301,26 +356,29 @@ export default function AuthPage() {
                     </p>
                   )}
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full hover:scale-105 transition-transform"
-                  disabled={registerMutation.isPending}
-                  data-testid="button-register-submit"
-                >
-                  {registerMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Create Account
-                </Button>
+                <MagneticWrap className="w-full mt-4">
+                  <button
+                    type="submit"
+                    className="hero-btn-primary w-full justify-center"
+                    disabled={registerMutation.isPending}
+                    data-testid="button-register-submit"
+                  >
+                    {registerMutation.isPending ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : null}
+                    <span>Create Account</span>
+                  </button>
+                </MagneticWrap>
               </form>
             )}
           </CardContent>
-        </Card>
+        </TiltCard>
 
-        <p className="text-center text-sm text-white mt-6">
+        <p className="text-center text-sm text-white/50 mt-8">
           By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

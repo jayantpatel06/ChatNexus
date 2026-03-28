@@ -63,6 +63,16 @@ export default {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
+        brand: {
+          bg: "var(--brand-bg)",
+          card: "var(--brand-card)",
+          primary: "var(--brand-primary)",
+          "primary-hover": "var(--brand-primary-hover)",
+          accent: "var(--brand-accent)",
+          text: "var(--brand-text)",
+          muted: "var(--brand-muted)",
+          border: "var(--brand-border)",
+        }
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

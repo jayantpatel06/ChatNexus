@@ -13,6 +13,7 @@ import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { QUERY_KEYS } from "@/lib/utils";
 import { MessageListItem } from "@/components/message-list-item";
 import { NewMessageIndicator } from "@/components/new-message-indicator";
+import { UsersSidebar } from "@/components/users-sidebar";
 
 export default function GlobalChat() {
   const queryClient = useQueryClient();
@@ -77,7 +78,6 @@ export default function GlobalChat() {
     if (!messageInput.trim() || !socket) return;
 
     markUserSentMessage();
-
     socket.emit("global_message", {
       message: messageInput,
     });
@@ -101,12 +101,156 @@ export default function GlobalChat() {
     }
   };
 
+  // Desktop: sidebar + global chat, Mobile: only global chat
+  if (!isMobile) {
+    return (
+      <div
+        className="h-screen bg-background flex"
+        data-testid="global-chat-desktop-layout"
+      >
+        <UsersSidebar selectedUser={null} onUserSelect={() => {}} />
+        <div className="flex-1 flex flex-col">
+          {/* Chat Header */}
+          <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
+            <div className="flex items-center gap-3">
+              <Link href="/dashboard">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-2"
+                  title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+              <div className="relative">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center font-medium">
+                  <Globe className="w-5 h-5" />
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Global Chat</h3>
+              </div>
+            </div>
+          </div>
+          {/* Messages Area */}
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-background min-h-0 relative"
+            onScroll={handleScroll}
+          >
+            {/* System Message */}
+            <div className="flex justify-center my-4">
+              <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+                  🌍
+                </div>
+                Everyone can see these messages
+              </div>
+            </div>
+            {isLoading && (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Loading messages...
+                </p>
+              </div>
+            )}
+            {error && !isLoading && (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <p className="text-sm text-destructive">
+                  Failed to load messages
+                </p>
+              </div>
+            )}
+            {!isLoading && !error && messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Globe className="w-12 h-12 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">
+                  No messages yet. Start the conversation!
+                </p>
+              </div>
+            )}
+            {!isLoading && !error && messages.length > 0 && (
+              <div className="space-y-3">
+                {messages.map((msg) => (
+                  <MessageListItem
+                    key={msg.id}
+                    messageId={msg.id}
+                    message={msg.message}
+                    timestamp={msg.timestamp}
+                    senderUsername={msg.sender?.username || "Unknown"}
+                    isCurrentUser={msg.senderId === user?.userId}
+                  />
+                ))}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          {showNewMessageIndicator && (
+            <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
+          )}
+          <div
+            className="bg-card border-t border-border p-3 flex-shrink-0"
+            style={{ paddingBottom: "12px" }}
+          >
+            <div className="flex items-end gap-2">
+              <div className="flex-1 relative">
+                <Textarea
+                  placeholder="Type a message..."
+                  className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg"
+                  rows={1}
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleInputFocus}
+                />
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 bottom-1 h-10 w-10 flex items-center justify-center"
+                    title="Add Emoji"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  >
+                    <Smile className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-12 right-0 z-50 shadow-xl rounded-xl border border-border">
+                      <EmojiPicker
+                        onEmojiClick={onEmojiClick}
+                        width={300}
+                        height={400}
+                        lazyLoadEmojis={true}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleSendMessage}
+                disabled={!messageInput.trim()}
+                className="h-10 w-10 flex-shrink-0"
+                size="icon"
+                title="Send Message"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile: original layout
   return (
     <div className="h-[100dvh] bg-background flex flex-col">
       {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
         <div className="flex items-center gap-3">
-          <Link href="/">
+          <Link href="/dashboard">
             <Button
               variant="ghost"
               size="sm"
@@ -116,7 +260,6 @@ export default function GlobalChat() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center font-medium">
               <Globe className="w-5 h-5" />
@@ -127,7 +270,6 @@ export default function GlobalChat() {
           </div>
         </div>
       </div>
-
       {/* Messages Area */}
       <div
         ref={messagesContainerRef}
@@ -143,23 +285,17 @@ export default function GlobalChat() {
             Everyone can see these messages
           </div>
         </div>
-
-        {/* Loading State */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Loading messages...</p>
           </div>
         )}
-
-        {/* Error State */}
         {error && !isLoading && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <p className="text-sm text-destructive">Failed to load messages</p>
           </div>
         )}
-
-        {/* Empty State */}
         {!isLoading && !error && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Globe className="w-12 h-12 text-muted-foreground/50" />
@@ -168,8 +304,6 @@ export default function GlobalChat() {
             </p>
           </div>
         )}
-
-        {/* Messages */}
         {!isLoading && !error && messages.length > 0 && (
           <div className="space-y-3">
             {messages.map((msg) => (
@@ -184,24 +318,16 @@ export default function GlobalChat() {
             ))}
           </div>
         )}
-
         <div ref={messagesEndRef} />
       </div>
-
-      {/* New Message Indicator - Instagram style */}
       {showNewMessageIndicator && (
         <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
       )}
-
-      {/* Message Input Area */}
       <div
         className="bg-card border-t border-border p-3 flex-shrink-0"
-        style={{
-          paddingBottom: "12px",
-        }}
+        style={{ paddingBottom: "12px" }}
       >
         <div className="flex items-end gap-2">
-          {/* Message Input */}
           <div className="flex-1 relative">
             <Textarea
               placeholder="Type a message..."
@@ -212,8 +338,6 @@ export default function GlobalChat() {
               onKeyDown={handleKeyDown}
               onFocus={handleInputFocus}
             />
-
-            {/* Emoji Button */}
             <div className="relative">
               <Button
                 variant="ghost"
@@ -236,8 +360,6 @@ export default function GlobalChat() {
               )}
             </div>
           </div>
-
-          {/* Send Button */}
           <Button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleSendMessage}
