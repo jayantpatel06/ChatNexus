@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Seo } from "@/components/seo";
 import {
@@ -102,7 +102,8 @@ import {
 /* ───────────────────── page component ──────────────────── */
 
 export default function LandingPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const scrollY = useParallax();
   const seoStructuredData = [
     {
@@ -204,6 +205,16 @@ export default function LandingPage() {
   const footerRef = useReveal(0.15);
 
   const dest = user ? "/dashboard" : "/auth";
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      setLocation("/dashboard");
+    }
+  }, [isLoading, user, setLocation]);
+
+  if (!isLoading && user) {
+    return null;
+  }
 
   return (
     <>
@@ -382,18 +393,18 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="about-section" aria-labelledby="faq-heading">
-          <div className="reveal-item about-inner max-w-[960px]">
+        <section className="faq-section" aria-labelledby="faq-heading">
+          <div className="reveal-item faq-inner">
             <span className="section-tag">FAQ</span>
             <h2 id="faq-heading" className="section-title">
               Questions People Ask Before Using Stranger Chat Sites
             </h2>
-            <div className="mt-10 space-y-6 text-left">
+            <div className="faq-list">
               {FAQS.map((faq) => (
-                <div key={faq.question} className="feature-card">
+                <article key={faq.question} className="faq-card">
                   <h3 className="feature-title">{faq.question}</h3>
                   <p className="feature-desc">{faq.answer}</p>
-                </div>
+                </article>
               ))}
             </div>
           </div>

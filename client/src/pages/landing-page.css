@@ -492,6 +492,35 @@
 }
 
 /* ═══════ Footer ═══════ */
+.faq-section {
+  position: relative;
+  z-index: 2;
+  padding: 24px 24px 72px;
+}
+
+.faq-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.faq-list {
+  margin-top: 40px;
+  display: grid;
+  gap: 18px;
+  text-align: left;
+}
+
+.faq-card {
+  padding: 28px 30px;
+  border-radius: 22px;
+  background: var(--ln-card-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--ln-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+
 .landing-footer {
   position: relative;
   z-index: 2;

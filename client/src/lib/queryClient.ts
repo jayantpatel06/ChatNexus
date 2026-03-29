@@ -1,7 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { User } from "@shared/schema";
 
 // Token storage key
-const TOKEN_KEY = 'chatnexus_jwt';
+const TOKEN_KEY = "chatnexus_jwt";
+const USER_KEY = "chatnexus_user";
 
 // Get token from localStorage
 export function getStoredToken(): string | null {
@@ -16,6 +18,47 @@ export function setStoredToken(token: string): void {
 // Remove token from localStorage
 export function removeStoredToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getStoredUser(): User | null {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as User;
+  } catch {
+    localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+export function setStoredUser(user: User): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function removeStoredUser(): void {
+  localStorage.removeItem(USER_KEY);
+}
+
+type JwtPayload = {
+  exp?: number;
+  iat?: number;
+  sub?: number;
+  username?: string;
+  isGuest?: boolean;
+};
+
+export function decodeStoredToken(token: string): JwtPayload | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    return JSON.parse(atob(padded)) as JwtPayload;
+  } catch {
+    return null;
+  }
 }
 
 async function throwIfResNotOk(res: Response) {

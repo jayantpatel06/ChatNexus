@@ -1,22 +1,15 @@
-import {
-  createContext,
-  ReactNode,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-} from "react";
-import {
-  useQuery,
-  useMutation,
-  UseMutationResult,
-} from "@tanstack/react-query";
+import { createContext, ReactNode, useContext, useState, useCallback, useEffect } from "react";
+import { useMutation, UseMutationResult } from "@tanstack/react-query";
 import { User as SelectUser, LoginUser, RegisterUser } from "@shared/schema";
 import {
   apiRequest,
   queryClient,
+  decodeStoredToken,
   getStoredToken,
+  getStoredUser,
+  removeStoredUser,
   setStoredToken,
+  setStoredUser,
   removeStoredToken,
 } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -47,12 +40,20 @@ type AuthContextType = {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+function clearStoredSession() {
+  removeStoredToken();
+  removeStoredUser();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  // Initialize token from localStorage
   const [token, setToken] = useState<string | null>(() => getStoredToken());
+  const [user, setUser] = useState<SelectUser | null>(() => getStoredUser());
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  // Update localStorage when token changes
   const updateToken = useCallback((newToken: string | null) => {
     setToken(newToken);
     if (newToken) {
@@ -62,49 +63,175 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const {
-    data: user,
-    error,
-    isLoading,
-  } = useQuery<SelectUser | null, Error>({
-    queryKey: ["/api/user"],
-    queryFn: async () => {
-      // Only fetch if we have a token
+  const updateSession = useCallback((nextUser: SelectUser | null, nextToken?: string | null) => {
+    setUser(nextUser);
+    queryClient.setQueryData(["/api/user"], nextUser);
+
+    if (nextUser) {
+      setStoredUser(nextUser);
+    } else {
+      removeStoredUser();
+    }
+
+    if (nextToken !== undefined) {
+      updateToken(nextToken);
+    }
+  }, [updateToken]);
+
+  const clearSession = useCallback(() => {
+    clearStoredSession();
+    setToken(null);
+    setUser(null);
+    setError(null);
+    queryClient.setQueryData(["/api/user"], null);
+  }, []);
+
+  const refreshTokenIfNeeded = useCallback(async (currentToken: string) => {
+    const payload = decodeStoredToken(currentToken);
+    if (!payload?.exp) {
+      throw new Error("Invalid token payload");
+    }
+
+    const expiresAt = payload.exp * 1000;
+    const timeUntilExpiry = expiresAt - Date.now();
+
+    if (timeUntilExpiry <= 0) {
+      throw new Error("Token expired");
+    }
+
+    if (timeUntilExpiry > REFRESH_THRESHOLD_MS) {
+      return currentToken;
+    }
+
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${currentToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to refresh token");
+    }
+
+    const data = (await res.json()) as { token: string; user: SelectUser };
+    updateSession(data.user, data.token);
+    return data.token;
+  }, [updateSession]);
+
+  const syncUser = useCallback(async (currentToken: string) => {
+    const res = await fetch("/api/user", {
+      headers: {
+        Authorization: `Bearer ${currentToken}`,
+      },
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      throw new Error("Unauthorized");
+    }
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch user");
+    }
+
+    const nextUser = (await res.json()) as SelectUser;
+    updateSession(nextUser);
+    return nextUser;
+  }, [updateSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapAuth = async () => {
       const storedToken = getStoredToken();
-      if (!storedToken) return null;
+      const storedUser = getStoredUser();
+
+      if (!storedToken) {
+        if (!cancelled) {
+          setIsLoading(false);
+          setUser(null);
+        }
+        return;
+      }
+
+      if (storedUser) {
+        setUser(storedUser);
+        queryClient.setQueryData(["/api/user"], storedUser);
+      }
 
       try {
-        const res = await fetch("/api/user", {
-          headers: {
-            Authorization: `Bearer ${storedToken}`,
-          },
-        });
-
-        if (res.status === 401 || res.status === 403) {
-          // Token is invalid or expired, clear it
-          updateToken(null);
-          return null;
+        const validToken = await refreshTokenIfNeeded(storedToken);
+        await syncUser(validToken);
+        if (!cancelled) {
+          setError(null);
         }
+      } catch (authError) {
+        const message =
+          authError instanceof Error ? authError.message : "Session validation failed";
 
-        if (!res.ok) throw new Error("Failed to fetch user");
-        return await res.json();
-      } catch (error) {
-        // Network error - don't clear token, just return cached user or null
-        // This prevents logout on temporary network issues (e.g., phone waking up)
-        console.warn("Network error fetching user, keeping existing session");
-        return null;
+        if (message === "Unauthorized" || message === "Token expired" || message === "Invalid token payload" || message === "Failed to refresh token") {
+          if (!cancelled) {
+            clearSession();
+          }
+        } else {
+          console.warn("Auth bootstrap network issue, keeping stored session");
+          if (!cancelled) {
+            setError(authError instanceof Error ? authError : new Error(message));
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-    },
-    // Prevent refetching on window focus (e.g., phone screen turning on)
-    refetchOnWindowFocus: false,
-    // Don't refetch on mount if we already have data
-    refetchOnMount: false,
-    // Keep cached data indefinitely
-    staleTime: Infinity,
-    // Don't retry on failure - prevents logout loop
-    retry: false,
-    // Keep previous data while refetching
-    placeholderData: (previousData) => previousData,
+    };
+
+    bootstrapAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearSession, refreshTokenIfNeeded, syncUser]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const payload = decodeStoredToken(token);
+    if (!payload?.exp) return;
+
+    const expiresAt = payload.exp * 1000;
+    const refreshAt = Math.max(Date.now() + 30_000, expiresAt - REFRESH_THRESHOLD_MS);
+    const delay = Math.max(30_000, refreshAt - Date.now());
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const nextToken = await refreshTokenIfNeeded(token);
+        await syncUser(nextToken);
+      } catch (refreshError) {
+        console.warn("Scheduled token refresh failed");
+      }
+    }, delay);
+
+    return () => window.clearTimeout(timeout);
+  }, [token, refreshTokenIfNeeded, syncUser]);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== "visible") return;
+
+      const currentToken = getStoredToken();
+      if (!currentToken) return;
+
+      try {
+        const nextToken = await refreshTokenIfNeeded(currentToken);
+        await syncUser(nextToken);
+      } catch (refreshError) {
+        console.warn("Visibility auth sync failed");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   });
 
   const loginMutation = useMutation({
@@ -121,8 +248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return (await res.json()) as { user: SelectUser; token: string };
     },
     onSuccess: (data) => {
-      updateToken(data.token);
-      queryClient.setQueryData(["/api/user"], data.user);
+      updateSession(data.user, data.token);
+      setError(null);
       toast({
         title: "Welcome back!",
         description: `Logged in as ${data.user.username}`,
@@ -151,8 +278,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return (await res.json()) as { user: SelectUser; token: string };
     },
     onSuccess: (data) => {
-      updateToken(data.token);
-      queryClient.setQueryData(["/api/user"], data.user);
+      updateSession(data.user, data.token);
+      setError(null);
       toast({
         title: "Account created!",
         description: `Welcome to ChatNexus, ${data.user.username}!`,
@@ -181,8 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return (await res.json()) as { user: SelectUser; token: string };
     },
     onSuccess: (data) => {
-      updateToken(data.token);
-      queryClient.setQueryData(["/api/user"], data.user);
+      updateSession(data.user, data.token);
+      setError(null);
       toast({
         title: "Welcome!",
         description: `Joined as ${data.user.username}`,
@@ -202,17 +329,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
-      updateToken(null);
-      queryClient.setQueryData(["/api/user"], null);
+      clearSession();
       toast({
         title: "Logged out",
         description: "See you next time!",
       });
     },
-    onError: (error: Error) => {
-      // Even if server logout fails, clear local state
-      updateToken(null);
-      queryClient.setQueryData(["/api/user"], null);
+    onError: () => {
+      clearSession();
       toast({
         title: "Logged out",
         description: "See you next time!",
@@ -223,7 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user: user ?? null,
+        user,
         isLoading,
         error,
         loginMutation,
