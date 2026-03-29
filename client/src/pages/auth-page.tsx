@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CardContent } from "@/components/ui/card";
+import { Seo } from "@/components/seo";
 import {
   CustomCursor,
   PagePreloader,
@@ -96,6 +97,12 @@ export default function AuthPage() {
 
   return (
     <>
+      <Seo
+        title="Login | ChatNexus"
+        description="Sign in or continue as a guest to access ChatNexus."
+        path="/auth"
+        robots="noindex, nofollow"
+      />
       <PagePreloader onComplete={() => setLoaded(true)} />
       <div className="landing-root min-h-screen flex items-center justify-center p-4">
         <CustomCursor />
@@ -105,7 +112,7 @@ export default function AuthPage() {
         <div className="fixed top-6 left-6 z-50">
           <MagneticWrap>
             <Link href="/">
-              <Button variant="ghost" className="text-white hover:bg-white/10 rounded-full gap-2 px-4 shadow-[0_0_15px_rgba(255,255,255,0.05)] border border-white/10 backdrop-blur-md">
+              <Button variant="ghost" className="text-brand-text hover:bg-brand-primary/10 rounded-full gap-2 px-4 shadow-[0_0_15px_var(--brand-glow-primary)] border border-brand-border backdrop-blur-md">
                 <ArrowLeft className="w-4 h-4" />
                 Back to Home
               </Button>
@@ -116,8 +123,8 @@ export default function AuthPage() {
         <div ref={containerRef} className="w-full max-w-md relative z-10" style={{ opacity: 0 }}>
           {/* Logo/Brand */}
           <div className="text-center mb-4">
-            <h1 className="text-4xl font-extrabold text-white tracking-tight mb-2">ChatNexus</h1>
-            <p className="text-white/70 text-base">
+            <h1 className="text-4xl font-extrabold text-brand-text tracking-tight mb-2">ChatNexus</h1>
+            <p className="text-brand-muted text-base">
               Connect and Chat in Real-time with Strangers
             </p>
           </div>
@@ -126,10 +133,10 @@ export default function AuthPage() {
           <TiltCard className="w-full shadow-2xl">
           <CardContent className="p-6">
             {/* Tab Navigation */}
-            <div className="flex bg-secondary rounded-lg p-1">
+            <div className="flex bg-brand-sidebar/50 rounded-lg p-1 border border-brand-border">
               <Button
                 variant={activeTab === "login" ? "default" : "ghost"}
-                className={`flex-1 ${activeTab === "login" ? "bg-card text-foreground shadow-sm" : "text-white"}`}
+                className={`flex-1 transition-all rounded-md ${activeTab === "login" ? "bg-brand-primary text-black shadow-lg" : "text-brand-muted hover:text-brand-text"}`}
                 onClick={() => setActiveTab("login")}
                 data-testid="tab-login"
               >
@@ -137,7 +144,7 @@ export default function AuthPage() {
               </Button>
               <Button
                 variant={activeTab === "register" ? "default" : "ghost"}
-                className={`flex-1 ${activeTab === "register" ? "bg-card text-foreground shadow-sm" : "text-white"}`}
+                className={`flex-1 transition-all rounded-md ${activeTab === "register" ? "bg-brand-primary text-black shadow-lg" : "text-brand-muted hover:text-brand-text"}`}
                 onClick={() => setActiveTab("register")}
                 data-testid="tab-register"
               >
@@ -150,7 +157,7 @@ export default function AuthPage() {
               <Button
                 type="button"
                 variant={undefined}
-                className="w-full mt-2 bg-black hover:bg-neutral-900 text-white"
+                className="w-full mt-2 bg-transparent border border-brand-border hover:bg-brand-primary/10 text-brand-text transition-all"
                 onClick={() => setShowGuestCard(true)}
                 data-testid="link-guest-login"
               >
@@ -158,7 +165,7 @@ export default function AuthPage() {
               </Button>
             </div>
             {showGuestCard && (
-              <div className="mb-4 p-4 bg-muted/50 rounded-lg border border-border animate-fade-in">
+              <div className="mb-4 mt-4 p-4 bg-brand-sidebar/40 rounded-lg border border-brand-border animate-fade-in backdrop-blur-sm">
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="guest-username" className="sr-only">
@@ -169,7 +176,7 @@ export default function AuthPage() {
                       placeholder="Choose a guest username"
                       value={guestUsername}
                       onChange={(e) => setGuestUsername(e.target.value)}
-                      className="bg-background"
+                      className="bg-brand-card border-brand-border text-brand-text placeholder:text-brand-muted focus:ring-brand-primary/20"
                       data-testid="input-guest-username"
                       autoFocus
                     />

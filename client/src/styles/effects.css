@@ -5,8 +5,10 @@
 
 /* ──── Design Tokens (Centralized Theme) ──── */
 :root {
-  /* You can easily change the ENTIRE app's theme here */
+  /* 🎨 PRIMARY THEME COLORS 
+     Change these hex codes to instantly update the whole app! */
   --brand-bg: #161a19;
+  --brand-sidebar: #1a1f1e;
   --brand-card: #232826;
   --brand-card-glass: rgba(35, 40, 38, 0.55);
   --brand-primary: #d6ff38;
@@ -16,16 +18,32 @@
   --brand-muted: #a1a7a4;
   --brand-border: rgba(255, 255, 255, 0.05);
 
+  /* 💬 MESSAGING & CHAT */
+  --brand-msg-sent: #d6ff38;
+  --brand-msg-sent-text: #000000;
+  --brand-msg-received: #232826;
+  --brand-msg-received-text: #ffffff;
+
+  /* ✨ GRADIENTS & GLOWS */
+  --brand-grad-start: #d6ff38;
+  --brand-grad-end: #eaff80;
   --brand-glow-primary: rgba(214, 255, 56, 0.35);
   --brand-glow-accent: rgba(234, 255, 128, 0.25);
-  --brand-glow-dark: rgba(0, 0, 0, 0.6);
   
-  /* Legacy mapped variables (will be refactored) */
+  /* 👤 AVATAR GRADIENTS */
+  --avatar-0: linear-gradient(135deg, #d6ff38 0%, #a1a7a4 100%);
+  --avatar-1: linear-gradient(135deg, #eaff80 0%, #232826 100%);
+  --avatar-2: linear-gradient(135deg, #ffffff 0%, #d6ff38 100%);
+  --avatar-3: linear-gradient(135deg, #a1a7a4 0%, #161a19 100%);
+  --avatar-4: linear-gradient(135deg, #d6ff38 0%, #eaff80 100%);
+  --avatar-5: linear-gradient(135deg, #232826 0%, #d6ff38 100%);
+
+  /* Internal Mappings */
   --ln-bg: var(--brand-bg);
   --ln-card: var(--brand-card);
   --ln-card-glass: var(--brand-card-glass);
   --ln-primary: var(--brand-primary);
-  --ln-accent: var(--brand-primary); /* unify accents */
+  --ln-accent: var(--brand-accent);
   --ln-text: var(--brand-text);
   --ln-muted: var(--brand-muted);
   --ln-border: var(--brand-border);

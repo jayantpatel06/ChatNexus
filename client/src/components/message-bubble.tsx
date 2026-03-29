@@ -114,7 +114,8 @@ function MessageBubbleComponent({
     >
       {!isOwnMessage && (
         <div
-          className={`w-8 h-8 ${sender?.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(sender?.username || "")}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
+          className={`w-8 h-8 text-black rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1 shadow-sm`}
+          style={{ background: sender?.isGuest ? 'var(--brand-muted)' : getAvatarColor(sender?.username || "") }}
         >
           {sender?.isGuest ? "G" : getUserInitials(sender?.username || "")}
         </div>
@@ -124,7 +125,7 @@ function MessageBubbleComponent({
         className={`flex flex-col gap-1 max-w-[75%] sm:max-w-xs lg:max-w-md min-w-0 ${isOwnMessage ? "items-end" : ""}`}
       >
         <div
-          className={`${isOwnMessage ? "bg-primary text-primary-foreground rounded-lg rounded-tr-none" : "bg-card border border-border rounded-lg rounded-tl-none shadow-sm"} p-3 overflow-hidden`}
+          className={`p-3 overflow-hidden shadow-sm transition-all duration-300 ${isOwnMessage ? "bg-brand-msg-sent text-brand-msg-sent-text rounded-2xl rounded-tr-none" : "bg-brand-msg-received text-brand-msg-received-text border border-brand-border rounded-2xl rounded-tl-none"}`}
         >
           {/* Show pending attachment preview */}
           {pendingAttachment && (
@@ -237,7 +238,7 @@ function MessageBubbleComponent({
               ))}
               {message.message && message.message !== "Sent an attachment" && (
                 <div
-                  className={`text-sm ${isOwnMessage ? "text-primary-foreground" : "text-foreground"}`}
+                  className={`text-sm leading-relaxed ${isOwnMessage ? "text-brand-msg-sent-text" : "text-brand-msg-received-text"}`}
                 >
                   <MessageContent content={message.message} />
                 </div>
@@ -246,7 +247,7 @@ function MessageBubbleComponent({
           ) : (
             !pendingAttachment && (
               <div
-                className={`text-sm ${isOwnMessage ? "text-primary-foreground" : "text-foreground"}`}
+                className={`text-sm leading-relaxed ${isOwnMessage ? "text-brand-msg-sent-text" : "text-brand-msg-received-text"}`}
               >
                 <MessageContent content={message.message} />
               </div>

@@ -23,26 +23,27 @@ export function MessageListItem({
   return (
     <div
       key={messageId}
-      className="flex items-start gap-2 py-1 hover:bg-muted/50 px-2 rounded"
+      className={`flex items-start gap-2 py-1 transition-colors px-2 rounded-lg ${isCurrentUser ? 'bg-brand-primary/5 border border-brand-primary/10' : 'hover:bg-brand-card/50'}`}
     >
       <div
-        className={`w-6 h-6 bg-gradient-to-br ${getAvatarColor(senderUsername)} text-white rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5`}
+        className={`w-6 h-6 text-black rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5`}
+        style={{ background: getAvatarColor(senderUsername) }}
       >
         {getUserInitials(senderUsername)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
           <span
-            className={`font-semibold text-sm ${isCurrentUser ? "text-primary" : "text-foreground"}`}
+            className={`font-bold text-xs ${isCurrentUser ? "text-brand-primary" : "text-brand-text"}`}
           >
             {isCurrentUser ? "Me" : senderUsername}
           </span>
         </div>
         <div className="flex items-end gap-2">
-          <span className="text-sm break-words min-w-0 flex-1 text-foreground">
+          <span className="text-sm break-words min-w-0 flex-1 text-brand-text/90">
             {message}
           </span>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
+          <span className="text-[10px] text-brand-muted whitespace-nowrap opacity-60">
             {format(new Date(timestamp), "HH:mm")}
           </span>
         </div>

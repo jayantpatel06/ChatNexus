@@ -11,16 +11,8 @@ export const getUserInitials = (username: string) => {
 };
 
 export const getAvatarColor = (username: string) => {
-  const colors = [
-    "from-blue-500 to-purple-500",
-    "from-green-500 to-teal-500",
-    "from-orange-500 to-red-500",
-    "from-purple-500 to-pink-500",
-    "from-indigo-500 to-blue-500",
-    "from-yellow-500 to-orange-500",
-  ];
-  const index = username.length % colors.length;
-  return colors[index];
+  const index = username.length % 6;
+  return `var(--avatar-${index})`;
 };
 
 // React Query key constants

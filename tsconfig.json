@@ -31,7 +31,8 @@
     "baseUrl": ".",
     "types": [
       "node",
-      "vite/client"
+      "vite/client",
+      "vite-plugin-pwa/client"
     ],
     "paths": {
       "@/*": [

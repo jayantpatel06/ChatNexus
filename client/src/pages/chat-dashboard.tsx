@@ -5,6 +5,7 @@ import { User } from "@shared/schema";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ActiveChatProvider, useActiveChat } from "@/hooks/use-active-chat";
 import { useEffect } from "react";
+import { Seo } from "@/components/seo";
 
 export default function ChatDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -50,38 +51,62 @@ function ChatDashboardContent({
     // Use h-[100dvh] for proper mobile viewport height (accounts for browser chrome)
     if (selectedUser) {
       return (
-        <div
-          className="h-[100dvh] bg-background flex flex-col overflow-hidden"
-          data-testid="chat-dashboard"
-        >
-          <ChatArea
-            selectedUser={selectedUser}
-            onBack={onBack}
-            showBackButton={true}
+        <>
+          <Seo
+            title="Dashboard | ChatNexus"
+            description="Protected chat dashboard inside ChatNexus."
+            path="/dashboard"
+            robots="noindex, nofollow"
           />
-        </div>
+          <div
+            className="h-[100dvh] bg-brand-bg flex flex-col overflow-hidden"
+            data-testid="chat-dashboard"
+          >
+            <ChatArea
+              selectedUser={selectedUser}
+              onBack={onBack}
+              showBackButton={true}
+            />
+          </div>
+        </>
       );
     } else {
       return (
-        <div className="h-[100dvh] bg-background" data-testid="chat-dashboard">
-          <UsersSidebar
-            selectedUser={selectedUser}
-            onUserSelect={onUserSelect}
+        <>
+          <Seo
+            title="Dashboard | ChatNexus"
+            description="Protected chat dashboard inside ChatNexus."
+            path="/dashboard"
+            robots="noindex, nofollow"
           />
-        </div>
+          <div className="h-[100dvh] bg-brand-bg" data-testid="chat-dashboard">
+            <UsersSidebar
+              selectedUser={selectedUser}
+              onUserSelect={onUserSelect}
+            />
+          </div>
+        </>
       );
     }
   }
 
   // Desktop layout - show both sidebar and chat area
   return (
-    <div className="h-screen bg-background flex" data-testid="chat-dashboard">
-      <UsersSidebar selectedUser={selectedUser} onUserSelect={onUserSelect} />
-      <ChatArea
-        selectedUser={selectedUser}
-        onBack={onBack}
-        showBackButton={true}
+    <>
+      <Seo
+        title="Dashboard | ChatNexus"
+        description="Protected chat dashboard inside ChatNexus."
+        path="/dashboard"
+        robots="noindex, nofollow"
       />
-    </div>
+      <div className="h-screen bg-brand-bg flex" data-testid="chat-dashboard">
+        <UsersSidebar selectedUser={selectedUser} onUserSelect={onUserSelect} />
+        <ChatArea
+          selectedUser={selectedUser}
+          onBack={onBack}
+          showBackButton={true}
+        />
+      </div>
+    </>
   );
 }

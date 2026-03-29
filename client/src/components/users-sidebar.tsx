@@ -191,16 +191,8 @@ export function UsersSidebar({
   };
 
   const getAvatarColor = (username: string) => {
-    const colors = [
-      "from-blue-500 to-purple-500",
-      "from-green-500 to-teal-500",
-      "from-orange-500 to-red-500",
-      "from-purple-500 to-pink-500",
-      "from-indigo-500 to-blue-500",
-      "from-yellow-500 to-orange-500",
-    ];
-    const index = username.length % colors.length;
-    return colors[index];
+    const index = username.length % 6;
+    return `var(--avatar-${index})`;
   };
 
   const handleLogout = () => {
@@ -208,9 +200,9 @@ export function UsersSidebar({
   };
 
   return (
-    <div className="w-full md:w-80 bg-card border-r border-border flex flex-col h-full">
+    <div className="w-full md:w-80 bg-brand-sidebar border-r border-brand-border flex flex-col h-full">
       {/* Sidebar Header */}
-      <div className="p-4 border-b border-border bg-card flex-shrink-0">
+      <div className="p-4 border-b border-brand-border bg-brand-sidebar flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-foreground">ChatNexus</h2>
           <div className="flex items-center gap-2">
@@ -218,11 +210,11 @@ export function UsersSidebar({
               <HoverCardTrigger asChild>
                 <Badge
                   variant="secondary"
-                  className="bg-gray-300 text-black flex items-center gap-1"
+                  className="bg-brand-card text-brand-text flex items-center gap-1 border border-brand-border"
                   data-testid="text-connection-status"
                 >
                   <div
-                    className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-600 animate-pulse" : "bg-red-600"}`}
+                    className={`w-2 h-2 rounded-full ${isConnected ? "bg-brand-primary animate-pulse" : "bg-red-600"}`}
                   ></div>
                   {isConnected ? "Server Online" : "Server Offline"}
                 </Badge>
@@ -249,10 +241,10 @@ export function UsersSidebar({
 
         {/* Current User Info */}
         {user && (
-          <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+          <div className="flex items-center gap-3 p-3 bg-brand-primary/10 rounded-lg border border-brand-primary/20">
             <div className="relative">
               <div
-                className={`w-10 h-10 ${user.isGuest ? "bg-gray-500" : "bg-primary"} text-white rounded-full flex items-center justify-center font-medium`}
+                className={`w-10 h-10 ${user.isGuest ? "bg-brand-muted" : "bg-brand-primary"} text-black rounded-full flex items-center justify-center font-bold`}
               >
                 {user.isGuest ? "G" : getUserInitials(user.username)}
               </div>
@@ -282,13 +274,13 @@ export function UsersSidebar({
       </div>
 
       {/* Search Bar */}
-      <div className="p-4 border-b border-border flex-shrink-0">
+      <div className="p-4 border-b border-brand-border flex-shrink-0">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-muted" />
           <Input
             type="text"
             placeholder="Search User"
-            className="pl-10 bg-gray-200 text-black placeholder:text-muted-foreground"
+            className="pl-10 bg-brand-card border-brand-border text-brand-text placeholder:text-brand-muted focus:ring-brand-primary/30"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-search-users"
@@ -297,9 +289,9 @@ export function UsersSidebar({
       </div>
 
       {/* Global Chat Link */}
-      <div className="p-4 border-b border-border flex-shrink-0">
+      <div className="p-4 border-b border-brand-border flex-shrink-0">
         <Link href="/global-chat">
-          <Button variant="outline" className="w-full gap-2">
+          <Button variant="outline" className="w-full gap-2 border-brand-border hover:bg-brand-primary hover:text-black hover:border-brand-primary transition-all">
             <Globe className="h-4 w-4" />
             Global Chat
           </Button>
@@ -309,11 +301,11 @@ export function UsersSidebar({
       {/* Online Users List */}
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="p-2">
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-2 py-2 flex items-center justify-between flex-shrink-0 sticky top-0 bg-card z-10">
+          <div className="text-xs font-medium text-brand-muted uppercase tracking-wide px-2 py-2 flex items-center justify-between flex-shrink-0 sticky top-0 bg-brand-sidebar z-10">
             <span>Users</span>
             <Badge
               variant="secondary"
-              className="bg-gray-200 text-black"
+              className="bg-brand-card text-brand-text border border-brand-border"
               data-testid="text-online-count"
             >
               {onlineCount} online
@@ -330,24 +322,25 @@ export function UsersSidebar({
                 <Button
                   key={displayUser.userId}
                   variant="ghost"
-                  className={`w-full flex items-center gap-3 p-2 h-auto justify-start ${
+                  className={`w-full flex items-center gap-3 p-2 h-auto justify-start border border-transparent rounded-lg transition-all ${
                     selectedUser?.userId === displayUser.userId
-                      ? "bg-gray-400 text-white"
-                      : "bg-transparent text-black"
+                      ? "bg-brand-primary/20 border-brand-primary/40 text-brand-text"
+                      : "bg-transparent text-brand-text hover:bg-brand-card hover:border-brand-border"
                   }`}
                   onClick={() => onUserSelect(displayUser)}
                   data-testid={`button-user-${displayUser.userId}`}
                 >
                   <div className="relative">
                     <div
-                      className={`w-8 h-8 ${displayUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(displayUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium ${!displayUser.isOnline ? "opacity-60" : ""}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-black ${!displayUser.isOnline ? "opacity-60" : ""}`}
+                      style={{ background: displayUser.isGuest ? 'var(--brand-muted)' : getAvatarColor(displayUser.username) }}
                     >
                       {displayUser.isGuest
                         ? "G"
                         : getUserInitials(displayUser.username)}
                     </div>
                     <div
-                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${displayUser.isOnline ? "bg-green-500" : "bg-gray-400"} border-2 border-card rounded-full`}
+                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${displayUser.isOnline ? "bg-brand-primary" : "bg-brand-muted"} border-2 border-brand-sidebar rounded-full`}
                     ></div>
                   </div>
                   <div className="flex-1 min-w-0 text-left">

@@ -14,6 +14,7 @@ import { QUERY_KEYS } from "@/lib/utils";
 import { MessageListItem } from "@/components/message-list-item";
 import { NewMessageIndicator } from "@/components/new-message-indicator";
 import { UsersSidebar } from "@/components/users-sidebar";
+import { Seo } from "@/components/seo";
 
 export default function GlobalChat() {
   const queryClient = useQueryClient();
@@ -104,45 +105,55 @@ export default function GlobalChat() {
   // Desktop: sidebar + global chat, Mobile: only global chat
   if (!isMobile) {
     return (
-      <div
-        className="h-screen bg-background flex"
-        data-testid="global-chat-desktop-layout"
-      >
-        <UsersSidebar selectedUser={null} onUserSelect={() => {}} />
-        <div className="flex-1 flex flex-col">
+      <>
+        <Seo
+          title="Global Chat | ChatNexus"
+          description="Protected global chat inside ChatNexus."
+          path="/global-chat"
+          robots="noindex, nofollow"
+        />
+        <div
+          className="h-screen bg-brand-bg flex text-brand-text"
+          data-testid="global-chat-desktop-layout"
+        >
+          <UsersSidebar selectedUser={null} onUserSelect={() => {}} />
+          <div className="flex-1 flex flex-col">
           {/* Chat Header */}
-          <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
+          <div className="bg-brand-sidebar border-b border-brand-border p-4 flex items-center justify-between flex-shrink-0 z-40">
             <div className="flex items-center gap-3">
               <Link href="/dashboard">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="p-2"
+                  className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-card transition-colors"
                   title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
               <div className="relative">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center font-medium">
+                <div 
+                   className="w-10 h-10 text-black rounded-full flex items-center justify-center font-bold shadow-[0_0_15px_var(--brand-glow-primary)]"
+                   style={{ background: 'var(--brand-grad-start)' }}
+                >
                   <Globe className="w-5 h-5" />
                 </div>
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Global Chat</h3>
+                <h3 className="font-bold text-brand-text tracking-tight">Global Chat</h3>
               </div>
             </div>
           </div>
           {/* Messages Area */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-background min-h-0 relative"
+            className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-brand-bg min-h-0 relative"
             onScroll={handleScroll}
           >
             {/* System Message */}
             <div className="flex justify-center my-4">
-              <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
-                <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+              <div className="bg-brand-card/50 border border-brand-border text-brand-muted text-[10px] px-4 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-sm">
+                <div className="w-3 h-3 flex items-center justify-center grayscale">
                   🌍
                 </div>
                 Everyone can see these messages
@@ -191,19 +202,19 @@ export default function GlobalChat() {
             <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
           )}
           <div
-            className="bg-card border-t border-border p-3 flex-shrink-0"
-            style={{ paddingBottom: "12px" }}
+            className="bg-brand-sidebar border-t border-brand-border p-4 flex-shrink-0 backdrop-blur-md"
+            style={{ paddingBottom: "16px" }}
           >
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-3 max-w-4xl mx-auto w-full">
               <div className="flex-1 relative">
                 <Textarea
                   placeholder="Type a message..."
-                  className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg"
-                  rows={1}
+                  className="min-h-[44px] h-[44px] bg-brand-card border-brand-border text-brand-text placeholder:text-brand-muted focus:ring-brand-primary/20 text-sm py-3 px-4 rounded-xl resize-none transition-all"
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onFocus={handleInputFocus}
+                  data-testid="textarea-message-input"
                 />
                 <div className="relative">
                   <Button
@@ -239,14 +250,22 @@ export default function GlobalChat() {
               </Button>
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // Mobile: original layout
   return (
-    <div className="h-[100dvh] bg-background flex flex-col">
+    <>
+      <Seo
+        title="Global Chat | ChatNexus"
+        description="Protected global chat inside ChatNexus."
+        path="/global-chat"
+        robots="noindex, nofollow"
+      />
+      <div className="h-[100dvh] bg-background flex flex-col">
       {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
         <div className="flex items-center gap-3">
@@ -372,6 +391,7 @@ export default function GlobalChat() {
           </Button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -65,6 +65,7 @@ export default {
         },
         brand: {
           bg: "var(--brand-bg)",
+          sidebar: "var(--brand-sidebar)",
           card: "var(--brand-card)",
           primary: "var(--brand-primary)",
           "primary-hover": "var(--brand-primary-hover)",
@@ -72,6 +73,12 @@ export default {
           text: "var(--brand-text)",
           muted: "var(--brand-muted)",
           border: "var(--brand-border)",
+          "msg-sent": "var(--brand-msg-sent)",
+          "msg-sent-text": "var(--brand-msg-sent-text)",
+          "msg-received": "var(--brand-msg-received)",
+          "msg-received-text": "var(--brand-msg-received-text)",
+          "grad-start": "var(--brand-grad-start)",
+          "grad-end": "var(--brand-grad-end)",
         }
       },
       fontFamily: {

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Seo } from "@/components/seo";
 import {
   MessageCircle,
   Zap,
@@ -23,6 +24,7 @@ import {
   ArrowRight,
   ChevronDown,
   Send,
+  Instagram,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import gsap from "gsap";
@@ -69,6 +71,24 @@ const SOCIALS = [
   { Icon: MessageCircle, href: "https://discord.com", label: "Discord" },
 ];
 
+const FAQS = [
+  {
+    question: "What makes ChatNexus a strong Omegle alternative?",
+    answer:
+      "ChatNexus focuses on fast anonymous chat, guest access, mobile-friendly messaging, and public conversations that help new users jump into live discussions quickly.",
+  },
+  {
+    question: "Can I talk to strangers without a long signup flow?",
+    answer:
+      "Yes. New users can use guest access to start chatting quickly, then create an account later if they want a more persistent profile.",
+  },
+  {
+    question: "Does ChatNexus work on phones and desktops?",
+    answer:
+      "Yes. The interface is responsive, installable as a PWA, and designed for real-time chatting across desktop and mobile devices.",
+  },
+];
+
 import {
   useReveal,
   useParallax,
@@ -84,6 +104,35 @@ import {
 export default function LandingPage() {
   const { user } = useAuth();
   const scrollY = useParallax();
+  const seoStructuredData = [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      name: "ChatNexus",
+      applicationCategory: "CommunicationApplication",
+      operatingSystem: "Web",
+      url: "https://chatnexus-8vh2.onrender.com/",
+      description:
+        "ChatNexus is an Omegle alternative for anonymous stranger chat, random conversations, and global messaging.",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQS.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: faq.answer,
+        },
+      })),
+    },
+  ];
 
   /* ── preloader state ── */
   const [loaded, setLoaded] = useState(false);
@@ -158,6 +207,13 @@ export default function LandingPage() {
 
   return (
     <>
+      <Seo
+        title="ChatNexus | Anonymous Stranger Chat"
+        description="ChatNexus helps people talk to strangers through anonymous chat, random conversations, and real-time global messaging on desktop and mobile."
+        path="/"
+        keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus"
+        structuredData={seoStructuredData}
+      />
       <PagePreloader onComplete={() => setLoaded(true)} />
 
       {/* ═══════ Main Content ═══════ */}
@@ -206,9 +262,9 @@ export default function LandingPage() {
           </h1>
 
           <p ref={heroSub} className="hero-sub" style={{ opacity: 0 }}>
-            Experience the next generation of real-time communication. Engage
-            with friends, share moments, and build communities — securely and
-            seamlessly.
+            Chat with strangers, join live global rooms, and start anonymous
+            conversations in seconds. ChatNexus is built for fast, modern,
+            real-time social discovery across mobile and desktop.
           </p>
 
           <div ref={heroCta} className="hero-cta-row" style={{ opacity: 0 }}>
@@ -262,11 +318,12 @@ export default function LandingPage() {
         <section id="about" className="about-section">
           <div ref={aboutRef} className="reveal-item about-inner">
             <span className="section-tag">About</span>
-            <h2 className="section-title">Built for People Who Love Chatting</h2>
+            <h2 className="section-title">Built for People Who Want to Talk to Strangers</h2>
             <p className="about-text">
-              ChatNexus was born from a simple idea: real-time conversations should
-              feel effortless, private, and fun. We obsess over speed, security,
-              and design so you can focus on what matters — connecting with people.
+              ChatNexus was built for people searching for an Omegle alternative
+              that feels faster, cleaner, and more reliable. We focus on
+              anonymous chat, real-time messaging, and frictionless entry so you
+              can meet new people without fighting the interface.
             </p>
             <div className="about-stats">
               <div className="about-stat">
@@ -286,9 +343,65 @@ export default function LandingPage() {
         </section>
 
         {/* ═══════ Footer ═══════ */}
+        <section className="features-section" aria-labelledby="stranger-chat-heading">
+          <div className="reveal-item section-header">
+            <span className="section-tag">Stranger Chat</span>
+            <h2 id="stranger-chat-heading" className="section-title">
+              Anonymous Chat Without the Usual Friction
+            </h2>
+            <p className="section-desc">
+              If users are searching for random chat, anonymous chat, or sites
+              where they can talk to strangers online, ChatNexus gives them a
+              faster route into live conversation with guest access, responsive
+              messaging, and global community chat.
+            </p>
+          </div>
+
+          <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
+            <div className="feature-card">
+              <h3 className="feature-title">Start Fast</h3>
+              <p className="feature-desc">
+                Guest access lowers friction for users who want to start a
+                stranger chat session immediately.
+              </p>
+            </div>
+            <div className="feature-card">
+              <h3 className="feature-title">Stay Anonymous</h3>
+              <p className="feature-desc">
+                ChatNexus supports lightweight identity and privacy-first flows
+                that fit anonymous conversation use cases.
+              </p>
+            </div>
+            <div className="feature-card">
+              <h3 className="feature-title">Chat Anywhere</h3>
+              <p className="feature-desc">
+                Mobile-friendly screens and PWA support help users join random
+                conversations from any device.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="about-section" aria-labelledby="faq-heading">
+          <div className="reveal-item about-inner max-w-[960px]">
+            <span className="section-tag">FAQ</span>
+            <h2 id="faq-heading" className="section-title">
+              Questions People Ask Before Using Stranger Chat Sites
+            </h2>
+            <div className="mt-10 space-y-6 text-left">
+              {FAQS.map((faq) => (
+                <div key={faq.question} className="feature-card">
+                  <h3 className="feature-title">{faq.question}</h3>
+                  <p className="feature-desc">{faq.answer}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <footer ref={footerRef} className="reveal-item w-full bg-[#0a0c14] border-t border-[rgba(255,255,255,0.06)] px-8 py-16 -mx-4 md:mx-0">
           <div className="max-w-[1200px] mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 ">
               {/* Brand Column */}
               <div className="flex flex-col gap-6 md:col-span-1">
                 <h2 className="text-2xl font-bold text-[#00c6fb]">ChatNexus</h2>
@@ -297,10 +410,6 @@ export default function LandingPage() {
                   We build tools that empower humanity to<br />
                   think faster and solve deeper.
                 </p>
-                <div className="flex gap-4">
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Twitter className="w-[18px] h-[18px]" /></a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Github className="w-[18px] h-[18px]" /></a>
-                </div>
               </div>
 
               {/* Platform Column */}
@@ -322,26 +431,26 @@ export default function LandingPage() {
               </div>
 
               {/* Subscribe Column */}
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-8">
                 <h3 className="text-white font-semibold mb-2">Stay Connected</h3>
-                <p className="text-[#a0aec0] text-[15px]">
-                  Get the latest on AI breakthroughs<br />delivered to your nexus.
-                </p>
-                <div className="relative mt-2">
+                <div className="relative">
                   <input 
                     type="email" 
                     placeholder="Email Address" 
                     className="w-full bg-[#181c2b] border border-[rgba(255,255,255,0.06)] rounded-xl py-3 px-4 text-white text-[15px] focus:outline-none focus:border-transparent focus:ring-1 focus:ring-[#00c6fb] transition-all"
                   />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00c6fb] hover:text-white hover:scale-110 transition-all">
+                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00c6fb] hover:text-white hover:scale-110 transition-all">
                     <Send className="w-5 h-5" />
                   </button>
                 </div>
+                <div className="flex gap-8">
+                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Twitter className="w-[18px] h-[18px]" /></a>
+                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Github className="w-[18px] h-[18px]" /></a>
+                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Instagram className="w-[18px] h-[18px]" /></a>
+                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Linkedin className="w-[18px] h-[18px]" /></a>                  
+                </div>
               </div>
-            </div>
-
-            {/* Bottom Bar */}
-            
+            </div>            
           </div>
         </footer>
       </div>
