@@ -20,7 +20,7 @@
   --destructive: hsl(356.3033 90.5579% 54.3137%);
   --destructive-foreground: hsl(0 0% 100%);
   --border: var(--brand-border);
-  --input: var(--brand-sidebar);
+  --input: color-mix(in srgb, var(--foreground) 16%, var(--background));
   --ring: var(--brand-primary);
   --chart-1: hsl(203.8863 88.2845% 53.1373%);
   --chart-2: hsl(159.7826 100% 36.0784%);
@@ -79,7 +79,7 @@
   --destructive: hsl(356.3033 90.5579% 54.3137%);
   --destructive-foreground: hsl(0 0% 100%);
   --border: var(--brand-border);
-  --input: var(--brand-sidebar);
+  --input: color-mix(in srgb, var(--foreground) 24%, var(--background));
   --ring: var(--brand-primary);
   --sidebar: var(--brand-sidebar);
   --sidebar-foreground: var(--brand-text);
@@ -149,6 +149,17 @@
   .keyboard-open {
     position: fixed;
     width: 100%;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }
 

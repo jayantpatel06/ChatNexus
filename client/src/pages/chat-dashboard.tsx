@@ -7,6 +7,8 @@ import { ActiveChatProvider, useActiveChat } from "@/hooks/use-active-chat";
 import { useEffect } from "react";
 import { Seo } from "@/components/seo";
 
+const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
+
 export default function ChatDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const isMobile = useIsMobile();
@@ -45,6 +47,21 @@ function ChatDashboardContent({
   useEffect(() => {
     setActiveUserId(selectedUser?.userId ?? null);
   }, [selectedUser, setActiveUserId]);
+
+  useEffect(() => {
+    if (selectedUser) return;
+
+    const pendingPrivateChat = sessionStorage.getItem(PENDING_PRIVATE_CHAT_KEY);
+    if (!pendingPrivateChat) return;
+
+    try {
+      onUserSelect(JSON.parse(pendingPrivateChat) as User);
+    } catch {
+      // Ignore malformed storage values.
+    } finally {
+      sessionStorage.removeItem(PENDING_PRIVATE_CHAT_KEY);
+    }
+  }, [selectedUser, onUserSelect]);
 
   if (isMobile) {
     // On mobile, show either sidebar or chat area, not both

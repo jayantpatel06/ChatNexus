@@ -299,7 +299,7 @@ export function UsersSidebar({
       </div>
 
       {/* Online Users List */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto scrollbar-none min-h-0">
         <div className="p-2">
           <div className="text-xs font-medium text-brand-muted uppercase tracking-wide px-2 py-2 flex items-center justify-between flex-shrink-0 sticky top-0 bg-brand-sidebar z-10">
             <span>Users</span>

@@ -24,7 +24,11 @@ export function useReveal(threshold = 0.15) {
           io.unobserve(el);
         }
       },
-      { threshold },
+      {
+        threshold,
+        // Reveal slightly before the element enters the viewport (helps footer / FAQ at page end)
+        rootMargin: "0px 0px 12% 0px",
+      },
     );
     io.observe(el);
     return () => io.disconnect();

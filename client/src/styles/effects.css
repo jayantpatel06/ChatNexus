@@ -4,42 +4,53 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* ──── Design Tokens (Centralized Theme) ──── */
+html {
+  --bg-light-1: #fcf5eb;
+  --bg-light-2: #fcf5eb;
+  --bg-light-3: #f7efe3;
+  --bg-dark-1: #161a19;
+  --bg-dark-2: #1a1f1e;
+  --bg-dark-3: #232826;
+}
+
 :root {
   /* 🎨 PRIMARY THEME COLORS 
      Change these hex codes to instantly update the whole app! */
-  --brand-bg: #161a19;
-  --brand-sidebar: #1a1f1e;
-  --brand-card: #232826;
-  --brand-card-glass: rgba(35, 40, 38, 0.55);
-  --brand-primary: #d6ff38;
-  --brand-primary-hover: #c4f224;
-  --brand-accent: #eaff80;
-  --brand-text: #ffffff;
-  --brand-muted: #a1a7a4;
-  --brand-border: rgba(255, 255, 255, 0.05);
+  --brand-bg: var(--bg-light-1);
+  --brand-sidebar: var(--bg-light-2);
+  --brand-card: var(--bg-light-3);
+  --brand-card-glass: rgba(247, 239, 227, 0.76);
+  --brand-primary: #08b2e3;
+  --brand-primary-hover: #0798c9;
+  --brand-accent: #08b2e3;
+  --brand-text: #000000;
+  --brand-muted: #2f3a36;
+  /* Stronger than before so cards/inputs read clearly on cream backgrounds */
+  --brand-border: rgba(8, 178, 227, 0.32);
+  --brand-footer: var(--brand-card);
 
   /* 💬 MESSAGING & CHAT */
-  --brand-msg-sent: #d6ff38;
+  --brand-msg-sent: #08b2e3;
   --brand-msg-sent-text: #000000;
-  --brand-msg-received: #232826;
-  --brand-msg-received-text: #ffffff;
+  --brand-msg-received: var(--bg-light-3);
+  --brand-msg-received-text: #000000;
 
   /* ✨ GRADIENTS & GLOWS */
-  --brand-grad-start: #d6ff38;
-  --brand-grad-end: #eaff80;
-  --brand-glow-primary: rgba(214, 255, 56, 0.35);
-  --brand-glow-accent: rgba(234, 255, 128, 0.25);
-  
+  --brand-grad-start: #08b2e3;
+  --brand-grad-end: #08b2e3;
+  --brand-glow-primary: rgba(8, 178, 227, 0.25);
+  --brand-glow-accent: rgba(94, 230, 255, 0.18);
+
   /* 👤 AVATAR GRADIENTS */
-  --avatar-0: linear-gradient(135deg, #d6ff38 0%, #a1a7a4 100%);
-  --avatar-1: linear-gradient(135deg, #eaff80 0%, #232826 100%);
-  --avatar-2: linear-gradient(135deg, #ffffff 0%, #d6ff38 100%);
+  --avatar-0: linear-gradient(135deg, #08b2e3 0%, #0798c9 100%);
+  --avatar-1: linear-gradient(135deg, #08b2e3 0%, #232826 100%);
+  --avatar-2: linear-gradient(135deg, #ffffff 0%, #08b2e3 100%);
   --avatar-3: linear-gradient(135deg, #a1a7a4 0%, #161a19 100%);
-  --avatar-4: linear-gradient(135deg, #d6ff38 0%, #eaff80 100%);
-  --avatar-5: linear-gradient(135deg, #232826 0%, #d6ff38 100%);
+  --avatar-4: linear-gradient(135deg, #08b2e3 0%, #0798c9 100%);
+  --avatar-5: linear-gradient(135deg, #232826 0%, #08b2e3 100%);
 
   /* Internal Mappings */
-  --ln-bg: var(--brand-bg);
+  --ln-bg: var(--bg-light-1);
   --ln-card: var(--brand-card);
   --ln-card-glass: var(--brand-card-glass);
   --ln-primary: var(--brand-primary);
@@ -51,13 +62,32 @@
   --ln-glow-cyan: var(--brand-glow-accent);
 }
 
+.dark {
+  --brand-bg: var(--bg-dark-1);
+  --brand-sidebar: var(--bg-dark-2);
+  --brand-card: var(--bg-dark-3);
+  --brand-card-glass: rgba(35, 40, 38, 0.55);
+  --brand-text: #ffffff;
+  --brand-muted: #b5bab5;
+  --brand-border: rgba(255, 255, 255, 0.16);
+  --brand-footer: #111b21;
+  --brand-msg-sent-text: #000000;
+  --brand-msg-received: #232826;
+  --brand-msg-received-text: #ffffff;
+  --ln-bg: var(--brand-bg);
+}
+
 /* ──── Root Reset ──── */
 .landing-root {
   position: relative;
   min-height: 100vh;
   background: var(--ln-bg);
   color: var(--ln-text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
   overflow-x: hidden;
   cursor: none;
 }
@@ -74,14 +104,21 @@
 
 /* Hide scrollbar but keep scrolling */
 .landing-root {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-.landing-root::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
-}
-html:has(.landing-root) {
-  scrollbar-width: none;
+  .landing-root input,
+  .landing-root textarea,
+  .landing-root select {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .landing-root input:focus,
+  .landing-root textarea:focus,
+  .landing-root select:focus {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
   -ms-overflow-style: none;
 }
 html:has(.landing-root)::-webkit-scrollbar {
@@ -152,7 +189,9 @@ html:has(.landing-root)::-webkit-scrollbar {
   border: 2px solid transparent;
   border-top-color: var(--ln-primary);
   border-right-color: var(--ln-accent);
-  animation: spin 1s linear infinite, pulse-glow 1.6s ease-in-out infinite;
+  animation:
+    spin 1s linear infinite,
+    pulse-glow 1.6s ease-in-out infinite;
 }
 @keyframes spin {
   to {
@@ -162,10 +201,14 @@ html:has(.landing-root)::-webkit-scrollbar {
 @keyframes pulse-glow {
   0%,
   100% {
-    box-shadow: 0 0 18px var(--ln-glow-purple), 0 0 40px var(--ln-glow-cyan);
+    box-shadow:
+      0 0 18px var(--ln-glow-purple),
+      0 0 40px var(--ln-glow-cyan);
   }
   50% {
-    box-shadow: 0 0 30px var(--ln-glow-purple), 0 0 60px var(--ln-glow-cyan);
+    box-shadow:
+      0 0 30px var(--ln-glow-purple),
+      0 0 60px var(--ln-glow-cyan);
   }
 }
 
@@ -217,11 +260,14 @@ html:has(.landing-root)::-webkit-scrollbar {
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   border: 1px solid var(--ln-border);
   overflow: hidden;
-  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+  transition:
+    box-shadow 0.4s ease,
+    border-color 0.4s ease;
   will-change: transform;
 }
 .tilt-card:hover {
-  box-shadow: 0 8px 40px rgba(130, 57, 255, 0.12),
+  box-shadow:
+    0 8px 40px rgba(130, 57, 255, 0.12),
     0 0 0 1px rgba(130, 57, 255, 0.1);
   border-color: rgba(130, 57, 255, 0.18);
 }
@@ -238,7 +284,8 @@ html:has(.landing-root)::-webkit-scrollbar {
 .reveal-item {
   opacity: 0;
   transform: translateY(40px);
-  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .reveal-item.revealed {
@@ -251,7 +298,10 @@ html:has(.landing-root)::-webkit-scrollbar {
   background: rgba(255, 255, 255, 0.03) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   color: var(--ln-text) !important;
-  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s !important;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s,
+    background 0.3s !important;
 }
 .auth-input:focus {
   border-color: var(--ln-accent) !important;

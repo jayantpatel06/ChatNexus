@@ -21,18 +21,19 @@ import { format } from "date-fns";
 import { MessageBubble } from "./message-bubble";
 import { NewMessageIndicator } from "./new-message-indicator";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useChatTheme, ChatTheme } from "@/hooks/use-chat-theme";
 import { cn, getUserInitials, getAvatarColor, QUERY_KEYS } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import { getStoredTheme, toggleStoredTheme } from "@/lib/theme";
+import EmojiPicker, {
+  EmojiClickData,
+  Theme as EmojiPickerTheme,
+} from "emoji-picker-react";
 
 // Optimistic message type for instant UI feedback
 interface OptimisticMessage extends Message {
@@ -61,6 +62,18 @@ export function ChatArea({
   onBack,
   showBackButton = false,
 }: ChatAreaProps) {
+  // Dark/light mode state
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return (
+        ((getStoredTheme() ??
+        document.documentElement.classList.contains("dark"))
+          ? "dark"
+          : "light") === "dark"
+      );
+    }
+    return false;
+  });
   const { user } = useAuth();
   const { sendMessage, startTyping, stopTyping, typingUsers, onlineUsers } =
     useSocket();
@@ -72,7 +85,7 @@ export function ChatArea({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
-  const { getThemeForUser, setThemeForUser, availableThemes } = useChatTheme();
+  // Chat theme logic removed
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -90,8 +103,8 @@ export function ChatArea({
     PendingAttachment[]
   >([]);
 
-  const currentTheme: ChatTheme = getThemeForUser(selectedUser?.userId ?? null);
-  const themeClass = `chat-theme-${currentTheme}`;
+  // const currentTheme: ChatTheme = getThemeForUser(selectedUser?.userId ?? null);
+  // const themeClass = `chat-theme-${currentTheme}`;
 
   // Fetch message history when user is selected (cursor-based) with caching
   const {
@@ -105,13 +118,9 @@ export function ChatArea({
     enabled: !!selectedUser?.userId,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     initialPageParam: null as string | null,
-    // Refetch when user returns to the chat (staleTime: 0 means always stale)
     staleTime: 0,
-    // Keep cached data for 30 minutes (prevents flicker on re-render)
     gcTime: 30 * 60 * 1000,
-    // Refetch on mount to get latest messages when returning to chat
     refetchOnMount: true,
-    // Don't refetch on window focus for better UX
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }) => {
       if (!selectedUser?.userId) {
@@ -540,12 +549,7 @@ export function ChatArea({
   };
 
   return (
-    <div
-      className={cn(
-        "flex-1 flex flex-col h-full relative overflow-hidden",
-        themeClass,
-      )}
-    >
+    <div className={cn("flex-1 flex flex-col h-full relative overflow-hidden")}>
       {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -621,22 +625,17 @@ export function ChatArea({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Chat Theme</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={currentTheme}
-                onValueChange={(val) =>
-                  setThemeForUser(
-                    selectedUser?.userId ?? null,
-                    val as ChatTheme,
-                  )
-                }
+              <DropdownMenuItem
+                onClick={() => {
+                  setIsDark((prev) => {
+                    const next = !prev;
+                    toggleStoredTheme(prev);
+                    return next;
+                  });
+                }}
               >
-                {availableThemes.map((t) => (
-                  <DropdownMenuRadioItem key={t.id} value={t.id}>
-                    {t.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
+                {isDark ? "Light Mode" : "Dark Mode"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -645,7 +644,7 @@ export function ChatArea({
       {/* Messages Area */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0 relative overscroll-contain"
+        className="flex-1 overflow-y-auto scrollbar-none p-4 space-y-4 bg-background min-h-0 relative overscroll-contain"
         onScroll={handleScroll}
         data-testid="chat-messages-area"
       >
@@ -769,7 +768,7 @@ export function ChatArea({
           <div className="flex-1 relative">
             <Textarea
               placeholder="Type a message..."
-              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg"
+              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none focus:border-border"
               rows={1}
               value={messageText}
               onChange={handleInputChange}
@@ -797,9 +796,9 @@ export function ChatArea({
                     width={300}
                     height={400}
                     theme={
-                      ["midnight", "forest", "sunset"].includes(currentTheme)
-                        ? ("dark" as any)
-                        : ("light" as any)
+                      isDark
+                        ? (EmojiPickerTheme.DARK as any)
+                        : (EmojiPickerTheme.LIGHT as any)
                     }
                     lazyLoadEmojis={true}
                   />

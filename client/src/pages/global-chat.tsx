@@ -15,11 +15,16 @@ import { MessageListItem } from "@/components/message-list-item";
 import { NewMessageIndicator } from "@/components/new-message-indicator";
 import { UsersSidebar } from "@/components/users-sidebar";
 import { Seo } from "@/components/seo";
+import { User } from "@shared/schema";
+import { useLocation } from "wouter";
+
+const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
 export default function GlobalChat() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { socket } = useSocket();
+  const [, setLocation] = useLocation();
   const [messageInput, setMessageInput] = useState("");
   const isMobile = useIsMobile();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -102,6 +107,17 @@ export default function GlobalChat() {
     }
   };
 
+  const handlePrivateUserSelect = useCallback(
+    (selectedUser: User) => {
+      sessionStorage.setItem(
+        PENDING_PRIVATE_CHAT_KEY,
+        JSON.stringify(selectedUser),
+      );
+      setLocation("/dashboard");
+    },
+    [setLocation],
+  );
+
   // Desktop: sidebar + global chat, Mobile: only global chat
   if (!isMobile) {
     return (
@@ -116,7 +132,10 @@ export default function GlobalChat() {
           className="h-screen bg-brand-bg flex text-brand-text"
           data-testid="global-chat-desktop-layout"
         >
-          <UsersSidebar selectedUser={null} onUserSelect={() => {}} />
+          <UsersSidebar
+            selectedUser={null}
+            onUserSelect={handlePrivateUserSelect}
+          />
           <div className="flex-1 flex flex-col">
           {/* Chat Header */}
           <div className="bg-brand-sidebar border-b border-brand-border p-4 flex items-center justify-between flex-shrink-0 z-40">
@@ -147,7 +166,7 @@ export default function GlobalChat() {
           {/* Messages Area */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-brand-bg min-h-0 relative"
+            className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-4 bg-brand-bg min-h-0 relative"
             onScroll={handleScroll}
           >
             {/* System Message */}
@@ -292,7 +311,7 @@ export default function GlobalChat() {
       {/* Messages Area */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-background min-h-0 relative"
+        className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-4 bg-background min-h-0 relative"
         onScroll={handleScroll}
       >
         {/* System Message */}

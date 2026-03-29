@@ -50,6 +50,52 @@ export function registerRoutes(app: Express): Server {
 </urlset>`);
   });
 
+  app.post("/api/help-center", (req, res) => {
+    const issueType =
+      typeof req.body?.issueType === "string" ? req.body.issueType.trim() : "";
+    const message =
+      typeof req.body?.message === "string" ? req.body.message.trim() : "";
+
+    const allowedIssueTypes = new Set([
+      "account_deletion",
+      "deletion_follow_up",
+      "login_problem",
+      "privacy_report",
+      "other",
+    ]);
+
+    if (!allowedIssueTypes.has(issueType)) {
+      return res.status(400).json({ message: "Invalid issue type selected" });
+    }
+
+    if (message.length < 20) {
+      return res
+        .status(400)
+        .json({ message: "Message must be at least 20 characters long" });
+    }
+
+    if (message.length > 5000) {
+      return res
+        .status(400)
+        .json({ message: "Message must be less than 5000 characters" });
+    }
+
+    const payload = {
+      issueType,
+      message,
+      submittedAt: new Date().toISOString(),
+      ip: req.ip,
+      userAgent: req.get("user-agent") ?? "",
+    };
+
+    // Replace with persistence/email integration if needed.
+    console.log("[HELP_CENTER_REQUEST]", JSON.stringify(payload));
+
+    return res.status(201).json({
+      message: "Support request received",
+    });
+  });
+
   // Serve uploaded files
   app.use('/uploads', express.static('uploads'));
 
