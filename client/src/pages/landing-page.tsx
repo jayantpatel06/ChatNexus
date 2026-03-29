@@ -109,6 +109,14 @@ export default function LandingPage() {
   const seoStructuredData = [
     {
       "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "ChatNexus",
+      url: `${siteUrl}/`,
+      description:
+        "Anonymous stranger chat, random conversations, and global messaging.",
+    },
+    {
+      "@context": "https://schema.org",
       "@type": "WebApplication",
       name: "ChatNexus",
       applicationCategory: "CommunicationApplication",
@@ -238,15 +246,25 @@ export default function LandingPage() {
           <div className="nav-inner">
             <div className="nav-brand">
               <div className="nav-logo">
-                <MessageCircle className="w-5 h-5" />
+                <img
+                  src="/assets/images/image.png"
+                  alt="ChatNexus Logo"
+                  className="h-10 w-auto object-contain"
+                />
               </div>
               <span className="nav-name">ChatNexus</span>
             </div>
 
             <div className="nav-pill">
-              <a href="#hero" className="nav-pill-link active">Home</a>
-              <a href="#features" className="nav-pill-link">Features</a>
-              <a href="#about" className="nav-pill-link">About</a>
+              <a href="#hero" className="nav-pill-link active">
+                Home
+              </a>
+              <a href="#features" className="nav-pill-link">
+                Features
+              </a>
+              <a href="#about" className="nav-pill-link">
+                About
+              </a>
             </div>
 
             <MagneticWrap>
@@ -330,7 +348,9 @@ export default function LandingPage() {
         <section id="about" className="about-section">
           <div ref={aboutRef} className="reveal-item about-inner">
             <span className="section-tag">About</span>
-            <h2 className="section-title">Built for People Who Want to Talk to Strangers</h2>
+            <h2 className="section-title">
+              Built for People Who Want to Talk to Strangers
+            </h2>
             <p className="about-text">
               ChatNexus was built for people searching for an Omegle alternative
               that feels faster, cleaner, and more reliable. We focus on
@@ -355,7 +375,10 @@ export default function LandingPage() {
         </section>
 
         {/* ═══════ Footer ═══════ */}
-        <section className="features-section" aria-labelledby="stranger-chat-heading">
+        <section
+          className="features-section"
+          aria-labelledby="stranger-chat-heading"
+        >
           <div className="reveal-item section-header">
             <span className="section-tag">Stranger Chat</span>
             <h2 id="stranger-chat-heading" className="section-title">
@@ -411,15 +434,20 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <footer ref={footerRef} className="reveal-item w-full bg-[#0a0c14] border-t border-[rgba(255,255,255,0.06)] px-8 py-16 -mx-4 md:mx-0">
+        <footer
+          ref={footerRef}
+          className="reveal-item w-full bg-[#0a0c14] border-t border-[rgba(255,255,255,0.06)] px-8 py-16 -mx-4 md:mx-0"
+        >
           <div className="max-w-[1200px] mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-12 ">
               {/* Brand Column */}
               <div className="flex flex-col gap-6 md:col-span-1">
                 <h2 className="text-2xl font-bold text-[#00c6fb]">ChatNexus</h2>
                 <p className="text-[#a0aec0] leading-relaxed text-[15px]">
-                  The architect of future communication.<br />
-                  We build tools that empower humanity to<br />
+                  The architect of future communication.
+                  <br />
+                  We build tools that empower humanity to
+                  <br />
                   think faster and solve deeper.
                 </p>
               </div>
@@ -427,28 +455,70 @@ export default function LandingPage() {
               {/* Platform Column */}
               <div className="flex flex-col gap-4">
                 <h3 className="text-white font-semibold mb-2">Platform</h3>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Documentation</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">API Status</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Enterprise Integrations</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Custom Solutions</a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Documentation
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  API Status
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Enterprise Integrations
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Custom Solutions
+                </a>
               </div>
 
               {/* Company Column */}
               <div className="flex flex-col gap-4">
                 <h3 className="text-white font-semibold mb-2">Company</h3>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">About ChatNexus</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Contact Us</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Privacy Policy</a>
-                <a href="#" className="text-[#a0aec0] hover:text-white transition-colors text-[15px]">Terms of Service</a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  About ChatNexus
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Contact Us
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Privacy Policy
+                </a>
+                <a
+                  href="#"
+                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  Terms of Service
+                </a>
               </div>
 
               {/* Subscribe Column */}
               <div className="flex flex-col gap-8">
-                <h3 className="text-white font-semibold mb-2">Stay Connected</h3>
+                <h3 className="text-white font-semibold mb-2">
+                  Stay Connected
+                </h3>
                 <div className="relative">
-                  <input 
-                    type="email" 
-                    placeholder="Email Address" 
+                  <input
+                    type="email"
+                    placeholder="Email Address"
                     className="w-full bg-[#181c2b] border border-[rgba(255,255,255,0.06)] rounded-xl py-3 px-4 text-white text-[15px] focus:outline-none focus:border-transparent focus:ring-1 focus:ring-[#00c6fb] transition-all"
                   />
                   <button className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00c6fb] hover:text-white hover:scale-110 transition-all">
@@ -456,13 +526,33 @@ export default function LandingPage() {
                   </button>
                 </div>
                 <div className="flex gap-8">
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Twitter className="w-[18px] h-[18px]" /></a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Github className="w-[18px] h-[18px]" /></a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Instagram className="w-[18px] h-[18px]" /></a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"><Linkedin className="w-[18px] h-[18px]" /></a>                  
+                  <a
+                    href="#"
+                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                  >
+                    <Twitter className="w-[18px] h-[18px]" />
+                  </a>
+                  <a
+                    href="#"
+                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                  >
+                    <Github className="w-[18px] h-[18px]" />
+                  </a>
+                  <a
+                    href="#"
+                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                  >
+                    <Instagram className="w-[18px] h-[18px]" />
+                  </a>
+                  <a
+                    href="#"
+                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                  >
+                    <Linkedin className="w-[18px] h-[18px]" />
+                  </a>
                 </div>
               </div>
-            </div>            
+            </div>
           </div>
         </footer>
       </div>

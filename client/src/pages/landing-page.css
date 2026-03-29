@@ -72,24 +72,17 @@
   gap: 10px;
 }
 .nav-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--ln-primary), #5b17c7);
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  box-shadow: 0 0 20px var(--ln-glow-purple);
-  transition: box-shadow 0.3s;
+  transition: transform 0.3s ease;
 }
 .nav-logo.small {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  height: 32px;
 }
 .nav-logo:hover {
-  box-shadow: 0 0 30px var(--ln-glow-purple);
+  transform: translateY(-1px);
 }
 .nav-name {
   font-size: 1.2rem;
