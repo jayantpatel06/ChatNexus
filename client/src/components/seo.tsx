@@ -10,8 +10,7 @@ type SeoProps = {
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 };
 
-const DEFAULT_SITE_URL = "https://chatnexus-8vh2.onrender.com";
-const DEFAULT_IMAGE = "/pwa-icon.png";
+const DEFAULT_IMAGE = "/pwa-icon-512.png";
 
 function upsertMeta(
   selector: string,
@@ -59,7 +58,7 @@ function resolveSiteUrl() {
     return window.location.origin.replace(/\/+$/, "");
   }
 
-  return DEFAULT_SITE_URL;
+  return "";
 }
 
 function resolveUrl(siteUrl: string, path = "/") {

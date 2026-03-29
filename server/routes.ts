@@ -6,6 +6,7 @@ import multer from 'multer';
 import { setupAuth } from './auth';
 import { storage } from './storage';
 import { signToken } from './lib/jwt';
+import { getSiteUrl } from './lib/site-url';
 import { jwtAuth } from './middleware/jwt-auth';
 import { setupSocketAuth, setupSocketHandlers, SOCKET_CONFIG } from './socket';
 import './types/socket'; // Import socket type extensions
@@ -21,6 +22,33 @@ const upload = multer({
 export function registerRoutes(app: Express): Server {
   // Setup authentication routes
   setupAuth(app);
+
+  app.get("/robots.txt", (req, res) => {
+    const siteUrl = getSiteUrl(req);
+
+    res.type("text/plain").send(
+      [
+        "User-agent: *",
+        "Allow: /",
+        `Sitemap: ${siteUrl}/sitemap.xml`,
+      ].join("\n"),
+    );
+  });
+
+  app.get("/sitemap.xml", (req, res) => {
+    const siteUrl = getSiteUrl(req);
+    const lastModified = new Date().toISOString().slice(0, 10);
+
+    res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${siteUrl}/</loc>
+    <lastmod>${lastModified}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+  });
 
   // Serve uploaded files
   app.use('/uploads', express.static('uploads'));

@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Seo } from "@/components/seo";
+import { Seo, getSiteUrl } from "@/components/seo";
 import {
   MessageCircle,
   Zap,
@@ -105,6 +105,7 @@ export default function LandingPage() {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const scrollY = useParallax();
+  const siteUrl = getSiteUrl();
   const seoStructuredData = [
     {
       "@context": "https://schema.org",
@@ -112,7 +113,7 @@ export default function LandingPage() {
       name: "ChatNexus",
       applicationCategory: "CommunicationApplication",
       operatingSystem: "Web",
-      url: "https://chatnexus-8vh2.onrender.com/",
+      url: `${siteUrl}/`,
       description:
         "ChatNexus is an Omegle alternative for anonymous stranger chat, random conversations, and global messaging.",
       offers: {

@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://chatnexus-8vh2.onrender.com/sitemap.xml
+# Runtime robots.txt is served by the Express route using SITE_URL/VITE_SITE_URL.
