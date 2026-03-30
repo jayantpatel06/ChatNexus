@@ -66,3 +66,21 @@ export const insertGlobalMessageSchema = z.object({
 export type GlobalMessage = PrismaGlobalMessage;
 export type GlobalMessageWithSender = GlobalMessage & { sender: User };
 export type InsertGlobalMessage = z.infer<typeof insertGlobalMessageSchema>;
+
+export type Friendship = {
+  id: number;
+  userId1: number;
+  userId2: number;
+  createdAt: Date;
+};
+
+export type FriendRequestStatus = "pending" | "accepted" | "rejected";
+
+export type FriendRequest = {
+  id: number;
+  senderId: number;
+  receiverId: number;
+  status: FriendRequestStatus;
+  createdAt: Date;
+  respondedAt: Date | null;
+};

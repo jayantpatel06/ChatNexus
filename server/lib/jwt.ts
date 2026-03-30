@@ -46,17 +46,3 @@ export function verifyToken(token: string): { userId: number; username: string; 
     }
 }
 
-/**
- * Decode token without verification (useful for checking expiry)
- */
-export function decodeToken(token: string): AppJwtPayload | null {
-    try {
-        const decoded = jwt.decode(token);
-        if (typeof decoded === 'string' || !decoded) {
-            return null;
-        }
-        return decoded as unknown as AppJwtPayload;
-    } catch {
-        return null;
-    }
-}

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 
 interface RateLimitStore {
   count: number;
@@ -15,10 +15,79 @@ interface RateLimitOptions {
   keyGenerator?: (req: Request) => string; // Custom key generator
 }
 
+interface RateLimitResult {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  resetTime: number;
+  retryAfterSeconds: number;
+}
+
+type RateLimiter = ((req: Request, res: Response, next: NextFunction) => void) & {
+  consume: (key: string) => RateLimitResult;
+  message: string;
+};
+
+function getOrCreateStore(name: string, windowMs: number) {
+  if (!stores.has(name)) {
+    const store = new Map<string, RateLimitStore>();
+    stores.set(name, store);
+
+    const cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of store.entries()) {
+        if (now > entry.resetTime) {
+          store.delete(key);
+        }
+      }
+    }, windowMs);
+
+    cleanupTimer.unref?.();
+  }
+
+  return stores.get(name)!;
+}
+
+function consumeRateLimit(
+  store: Map<string, RateLimitStore>,
+  key: string,
+  windowMs: number,
+  maxRequests: number,
+): RateLimitResult {
+  const now = Date.now();
+  let entry = store.get(key);
+
+  if (!entry || now > entry.resetTime) {
+    entry = {
+      count: 1,
+      resetTime: now + windowMs,
+    };
+    store.set(key, entry);
+
+    return {
+      allowed: true,
+      limit: maxRequests,
+      remaining: Math.max(0, maxRequests - entry.count),
+      resetTime: entry.resetTime,
+      retryAfterSeconds: Math.ceil((entry.resetTime - now) / 1000),
+    };
+  }
+
+  entry.count++;
+
+  return {
+    allowed: entry.count <= maxRequests,
+    limit: maxRequests,
+    remaining: Math.max(0, maxRequests - entry.count),
+    resetTime: entry.resetTime,
+    retryAfterSeconds: Math.ceil((entry.resetTime - now) / 1000),
+  };
+}
+
 /**
  * Create a rate limiter middleware
  */
-export function createRateLimiter(name: string, options: RateLimitOptions) {
+export function createRateLimiter(name: string, options: RateLimitOptions): RateLimiter {
   const {
     windowMs,
     maxRequests,
@@ -26,56 +95,28 @@ export function createRateLimiter(name: string, options: RateLimitOptions) {
     keyGenerator = (req) => req.ip || req.socket.remoteAddress || 'unknown',
   } = options;
 
-  // Initialize store for this limiter
-  if (!stores.has(name)) {
-    stores.set(name, new Map());
-  }
-  const store = stores.get(name)!;
+  const store = getOrCreateStore(name, windowMs);
 
-  // Cleanup old entries periodically
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of store.entries()) {
-      if (now > entry.resetTime) {
-        store.delete(key);
-      }
-    }
-  }, windowMs);
+  const limiter = ((req: Request, res: Response, next: NextFunction) => {
+    const result = consumeRateLimit(store, keyGenerator(req), windowMs, maxRequests);
 
-  return (req: Request, res: Response, next: NextFunction) => {
-    const key = keyGenerator(req);
-    const now = Date.now();
+    res.setHeader('X-RateLimit-Limit', result.limit);
+    res.setHeader('X-RateLimit-Remaining', result.remaining);
+    res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
 
-    let entry = store.get(key);
-
-    if (!entry || now > entry.resetTime) {
-      // Create new entry or reset expired one
-      entry = {
-        count: 1,
-        resetTime: now + windowMs,
-      };
-      store.set(key, entry);
-      return next();
-    }
-
-    entry.count++;
-
-    if (entry.count > maxRequests) {
-      const retryAfterSeconds = Math.ceil((entry.resetTime - now) / 1000);
-      res.setHeader('Retry-After', retryAfterSeconds);
-      res.setHeader('X-RateLimit-Limit', maxRequests);
-      res.setHeader('X-RateLimit-Remaining', 0);
-      res.setHeader('X-RateLimit-Reset', Math.ceil(entry.resetTime / 1000));
+    if (!result.allowed) {
+      res.setHeader('Retry-After', result.retryAfterSeconds);
       return res.status(429).json({ message });
     }
 
-    // Set rate limit headers
-    res.setHeader('X-RateLimit-Limit', maxRequests);
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - entry.count));
-    res.setHeader('X-RateLimit-Reset', Math.ceil(entry.resetTime / 1000));
-
     next();
-  };
+  }) as RateLimiter;
+
+  limiter.consume = (key: string) =>
+    consumeRateLimit(store, key, windowMs, maxRequests);
+  limiter.message = message;
+
+  return limiter;
 }
 
 // Pre-configured rate limiters for common use cases

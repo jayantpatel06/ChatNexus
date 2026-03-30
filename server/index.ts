@@ -1,21 +1,39 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express from "express";
 import dotenv from "dotenv";
 
+import type { NextFunction, Request, Response } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-// Load .env variables
 dotenv.config();
 
-const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+const APP_HOST = "0.0.0.0";
 
-// --- LOGGING MIDDLEWARE ---
-app.use((req, res, next) => {
+function getServerPort() {
+  return parseInt(process.env.PORT || "5000", 10);
+}
+
+function errorHandler(
+  err: any,
+  _req: Request,
+  res: Response,
+  _next: NextFunction,
+) {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+
+  res.status(status).json({ message });
+  console.error("Unhandled error:", err);
+}
+
+function requestLoggingMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let capturedJsonResponse: Record<string, any> | undefined;
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
@@ -32,7 +50,7 @@ app.use((req, res, next) => {
       }
 
       if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+        logLine = logLine.slice(0, 77) + "...";
       }
 
       log(logLine);
@@ -40,35 +58,32 @@ app.use((req, res, next) => {
   });
 
   next();
-});
+}
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(requestLoggingMiddleware);
 
 (async () => {
   const server = await registerRoutes(app);
 
-  // --- ERROR HANDLER ---
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  app.use(errorHandler);
 
-    res.status(status).json({ message });
-    console.error("Unhandled error:", err);
-  });
-
-  // --- DEV vs PROD ---
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = getServerPort();
   server.listen(
     {
       port,
-      host: "0.0.0.0",
+      host: APP_HOST,
     },
     () => {
       log(`serving on port ${port}`);
-    }
+    },
   );
 })();

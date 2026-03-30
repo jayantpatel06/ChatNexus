@@ -1,11 +1,21 @@
-import { Express } from "express";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { randomBytes, scrypt, timingSafeEqual } from "crypto";
+import type { Express, NextFunction, Request, Response } from "express";
+import {
+  loginUserSchema,
+  registerUserSchema,
+  type InsertUser,
+  type LoginUser,
+  type RegisterUser,
+  type User,
+} from "@shared/schema";
 import { promisify } from "util";
-import { storage } from "./storage";
-import { registerUserSchema, loginUserSchema } from "@shared/schema";
 import { signToken } from "./lib/jwt";
 import { jwtAuth } from "./middleware/jwt-auth";
-import { authRateLimiter, guestLoginRateLimiter } from "./middleware/rate-limit";
+import {
+  authRateLimiter,
+  guestLoginRateLimiter,
+} from "./middleware/rate-limit";
+import { storage } from "./storage";
 
 const scryptAsync = promisify(scrypt);
 
@@ -22,158 +32,216 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+function validateGuestUsername(username: unknown): string | null {
+  if (!username || typeof username !== "string" || username.trim().length === 0) {
+    return "Username is required";
+  }
+
+  const trimmedUsername = username.trim();
+
+  if (trimmedUsername.length < 2) {
+    return "Username must be at least 2 characters long";
+  }
+
+  if (trimmedUsername.length > 20) {
+    return "Username must be less than 20 characters";
+  }
+
+  return null;
+}
+
+function parseRegisterPayload(body: unknown): RegisterUser {
+  return registerUserSchema.parse(body);
+}
+
+function parseLoginPayload(body: unknown): LoginUser {
+  return loginUserSchema.parse(body);
+}
+
+async function ensureUsernameIsAvailable(username: string) {
+  const existingUser = await storage.getUserByUsername(username);
+  return !existingUser;
+}
+
+async function createGuestUser(username: string) {
+  const user = await storage.createUser({
+    username,
+    isGuest: true,
+    isOnline: true,
+    gmail: null,
+    passwordHash: null,
+    age: null,
+    gender: null,
+  });
+
+  return { user, token: signToken(user) };
+}
+
+async function registerMemberUser(
+  userInput: Omit<InsertUser, "passwordHash"> & { password: string },
+) {
+  const user = await storage.createUser({
+    gmail: userInput.gmail,
+    passwordHash: await hashPassword(userInput.password),
+    username: userInput.username,
+    age: userInput.age,
+    gender: userInput.gender,
+    isGuest: false,
+    isOnline: true,
+  });
+
+  return { user, token: signToken(user) };
+}
+
+async function authenticateMemberUser(gmail: string, password: string) {
+  const user = await storage.getUserByGmail(gmail);
+  if (!user || !user.passwordHash) {
+    return null;
+  }
+
+  const passwordsMatch = await comparePasswords(password, user.passwordHash);
+  if (!passwordsMatch) {
+    return null;
+  }
+
+  await storage.updateUserOnlineStatus(user.userId, true);
+  return { user, token: signToken(user) };
+}
+
+async function logoutUser(user: User) {
+  await storage.clearEphemeralConversationsForUser(user.userId);
+
+  if (user.isGuest) {
+    await storage.deleteUser(user.userId);
+    return;
+  }
+
+  await storage.updateUserOnlineStatus(user.userId, false);
+}
+
+function refreshUserToken(user: User) {
+  return { token: signToken(user), user };
+}
+
+async function guestLoginController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const validationMessage = validateGuestUsername(req.body?.username);
+    if (validationMessage) {
+      return res.status(400).json({ message: validationMessage });
+    }
+
+    const trimmedUsername = req.body.username.trim();
+    const isAvailable = await ensureUsernameIsAvailable(trimmedUsername);
+    if (!isAvailable) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    return res.status(201).json(await createGuestUser(trimmedUsername));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function registerController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const validatedData = parseRegisterPayload(req.body);
+
+    const existingUser = await storage.getUserByGmail(validatedData.gmail);
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+
+    const existingUsername = await storage.getUserByUsername(validatedData.username);
+    if (existingUsername) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    return res.status(201).json(await registerMemberUser(validatedData));
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ message: "Invalid input data" });
+    }
+    next(error);
+  }
+}
+
+async function loginController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const validatedData = parseLoginPayload(req.body);
+    const payload = await authenticateMemberUser(
+      validatedData.gmail,
+      validatedData.password,
+    );
+
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    return res.status(200).json(payload);
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ message: "Invalid input data" });
+    }
+    next(error);
+  }
+}
+
+async function logoutController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await logoutUser(req.jwtUser!);
+    res.sendStatus(200);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function currentUserController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(req.jwtUser!);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function refreshTokenController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(refreshUserToken(req.jwtUser!));
+  } catch (error) {
+    next(error);
+  }
+}
+
 export function setupAuth(app: Express) {
-  // Trust proxy for production environments behind reverse proxies
   app.set("trust proxy", 1);
 
-  // Guest login - returns JWT token directly (rate limited to prevent abuse)
-  app.post("/api/guest-login", guestLoginRateLimiter, async (req, res, next) => {
-    try {
-      const { username } = req.body;
-
-      if (!username || typeof username !== "string" || username.trim().length === 0) {
-        return res.status(400).json({ message: "Username is required" });
-      }
-
-      const trimmedUsername = username.trim();
-
-      if (trimmedUsername.length < 2) {
-        return res.status(400).json({ message: "Username must be at least 2 characters long" });
-      }
-
-      if (trimmedUsername.length > 20) {
-        return res.status(400).json({ message: "Username must be less than 20 characters" });
-      }
-
-      // Ensure username is unique
-      const existingUser = await storage.getUserByUsername(trimmedUsername);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-
-      const user = await storage.createUser({
-        username: trimmedUsername,
-        isGuest: true,
-        isOnline: true,
-        gmail: null,
-        passwordHash: null,
-        age: null,
-        gender: null,
-      });
-
-      // Generate JWT token
-      const token = signToken(user);
-
-      res.status(201).json({ user, token });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Member registration - returns JWT token directly (rate limited)
-  app.post("/api/register", authRateLimiter, async (req, res, next) => {
-    try {
-      const validatedData = registerUserSchema.parse(req.body);
-
-      const existingUser = await storage.getUserByGmail(validatedData.gmail);
-      if (existingUser) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
-
-      const existingUsername = await storage.getUserByUsername(validatedData.username);
-      if (existingUsername) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-
-      const user = await storage.createUser({
-        gmail: validatedData.gmail,
-        passwordHash: await hashPassword(validatedData.password),
-        username: validatedData.username,
-        age: validatedData.age,
-        gender: validatedData.gender,
-        isGuest: false,
-        isOnline: true,
-      });
-
-      // Generate JWT token
-      const token = signToken(user);
-
-      res.status(201).json({ user, token });
-    } catch (error: any) {
-      if (error.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid input data" });
-      }
-      next(error);
-    }
-  });
-
-  // Member login - returns JWT token directly (rate limited)
-  app.post("/api/login", authRateLimiter, async (req, res, next) => {
-    try {
-      const validatedData = loginUserSchema.parse(req.body);
-
-      const user = await storage.getUserByGmail(validatedData.gmail);
-      if (!user || !user.passwordHash || !(await comparePasswords(validatedData.password, user.passwordHash))) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-
-      // Update online status
-      await storage.updateUserOnlineStatus(user.userId, true);
-
-      // Generate JWT token
-      const token = signToken(user);
-
-      res.status(200).json({ user, token });
-    } catch (error: any) {
-      if (error.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid input data" });
-      }
-      next(error);
-    }
-  });
-
-  // Logout - requires JWT auth
-  app.post("/api/logout", jwtAuth, async (req, res, next) => {
-    try {
-      const user = req.jwtUser!;
-
-      if (user.isGuest) {
-        // If it's a guest user, delete them from the database
-        await storage.deleteUser(user.userId);
-      } else {
-        // For regular users, just update online status
-        await storage.updateUserOnlineStatus(user.userId, false);
-      }
-
-      // JWT tokens are stateless - client should delete the token from localStorage
-      res.sendStatus(200);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get current user - requires JWT auth
-  // Note: Online status is managed by Socket.io connection, not by this endpoint
-  app.get("/api/user", jwtAuth, async (req, res, next) => {
-    try {
-      const user = req.jwtUser!;
-      res.json(user);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Refresh token endpoint - get a new token before the old one expires
-  app.post("/api/auth/refresh", jwtAuth, async (req, res, next) => {
-    try {
-      const user = req.jwtUser!;
-      
-      // Generate a fresh token
-      const token = signToken(user);
-      
-      res.json({ token, user });
-    } catch (error) {
-      next(error);
-    }
-  });
+  app.post("/api/guest-login", guestLoginRateLimiter, guestLoginController);
+  app.post("/api/register", authRateLimiter, registerController);
+  app.post("/api/login", authRateLimiter, loginController);
+  app.post("/api/logout", jwtAuth, logoutController);
+  app.get("/api/user", jwtAuth, currentUserController);
+  app.post("/api/auth/refresh", jwtAuth, refreshTokenController);
 }

@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
-/** Injects Bing Webmaster `msvalidate.01` when `VITE_BING_SITE_VERIFICATION` is set (build + dev HTML). */
 function injectBingSiteVerification(verification: string | undefined): Plugin {
   return {
     name: "inject-bing-site-verification",

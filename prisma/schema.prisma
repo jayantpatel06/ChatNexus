@@ -20,9 +20,43 @@ model User {
   receivedMessages Message[] @relation("Receiver")
   sentMessages     Message[] @relation("Sender")
   sentGlobalMessages GlobalMessage[]
+  friendshipsOne   Friendship[] @relation("FriendshipsUserOne")
+  friendshipsTwo   Friendship[] @relation("FriendshipsUserTwo")
+  sentFriendRequests FriendRequest[] @relation("FriendRequestsSender")
+  receivedFriendRequests FriendRequest[] @relation("FriendRequestsReceiver")
 
   @@map("Users")
   @@index([isOnline])
+}
+
+model Friendship {
+  id        Int      @id @default(autoincrement())
+  userId1   Int      @map("user_id1")
+  userId2   Int      @map("user_id2")
+  createdAt DateTime @default(now()) @map("created_at")
+  userOne   User     @relation("FriendshipsUserOne", fields: [userId1], references: [userId], onDelete: Cascade)
+  userTwo   User     @relation("FriendshipsUserTwo", fields: [userId2], references: [userId], onDelete: Cascade)
+
+  @@unique([userId1, userId2])
+  @@index([userId1])
+  @@index([userId2])
+  @@map("Friendships")
+}
+
+model FriendRequest {
+  id         Int      @id @default(autoincrement())
+  senderId   Int      @map("sender_id")
+  receiverId Int      @map("receiver_id")
+  status     String   @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+  respondedAt DateTime? @map("responded_at")
+  sender     User     @relation("FriendRequestsSender", fields: [senderId], references: [userId], onDelete: Cascade)
+  receiver   User     @relation("FriendRequestsReceiver", fields: [receiverId], references: [userId], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+  @@map("FriendRequests")
 }
 
 model Message {
