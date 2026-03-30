@@ -133,18 +133,20 @@ export function MagneticWrap({
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
     gsap.to(el, {
-      x: dx * 0.25,
-      y: dy * 0.25,
-      duration: 0.3,
-      ease: "power2.out",
+      x: dx * 0.08,
+      y: dy * 0.08,
+      duration: 0.18,
+      ease: "power3.out",
+      overwrite: "auto",
     });
   }, []);
   const handleLeave = useCallback(() => {
     gsap.to(wrap.current, {
       x: 0,
       y: 0,
-      duration: 0.5,
-      ease: "elastic.out(1,0.35)",
+      duration: 0.22,
+      ease: "power2.out",
+      overwrite: "auto",
     });
   }, []);
   return (

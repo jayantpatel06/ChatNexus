@@ -1,12 +1,5 @@
 import "./landing-page.css";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  type ReactNode,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Seo, getSiteUrl } from "@/components/seo";
@@ -23,10 +16,26 @@ import {
   Github,
   ArrowRight,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Send,
   Instagram,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  applyTheme,
+  getStoredTheme,
+  persistTheme,
+  type ThemePreference,
+} from "@/lib/theme";
+import {
+  useReveal,
+  useParallax,
+  MagneticWrap,
+  CustomCursor,
+  PagePreloader,
+  AmbientOrbs,
+} from "@/components/effects";
 import gsap from "gsap";
 
 /* ───────────────────────── constants ───────────────────────── */
@@ -89,17 +98,245 @@ const FAQS = [
   },
 ];
 
-import {
-  useReveal,
-  useParallax,
-  TiltCard,
-  MagneticWrap,
-  CustomCursor,
-  PagePreloader,
-  AmbientOrbs,
-} from "@/components/effects";
+function FeaturesStack() {
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-/* ───────────────────── page component ──────────────────── */
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      
+      // Calculate how far we've scrolled into the features section
+      // 0 = just started, 1 = scrolled through the whole track
+      const progress = Math.max(0, Math.min(1, -rect.top / (rect.height - windowHeight)));
+      setScrollProgress(progress);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="features-stack-shell">
+      <div className="features-stack-hint">
+        <span>Scroll to discover power</span>
+      </div>
+
+      {FEATURES.map((feature, i) => {
+        // cards stack one after another with 32px visible "tops"
+        const cardCount = FEATURES.length;
+        
+        // Progress within this card's section
+        // Each card takes a portion of the 1.0 scrollProgress
+        const step = 1 / cardCount;
+        const start = i * step;
+        const end = (i + 1) * step;
+        const localizedProgress = Math.max(0, Math.min(1, (scrollProgress - start) / step));
+        
+        // Receding factor: how much to scale down based on cards ABOVE this one
+        // A card scales down as the NEXT cards scroll in.
+        const nextCardsProgress = Math.max(0, (scrollProgress - (i + 1) * step) / (1 - (i + 1) * step));
+        const progressScale = i === cardCount - 1 ? 1 : Math.max(0.85, 1 - nextCardsProgress * 0.15);
+
+        return (
+          <div 
+            key={feature.title} 
+            className="feature-stack-layer"
+            style={{ 
+              zIndex: i,
+              height: i === cardCount - 1 ? "auto" : "70vh" // Reduced height for tighter stack
+            }}
+          >
+            <article
+              className="feature-stack-card"
+              style={
+                {
+                  position: "sticky",
+                  top: `calc(100px + ${i * 32}px)`, // Sequential offsets for "deck" look
+                  transform: `scale(${progressScale})`,
+                  opacity: 1,
+                  "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
+                  "--feature-index": i,
+                } as React.CSSProperties
+              }
+            >
+              <div className="feature-stack-panel">
+                <div className="feature-stack-badge">{i + 1}</div>
+                <div className="feature-marker-dot" />
+                <div className="feature-stack-copy">
+                  <div className="feature-icon-wrap feature-stack-icon mb-6">
+                    <feature.Icon className="w-10 h-10" />
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    <span className="feature-kicker">{feature.title}</span>
+                    <h3 className="feature-title text-3xl font-black tracking-tight">
+                      {feature.title}
+                    </h3>
+                    <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
+                      {feature.desc}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type ThemeAnimationStart =
+  | "bottom-up"
+  | "top-down"
+  | "left-right"
+  | "right-left";
+
+function createThemeTransitionCss(
+  start: ThemeAnimationStart = "bottom-up",
+  blur = false,
+) {
+  const getClipPath = (direction: ThemeAnimationStart) => {
+    switch (direction) {
+      case "top-down":
+        return {
+          from: "polygon(0% 0%, 100% 0%, 100% 0%, 0% 0%)",
+          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+        };
+      case "left-right":
+        return {
+          from: "polygon(0% 0%, 0% 0%, 0% 100%, 0% 100%)",
+          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+        };
+      case "right-left":
+        return {
+          from: "polygon(100% 0%, 100% 0%, 100% 100%, 100% 100%)",
+          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+        };
+      case "bottom-up":
+      default:
+        return {
+          from: "polygon(0% 100%, 100% 100%, 100% 100%, 0% 100%)",
+          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+        };
+    }
+  };
+
+  const clipPath = getClipPath(start);
+
+  return `
+    ::view-transition-group(root) {
+      animation-duration: 0.7s;
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    ::view-transition-new(root) {
+      animation-name: landing-theme-reveal-${start}${blur ? "-blur" : ""};
+      ${blur ? "filter: blur(2px);" : ""}
+    }
+
+    ::view-transition-old(root),
+    .dark::view-transition-old(root) {
+      animation: none;
+      z-index: -1;
+    }
+
+    .dark::view-transition-new(root) {
+      animation-name: landing-theme-reveal-${start}${blur ? "-blur" : ""};
+      ${blur ? "filter: blur(2px);" : ""}
+    }
+
+    @keyframes landing-theme-reveal-${start}${blur ? "-blur" : ""} {
+      from {
+        clip-path: ${clipPath.from};
+        ${blur ? "filter: blur(8px);" : ""}
+      }
+      ${blur ? "50% { filter: blur(4px); }" : ""}
+      to {
+        clip-path: ${clipPath.to};
+        ${blur ? "filter: blur(0px);" : ""}
+      }
+    }
+  `;
+}
+
+function AnimatedThemeToggle({ className }: { className?: string }) {
+  const [isDark, setIsDark] = useState(() =>
+    typeof window !== "undefined"
+      ? (getStoredTheme() ??
+          (document.documentElement.classList.contains("dark")
+            ? "dark"
+            : "light")) === "dark"
+      : false,
+  );
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    const viewTransitionDocument = document as Document & {
+      startViewTransition?: (callback: () => void) => void;
+    };
+    const nextTheme: ThemePreference = isDark ? "light" : "dark";
+    const styleId = "landing-theme-transition-styles";
+    const css = createThemeTransitionCss("bottom-up", false);
+
+    let styleElement = document.getElementById(
+      styleId,
+    ) as HTMLStyleElement | null;
+    if (!styleElement) {
+      styleElement = document.createElement("style");
+      styleElement.id = styleId;
+      document.head.appendChild(styleElement);
+    }
+    styleElement.textContent = css;
+
+    const switchTheme = () => {
+      applyTheme(nextTheme);
+      persistTheme(nextTheme);
+      setIsDark(nextTheme === "dark");
+    };
+
+    if (!viewTransitionDocument.startViewTransition) {
+      switchTheme();
+      return;
+    }
+
+    viewTransitionDocument.startViewTransition(switchTheme);
+  }, [isDark]);
+
+  return (
+    <button
+      type="button"
+      className={`landing-theme-toggle ${className ?? ""}`.trim()}
+      onClick={toggleTheme}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      <span className="sr-only">Toggle theme</span>
+      <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g className={`landing-theme-toggle__core${isDark ? " is-dark" : ""}`}>
+          <path
+            d="M120 67.5C149.25 67.5 172.5 90.75 172.5 120C172.5 149.25 149.25 172.5 120 172.5"
+            fill="white"
+          />
+          <path
+            d="M120 67.5C90.75 67.5 67.5 90.75 67.5 120C67.5 149.25 90.75 172.5 120 172.5"
+            fill="black"
+          />
+        </g>
+        <path
+          className={`landing-theme-toggle__ring${isDark ? " is-dark" : ""}`}
+          d="M120 3.75C55.5 3.75 3.75 55.5 3.75 120C3.75 184.5 55.5 236.25 120 236.25C184.5 236.25 236.25 184.5 236.25 120C236.25 55.5 184.5 3.75 120 3.75ZM120 214.5V172.5C90.75 172.5 67.5 149.25 67.5 120C67.5 90.75 90.75 67.5 120 67.5V25.5C172.5 25.5 214.5 67.5 214.5 120C214.5 172.5 172.5 214.5 120 214.5Z"
+          fill="white"
+        />
+      </svg>
+    </button>
+  );
+}
 
 export default function LandingPage() {
   const { user, isLoading } = useAuth();
@@ -184,7 +421,14 @@ export default function LandingPage() {
   /* ── nav glass + scroll-spy ── */
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const sections = ["hero", "features", "about"];
+    const sections = [
+      "hero",
+      "features",
+      "about",
+      "stranger-chat",
+      "faq",
+      "support",
+    ];
     const handle = () => {
       if (!navRef.current) return;
       const cur = window.scrollY;
@@ -193,24 +437,34 @@ export default function LandingPage() {
       } else {
         navRef.current.classList.remove("nav-scrolled");
       }
-      /* scroll-spy: highlight active pill link */
+      /* scroll-spy: highlight active pill link (use layout position in document — offsetTop is wrong inside position:relative .landing-root) */
+      const sectionTop = (id: string) => {
+        const el = document.getElementById(id);
+        if (!el) return Number.POSITIVE_INFINITY;
+        return el.getBoundingClientRect().top + window.scrollY;
+      };
       let activeId = sections[0];
       for (const id of sections) {
-        const el = document.getElementById(id);
-        if (el && el.offsetTop - 120 <= cur) activeId = id;
+        if (sectionTop(id) - 120 <= cur) activeId = id;
       }
       navRef.current.querySelectorAll(".nav-pill-link").forEach((a) => {
         a.classList.toggle("active", a.getAttribute("href") === `#${activeId}`);
       });
     };
     window.addEventListener("scroll", handle, { passive: true });
+    window.addEventListener("hashchange", handle);
     handle(); // run once on mount
-    return () => window.removeEventListener("scroll", handle);
+    return () => {
+      window.removeEventListener("scroll", handle);
+      window.removeEventListener("hashchange", handle);
+    };
   }, []);
 
-  /* ── section reveal refs ── */
+  /* ── section reveal refs (each .reveal-item needs a ref or it stays opacity:0) ── */
   const sectionTitleRef = useReveal(0.2);
   const aboutRef = useReveal(0.15);
+  const strangerChatRef = useReveal(0.12);
+  const faqRef = useReveal(0.12);
   const footerRef = useReveal(0.15);
 
   const dest = user ? "/dashboard" : "/auth";
@@ -265,16 +519,27 @@ export default function LandingPage() {
               <a href="#about" className="nav-pill-link">
                 About
               </a>
+              <a href="#faq" className="nav-pill-link">
+                FAQs
+              </a>
+              <Link href="/help-center" className="nav-pill-link">
+                Support
+              </Link>
             </div>
 
-            <MagneticWrap>
-              <Link href={dest}>
-                <Button className="nav-cta">
-                  {user ? "Dashboard" : "Get Started"}
-                  <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
-                </Button>
-              </Link>
-            </MagneticWrap>
+            <div className="nav-actions">
+              <AnimatedThemeToggle />
+              <MagneticWrap>
+                <Link href={dest}>
+                  <Button className="nav-cta">
+                    <span className="nav-cta-label">
+                      {user ? "Dashboard" : "Get Started"}
+                    </span>
+                    <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
+                  </Button>
+                </Link>
+              </MagneticWrap>
+            </div>
           </div>
         </nav>
 
@@ -329,19 +594,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="features-grid">
-            {FEATURES.map((f, i) => (
-              <TiltCard key={f.title} delay={i * 80}>
-                <div className="feature-card">
-                  <div className="feature-icon-wrap">
-                    <f.Icon className="w-7 h-7" />
-                  </div>
-                  <h3 className="feature-title">{f.title}</h3>
-                  <p className="feature-desc">{f.desc}</p>
-                </div>
-              </TiltCard>
-            ))}
-          </div>
+          <FeaturesStack />
         </section>
 
         {/* ═══════ About ═══════ */}
@@ -349,13 +602,14 @@ export default function LandingPage() {
           <div ref={aboutRef} className="reveal-item about-inner">
             <span className="section-tag">About</span>
             <h2 className="section-title">
-              Built for People Who Want to Talk to Strangers
+              The Fastest Way to Talk to Strangers Online
             </h2>
             <p className="about-text">
-              ChatNexus was built for people searching for an Omegle alternative
-              that feels faster, cleaner, and more reliable. We focus on
-              anonymous chat, real-time messaging, and frictionless entry so you
-              can meet new people without fighting the interface.
+              ChatNexus is a modern Omegle alternative designed for people who
+              want to meet new friends, chat anonymously, and join global
+              conversations instantly. We focus on frictionless entry,
+              privacy-first flows, and a mobile-friendly experience so you can
+              start chatting with strangers in seconds—no long signup required.
             </p>
             <div className="about-stats">
               <div className="about-stat">
@@ -371,54 +625,36 @@ export default function LandingPage() {
                 <span className="about-stat-label">Uptime</span>
               </div>
             </div>
+            <div className="about-features-grid max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 px-4 mt-10">
+              <div className="feature-card">
+                <h3 className="feature-title">Start Fast</h3>
+                <p className="feature-desc">
+                  Guest access lets you join a stranger chat session
+                  immediately—no account needed.
+                </p>
+              </div>
+              <div className="feature-card">
+                <h3 className="feature-title">Stay Anonymous</h3>
+                <p className="feature-desc">
+                  Lightweight identity and privacy-first design keep your
+                  conversations safe and anonymous.
+                </p>
+              </div>
+              <div className="feature-card">
+                <h3 className="feature-title">Chat Anywhere</h3>
+                <p className="feature-desc">
+                  Mobile-friendly screens and PWA support help you join random
+                  conversations from any device.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
         {/* ═══════ Footer ═══════ */}
-        <section
-          className="features-section"
-          aria-labelledby="stranger-chat-heading"
-        >
-          <div className="reveal-item section-header">
-            <span className="section-tag">Stranger Chat</span>
-            <h2 id="stranger-chat-heading" className="section-title">
-              Anonymous Chat Without the Usual Friction
-            </h2>
-            <p className="section-desc">
-              If users are searching for random chat, anonymous chat, or sites
-              where they can talk to strangers online, ChatNexus gives them a
-              faster route into live conversation with guest access, responsive
-              messaging, and global community chat.
-            </p>
-          </div>
 
-          <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
-            <div className="feature-card">
-              <h3 className="feature-title">Start Fast</h3>
-              <p className="feature-desc">
-                Guest access lowers friction for users who want to start a
-                stranger chat session immediately.
-              </p>
-            </div>
-            <div className="feature-card">
-              <h3 className="feature-title">Stay Anonymous</h3>
-              <p className="feature-desc">
-                ChatNexus supports lightweight identity and privacy-first flows
-                that fit anonymous conversation use cases.
-              </p>
-            </div>
-            <div className="feature-card">
-              <h3 className="feature-title">Chat Anywhere</h3>
-              <p className="feature-desc">
-                Mobile-friendly screens and PWA support help users join random
-                conversations from any device.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="faq-section" aria-labelledby="faq-heading">
-          <div className="reveal-item faq-inner">
+        <section id="faq" className="faq-section" aria-labelledby="faq-heading">
+          <div ref={faqRef} className="reveal-item faq-inner">
             <span className="section-tag">FAQ</span>
             <h2 id="faq-heading" className="section-title">
               Questions People Ask Before Using Stranger Chat Sites
@@ -435,15 +671,18 @@ export default function LandingPage() {
         </section>
 
         <footer
+          id="support"
           ref={footerRef}
-          className="reveal-item w-full bg-[#0a0c14] border-t border-[rgba(255,255,255,0.06)] px-8 py-16 -mx-4 md:mx-0"
+          className="reveal-item landing-footer w-full px-4 md:px-8 py-16"
         >
           <div className="max-w-[1200px] mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-12 ">
               {/* Brand Column */}
               <div className="flex flex-col gap-6 md:col-span-1">
-                <h2 className="text-2xl font-bold text-[#00c6fb]">ChatNexus</h2>
-                <p className="text-[#a0aec0] leading-relaxed text-[15px]">
+                <h2 className="text-2xl font-bold text-brand-primary">
+                  ChatNexus
+                </h2>
+                <p className="text-brand-muted leading-relaxed text-[15px]">
                   The architect of future communication.
                   <br />
                   We build tools that empower humanity to
@@ -454,30 +693,90 @@ export default function LandingPage() {
 
               {/* Platform Column */}
               <div className="flex flex-col gap-4">
-                <h3 className="text-white font-semibold mb-2">Platform</h3>
+                <h3 className="text-brand-text font-semibold mb-2">Platform</h3>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
                 >
-                  Documentation
+                  <span>Documentation</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
                 >
-                  API Status
+                  <span>API Status</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
                 >
-                  Enterprise Integrations
+                  <span>Enterprise Integrations</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
                 >
-                  Custom Solutions
+                  <span>Custom Solutions</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
               </div>
 
@@ -486,67 +785,128 @@ export default function LandingPage() {
                 <h3 className="text-white font-semibold mb-2">Company</h3>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
                 >
-                  About ChatNexus
+                  <span>About ChatNexus</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </a>
+                <a
+                  href="/help-center"
+                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                >
+                  <span>Contact Us</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
                 >
-                  Contact Us
+                  <span>Privacy Policy</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
                 <a
                   href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
+                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
                 >
-                  Privacy Policy
-                </a>
-                <a
-                  href="#"
-                  className="text-[#a0aec0] hover:text-white transition-colors text-[15px]"
-                >
-                  Terms of Service
+                  <span>Terms of Service</span>
+                  <svg
+                    className="footer-fancy-link__icon"
+                    fill="none"
+                    viewBox="0 0 10 10"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
+                      stroke="currentColor"
+                      strokeWidth="1.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </a>
               </div>
 
               {/* Subscribe Column */}
-              <div className="flex flex-col gap-8">
-                <h3 className="text-white font-semibold mb-2">
-                  Stay Connected
+              <div className="flex flex-col gap-4">
+                <h3 className="text-brand-text font-semibold mb-2">
+                  Subscribe
                 </h3>
+                <span className="text-sm">Sign up to get feature updates.</span>
                 <div className="relative">
                   <input
                     type="email"
                     placeholder="Email Address"
-                    className="w-full bg-[#181c2b] border border-[rgba(255,255,255,0.06)] rounded-xl py-3 px-4 text-white text-[15px] focus:outline-none focus:border-transparent focus:ring-1 focus:ring-[#00c6fb] transition-all"
+                    className="w-full rounded-xl border border-brand-border bg-brand-card py-3 px-4 text-brand-text text-[15px] placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-primary/40 transition-all"
                   />
-                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00c6fb] hover:text-white hover:scale-110 transition-all">
+                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary hover:text-brand-text transition-colors">
                     <Send className="w-5 h-5" />
                   </button>
                 </div>
                 <div className="flex gap-8">
                   <a
                     href="#"
-                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
                   >
                     <Twitter className="w-[18px] h-[18px]" />
                   </a>
                   <a
                     href="#"
-                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
                   >
                     <Github className="w-[18px] h-[18px]" />
                   </a>
                   <a
                     href="#"
-                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
                   >
                     <Instagram className="w-[18px] h-[18px]" />
                   </a>
                   <a
                     href="#"
-                    className="w-10 h-10 rounded-full bg-[#181c2b] flex items-center justify-center text-white hover:bg-[#23263a] transition-colors"
+                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
                   >
                     <Linkedin className="w-[18px] h-[18px]" />
                   </a>
