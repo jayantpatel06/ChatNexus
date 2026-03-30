@@ -126,63 +126,46 @@ function FeaturesStack() {
       </div>
 
       {FEATURES.map((feature, i) => {
-        // cards stack one after another with 32px visible "tops"
         const cardCount = FEATURES.length;
-        
-        // Progress within this card's section
-        // Each card takes a portion of the 1.0 scrollProgress
         const step = 1 / cardCount;
-        const start = i * step;
-        const end = (i + 1) * step;
-        const localizedProgress = Math.max(0, Math.min(1, (scrollProgress - start) / step));
-        
-        // Receding factor: how much to scale down based on cards ABOVE this one
-        // A card scales down as the NEXT cards scroll in.
         const nextCardsProgress = Math.max(0, (scrollProgress - (i + 1) * step) / (1 - (i + 1) * step));
         const progressScale = i === cardCount - 1 ? 1 : Math.max(0.85, 1 - nextCardsProgress * 0.15);
 
         return (
-          <div 
-            key={feature.title} 
-            className="feature-stack-layer"
-            style={{ 
-              zIndex: i,
-              height: i === cardCount - 1 ? "auto" : "70vh" // Reduced height for tighter stack
-            }}
+          <article
+            key={feature.title}
+            className="feature-stack-card"
+            style={
+              {
+                zIndex: i,
+                top: `calc(100px + ${i * 32}px)`,
+                marginBottom: i === cardCount - 1 ? "0" : "70vh",
+                transform: `scale(${progressScale})`,
+                opacity: 1,
+                "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
+                "--feature-index": i,
+              } as React.CSSProperties
+            }
           >
-            <article
-              className="feature-stack-card"
-              style={
-                {
-                  position: "sticky",
-                  top: `calc(100px + ${i * 32}px)`, // Sequential offsets for "deck" look
-                  transform: `scale(${progressScale})`,
-                  opacity: 1,
-                  "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
-                  "--feature-index": i,
-                } as React.CSSProperties
-              }
-            >
-              <div className="feature-stack-panel">
-                <div className="feature-stack-badge">{i + 1}</div>
-                <div className="feature-marker-dot" />
-                <div className="feature-stack-copy">
-                  <div className="feature-icon-wrap feature-stack-icon mb-6">
-                    <feature.Icon className="w-10 h-10" />
-                  </div>
-                  <div className="flex flex-col gap-4">
-                    <span className="feature-kicker">{feature.title}</span>
-                    <h3 className="feature-title text-3xl font-black tracking-tight">
-                      {feature.title}
-                    </h3>
-                    <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
-                      {feature.desc}
-                    </p>
-                  </div>
+            <div className="feature-stack-panel">
+              <div className="feature-stack-badge">{i + 1}</div>
+              <div className="feature-marker-dot" />
+              <div className="feature-stack-copy">
+                <div className="feature-icon-wrap feature-stack-icon mb-6">
+                  <feature.Icon className="w-10 h-10" />
+                </div>
+                <div className="flex flex-col gap-4">
+                  <span className="feature-kicker">{feature.title}</span>
+                  <h3 className="feature-title text-3xl font-black tracking-tight">
+                    {feature.title}
+                  </h3>
+                  <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
+                    {feature.desc}
+                  </p>
                 </div>
               </div>
-            </article>
-          </div>
+            </div>
+          </article>
         );
       })}
     </div>

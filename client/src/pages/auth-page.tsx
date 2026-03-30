@@ -4,14 +4,11 @@ import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CardContent } from "@/components/ui/card";
 import { Seo } from "@/components/seo";
 import {
   CustomCursor,
   PagePreloader,
   AmbientOrbs,
-  TiltCard,
-  MagneticWrap,
   useParallax,
 } from "@/components/effects";
 import gsap from "gsap";
@@ -23,11 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  MessageCircle,
   Loader2,
-  KeyRound,
-  Mail,
-  User,
   ArrowLeft,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -41,7 +34,7 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [guestUsername, setGuestUsername] = useState("");
-  const [showGuestCard, setShowGuestCard] = useState(false);
+  const [isGuestMode, setIsGuestMode] = useState(false);
 
   const scrollY = useParallax();
   const [loaded, setLoaded] = useState(false);
@@ -118,306 +111,339 @@ export default function AuthPage() {
         robots="noindex, nofollow"
       />
       <PagePreloader onComplete={() => setLoaded(true)} />
-      <div className="landing-root min-h-screen flex items-center justify-center p-4">
+      <div className="landing-root min-h-screen">
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />
 
         {/* Floating Back Button */}
         <div className="fixed top-6 left-6 z-50">
-          <MagneticWrap>
-            <Link href="/">
-              <Button
-                variant="ghost"
-                className="text-brand-text hover:bg-brand-primary/10 rounded-full gap-2 px-4 shadow-[0_0_15px_var(--brand-glow-primary)] border border-brand-border backdrop-blur-md"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Home
-              </Button>
-            </Link>
-          </MagneticWrap>
+          <Link href="/">
+            <Button
+              variant="ghost"
+              className="text-brand-text hover:bg-brand-primary/10 rounded-full gap-2 px-4 shadow-[0_0_15px_var(--brand-glow-primary)] border border-brand-border backdrop-blur-md"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </Button>
+          </Link>
         </div>
 
         <div
           ref={containerRef}
-          className="w-full max-w-md relative z-10"
+          className="relative z-10 min-h-screen w-full"
           style={{ opacity: 0 }}
         >
-          {/* Logo/Brand */}
-          <div className="text-center mb-4">
-            <img
-              src="/assets/images/image.png"
-              alt="ChatNexus Logo"
-              className="mx-auto mb-3 h-14 w-auto object-contain"
-            />
-            <h1 className="text-4xl font-extrabold text-brand-text tracking-tight mb-2">
-              ChatNexus
-            </h1>
-            <p className="text-brand-muted text-base">
-              Connect and Chat in Real-time with Strangers
-            </p>
-          </div>
-
-          {/* Auth Card */}
-          <TiltCard className="w-full shadow-2xl">
-            <CardContent className="p-6">
-              {/* Tab Navigation */}
-              <div className="flex bg-brand-sidebar/50 rounded-lg p-1 border border-brand-border">
-                <Button
-                  variant={activeTab === "login" ? "default" : "ghost"}
-                  className={`flex-1 transition-all rounded-md ${activeTab === "login" ? "bg-brand-primary text-black shadow-lg" : "text-brand-muted hover:text-brand-text"}`}
-                  onClick={() => setActiveTab("login")}
-                  data-testid="tab-login"
-                >
-                  Login
-                </Button>
-                <Button
-                  variant={activeTab === "register" ? "default" : "ghost"}
-                  className={`flex-1 transition-all rounded-md ${activeTab === "register" ? "bg-brand-primary text-black shadow-lg" : "text-brand-muted hover:text-brand-text"}`}
-                  onClick={() => setActiveTab("register")}
-                  data-testid="tab-register"
-                >
-                  Register
-                </Button>
+          <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
+            <section className="hidden lg:flex flex-col justify-between border-r border-border bg-muted px-12 py-14 text-foreground dark:bg-[#020913] dark:text-white">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/assets/images/image.png"
+                  alt="ChatNexus Logo"
+                  className="h-12 w-auto object-contain"
+                />
+                <span className="text-2xl font-bold tracking-tight">ChatNexus</span>
               </div>
-
-              {/* Guest Login Link and Card */}
-              <div className="flex flex-col items-center">
-                <Button
-                  type="button"
-                  variant={undefined}
-                  className="w-full mt-2 bg-transparent border border-brand-border hover:bg-brand-primary/10 text-brand-text transition-all"
-                  onClick={() => setShowGuestCard(true)}
-                  data-testid="link-guest-login"
-                >
-                  Login as Guest
-                </Button>
+              <div className="max-w-md space-y-8">
+                <h1 className="text-5xl font-extrabold leading-tight tracking-tight">
+                  See real-time moments from your next close friends.
+                </h1>
+                <p className="text-base text-muted-foreground dark:text-white/70">
+                  Join anonymous conversations, discover new communities, and
+                  start chatting instantly.
+                </p>
+               
               </div>
-              {showGuestCard && (
-                <div className="mb-4 mt-4 p-4 bg-brand-sidebar/40 rounded-lg border border-brand-border animate-fade-in backdrop-blur-sm">
-                  <div className="space-y-3">
-                    <div>
-                      <Label htmlFor="guest-username" className="sr-only">
-                        Guest Username
+            </section>
+
+            <section className="flex min-h-screen items-center justify-center border-l border-border bg-background/95 px-6 py-10 sm:px-10 dark:bg-[#12161e]/95">
+              <div className="w-full max-w-md space-y-6">
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-semibold text-foreground dark:text-white">
+                    {isGuestMode
+                      ? "Continue as guest"
+                      : activeTab === "login"
+                      ? "Log into ChatNexus"
+                      : "Create your account"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground dark:text-white/60">
+                    {isGuestMode
+                      ? "Pick a guest username and start chatting immediately."
+                      : activeTab === "login"
+                      ? "Continue your conversations."
+                      : "Start chatting with people worldwide."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 rounded-xl border border-border bg-muted/70 p-1 dark:border-white/15 dark:bg-white/5">
+                  <Button
+                    type="button"
+                    variant={activeTab === "login" ? "default" : "ghost"}
+                    className={`rounded-lg ${activeTab === "login" ? "bg-[#0f4b91] text-white hover:bg-[#0f4b91]" : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"}`}
+                    onClick={() => {
+                      setActiveTab("login");
+                      setIsGuestMode(false);
+                    }}
+                    data-testid="tab-login"
+                  >
+                    Login
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={activeTab === "register" ? "default" : "ghost"}
+                    className={`rounded-lg ${activeTab === "register" ? "bg-[#0f4b91] text-white hover:bg-[#0f4b91]" : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"}`}
+                    onClick={() => {
+                      setActiveTab("register");
+                      setIsGuestMode(false);
+                    }}
+                    data-testid="tab-register"
+                  >
+                    Register
+                  </Button>
+                </div>
+
+                {activeTab === "login" && !isGuestMode && (
+                  <form
+                    onSubmit={loginForm.handleSubmit(handleLogin)}
+                    className="space-y-4"
+                    data-testid="form-login"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="login-email" className="text-muted-foreground dark:text-white/80">
+                        Mobile number, username or email
+                      </Label>
+                      <Input
+                        id="login-email"
+                        type="email"
+                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                        placeholder="Mobile number, username or email"
+                        {...loginForm.register("gmail")}
+                        data-testid="input-login-email"
+                      />
+                      {loginForm.formState.errors.gmail && (
+                        <p className="text-sm text-destructive">
+                          {loginForm.formState.errors.gmail.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="login-password" className="text-muted-foreground dark:text-white/80">
+                        Password
+                      </Label>
+                      <Input
+                        id="login-password"
+                        type="password"
+                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                        placeholder="Password"
+                        {...loginForm.register("password")}
+                        data-testid="input-login-password"
+                      />
+                      {loginForm.formState.errors.password && (
+                        <p className="text-sm text-destructive">
+                          {loginForm.formState.errors.password.message}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="submit"
+                      className="h-12 w-full rounded-full bg-[#0f4b91] text-white hover:bg-[#0f4b91]/90"
+                      disabled={loginMutation.isPending}
+                      data-testid="button-login-submit"
+                    >
+                      {loginMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Log in
+                    </Button>
+                  </form>
+                )}
+
+                {activeTab === "login" && isGuestMode && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleGuestLogin();
+                    }}
+                    className="space-y-4"
+                    data-testid="form-guest-login"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="guest-username" className="text-muted-foreground dark:text-white/80">
+                        Guest username
                       </Label>
                       <Input
                         id="guest-username"
                         placeholder="Choose a guest username"
                         value={guestUsername}
                         onChange={(e) => setGuestUsername(e.target.value)}
-                        className="bg-brand-card border-brand-border text-brand-text placeholder:text-brand-muted focus:ring-brand-primary/20"
+                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
                         data-testid="input-guest-username"
                         autoFocus
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        className="w-full hover:scale-105 transition-transform"
-                        onClick={handleGuestLogin}
-                        disabled={
-                          guestLoginMutation.isPending || !guestUsername.trim()
-                        }
-                        data-testid="button-guest-login"
-                      >
-                        {guestLoginMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : null}
-                        Continue as Guest
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="flex-0"
-                        onClick={() => setShowGuestCard(false)}
-                        data-testid="button-guest-cancel"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="relative mb-6 ">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-              </div>
-
-              {/* Login Form */}
-              {activeTab === "login" && (
-                <form
-                  onSubmit={loginForm.handleSubmit(handleLogin)}
-                  className="space-y-4"
-                  data-testid="form-login"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email" className="auth-label">
-                      Email
-                    </Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      className="auth-input"
-                      placeholder="Enter your Gmail address"
-                      {...loginForm.register("gmail")}
-                      data-testid="input-login-email"
-                    />
-                    {loginForm.formState.errors.gmail && (
-                      <p className="text-sm text-destructive">
-                        {loginForm.formState.errors.gmail.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password" className="auth-label">
-                      Password
-                    </Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      className="auth-input"
-                      placeholder="Enter your password"
-                      {...loginForm.register("password")}
-                      data-testid="input-login-password"
-                    />
-                    {loginForm.formState.errors.password && (
-                      <p className="text-sm text-destructive">
-                        {loginForm.formState.errors.password.message}
-                      </p>
-                    )}
-                  </div>
-                  <MagneticWrap className="w-full mt-2">
-                    <button
+                    <Button
                       type="submit"
-                      className="hero-btn-primary w-full justify-center"
-                      disabled={loginMutation.isPending}
-                      data-testid="button-login-submit"
-                    >
-                      {loginMutation.isPending ? (
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                      ) : null}
-                      <span>Sign In</span>
-                    </button>
-                  </MagneticWrap>
-                </form>
-              )}
-
-              {/* Register Form */}
-              {activeTab === "register" && (
-                <form
-                  onSubmit={registerForm.handleSubmit(handleRegister)}
-                  className="space-y-4"
-                  data-testid="form-register"
-                >
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="register-username">Username</Label>
-                      <Input
-                        id="register-username"
-                        placeholder="Choose username"
-                        {...registerForm.register("username")}
-                        data-testid="input-register-username"
-                      />
-                      {registerForm.formState.errors.username && (
-                        <p className="text-sm text-destructive">
-                          {registerForm.formState.errors.username.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-age">Age</Label>
-                      <Input
-                        id="register-age"
-                        type="number"
-                        min={13}
-                        max={120}
-                        placeholder="Age"
-                        {...registerForm.register("age", {
-                          valueAsNumber: true,
-                        })}
-                        data-testid="input-register-age"
-                      />
-                      {registerForm.formState.errors.age && (
-                        <p className="text-sm text-destructive">
-                          {registerForm.formState.errors.age.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email">Gmail Address</Label>
-                    <Input
-                      id="register-email"
-                      type="email"
-                      placeholder="your.email@gmail.com"
-                      {...registerForm.register("gmail")}
-                      data-testid="input-register-email"
-                    />
-                    {registerForm.formState.errors.gmail && (
-                      <p className="text-sm text-destructive">
-                        {registerForm.formState.errors.gmail.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="register-gender">Gender</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        registerForm.setValue("gender", value as any)
+                      className="h-12 w-full rounded-full bg-[#0f4b91] text-white hover:bg-[#0f4b91]/90"
+                      disabled={
+                        guestLoginMutation.isPending || !guestUsername.trim()
                       }
-                      data-testid="select-register-gender"
+                      data-testid="button-guest-login"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {registerForm.formState.errors.gender && (
-                      <p className="text-sm text-destructive">
-                        {registerForm.formState.errors.gender.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password">Password</Label>
-                    <Input
-                      id="register-password"
-                      type="password"
-                      placeholder="Create a strong password"
-                      {...registerForm.register("password")}
-                      data-testid="input-register-password"
-                    />
-                    {registerForm.formState.errors.password && (
-                      <p className="text-sm text-destructive">
-                        {registerForm.formState.errors.password.message}
-                      </p>
-                    )}
-                  </div>
-                  <MagneticWrap className="w-full mt-4">
-                    <button
+                      {guestLoginMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Continue as guest
+                    </Button>
+                  </form>
+                )}
+
+                {activeTab === "register" && (
+                  <form
+                    onSubmit={registerForm.handleSubmit(handleRegister)}
+                    className="space-y-4"
+                    data-testid="form-register"
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="register-username" className="text-muted-foreground dark:text-white/80">
+                          Username
+                        </Label>
+                        <Input
+                          id="register-username"
+                          placeholder="Username"
+                          className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                          {...registerForm.register("username")}
+                          data-testid="input-register-username"
+                        />
+                        {registerForm.formState.errors.username && (
+                          <p className="text-sm text-destructive">
+                            {registerForm.formState.errors.username.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="register-age" className="text-muted-foreground dark:text-white/80">
+                          Age
+                        </Label>
+                        <Input
+                          id="register-age"
+                          type="number"
+                          min={13}
+                          max={120}
+                          placeholder="Age"
+                          className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                          {...registerForm.register("age", { valueAsNumber: true })}
+                          data-testid="input-register-age"
+                        />
+                        {registerForm.formState.errors.age && (
+                          <p className="text-sm text-destructive">
+                            {registerForm.formState.errors.age.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-email" className="text-muted-foreground dark:text-white/80">
+                        Email
+                      </Label>
+                      <Input
+                        id="register-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                        {...registerForm.register("gmail")}
+                        data-testid="input-register-email"
+                      />
+                      {registerForm.formState.errors.gmail && (
+                        <p className="text-sm text-destructive">
+                          {registerForm.formState.errors.gmail.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-gender" className="text-muted-foreground dark:text-white/80">
+                        Gender
+                      </Label>
+                      <Select
+                        onValueChange={(value) =>
+                          registerForm.setValue("gender", value as any)
+                        }
+                        data-testid="select-register-gender"
+                      >
+                        <SelectTrigger className="h-12 rounded-xl border-border bg-background text-foreground dark:border-white/15 dark:bg-transparent dark:text-white">
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {registerForm.formState.errors.gender && (
+                        <p className="text-sm text-destructive">
+                          {registerForm.formState.errors.gender.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-password" className="text-muted-foreground dark:text-white/80">
+                        Password
+                      </Label>
+                      <Input
+                        id="register-password"
+                        type="password"
+                        placeholder="Create a strong password"
+                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                        {...registerForm.register("password")}
+                        data-testid="input-register-password"
+                      />
+                      {registerForm.formState.errors.password && (
+                        <p className="text-sm text-destructive">
+                          {registerForm.formState.errors.password.message}
+                        </p>
+                      )}
+                    </div>
+                    <Button
                       type="submit"
-                      className="hero-btn-primary w-full justify-center"
+                      className="h-12 w-full rounded-full bg-[#0f4b91] text-white hover:bg-[#0f4b91]/90"
                       disabled={registerMutation.isPending}
                       data-testid="button-register-submit"
                     >
                       {registerMutation.isPending ? (
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : null}
-                      <span>Create Account</span>
-                    </button>
-                  </MagneticWrap>
-                </form>
-              )}
-            </CardContent>
-          </TiltCard>
+                      Create account
+                    </Button>
+                  </form>
+                )}
 
-          <p className="text-center text-sm text-white/50 mt-8">
-            By continuing, you agree to our Terms of Service and Privacy Policy
-          </p>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border dark:border-white/15" />
+                  </div>
+                  <span className="relative mx-auto block w-fit bg-background px-3 text-xs uppercase tracking-[0.14em] text-muted-foreground dark:bg-[#12161e] dark:text-white/40">
+                    or
+                  </span>
+                </div>
+
+                <Button
+                  type="button"
+                  className="h-11 w-full rounded-full border border-border bg-transparent text-foreground hover:bg-muted/60 dark:border-white/15 dark:text-white dark:hover:bg-white/10"
+                  onClick={() => {
+                    setActiveTab("login");
+                    setIsGuestMode(true);
+                  }}
+                  data-testid="link-guest-login"
+                >
+                  Continue as guest
+                </Button>
+
+                <p className="text-center text-sm text-muted-foreground dark:text-white/55">
+                  By continuing, you agree to our Terms of Service and Privacy
+                  Policy.
+                </p>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </>

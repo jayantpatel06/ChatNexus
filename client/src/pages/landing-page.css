@@ -551,6 +551,9 @@
 .features-stack-shell {
   position: relative;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding-bottom: 20vh; /* space for the last card to settle */
 }
 
@@ -594,16 +597,9 @@
   padding-bottom: 100vh;
 }
 
-.feature-stack-layer {
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
 /* ── The card itself ── */
 .feature-stack-card {
+  position: sticky;
   width: min(720px, 94vw);
   transform-origin: center top;
   will-change: transform, top, opacity;
@@ -1020,10 +1016,6 @@
   .features-stack-track {
     padding-top: 14vh;
     padding-bottom: 72vh;
-  }
-
-  .feature-stack-layer {
-    min-height: 86vh;
   }
 
   .feature-stack-card {
