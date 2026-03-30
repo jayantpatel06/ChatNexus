@@ -15,7 +15,6 @@ import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import HelpCenterPage from "@/pages/help-center";
 import { ChatThemeProvider } from "@/hooks/use-chat-theme";
-import DotGrid from "./DotGrid";
 import { THEME_STORAGE_KEY, applyTheme } from "@/lib/theme";
 
 function Router() {

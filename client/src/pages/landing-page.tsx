@@ -36,6 +36,7 @@ import {
   PagePreloader,
   AmbientOrbs,
 } from "@/components/effects";
+import FaqCards from "@/components/faq-cards";
 import gsap from "gsap";
 
 /* ───────────────────────── constants ───────────────────────── */
@@ -82,16 +83,19 @@ const SOCIALS = [
 
 const FAQS = [
   {
+    category: "Product",
     question: "What makes ChatNexus a strong Omegle alternative?",
     answer:
       "ChatNexus focuses on fast anonymous chat, guest access, mobile-friendly messaging, and public conversations that help new users jump into live discussions quickly.",
   },
   {
+    category: "Access",
     question: "Can I talk to strangers without a long signup flow?",
     answer:
       "Yes. New users can use guest access to start chatting quickly, then create an account later if they want a more persistent profile.",
   },
   {
+    category: "Devices",
     question: "Does ChatNexus work on phones and desktops?",
     answer:
       "Yes. The interface is responsive, installable as a PWA, and designed for real-time chatting across desktop and mobile devices.",
@@ -99,75 +103,90 @@ const FAQS = [
 ];
 
 function FeaturesStack() {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const cardCount = FEATURES.length;
 
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      
-      // Calculate how far we've scrolled into the features section
-      // 0 = just started, 1 = scrolled through the whole track
-      const progress = Math.max(0, Math.min(1, -rect.top / (rect.height - windowHeight)));
-      setScrollProgress(progress);
-    };
+  const handlePrev = useCallback(() => {
+    setCurrentIndex((prev) => (prev === 0 ? cardCount - 1 : prev - 1));
+  }, [cardCount]);
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const handleNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev === cardCount - 1 ? 0 : prev + 1));
+  }, [cardCount]);
 
   return (
-    <div ref={containerRef} className="features-stack-shell">
-      <div className="features-stack-hint">
-        <span>Scroll to discover power</span>
-      </div>
-
-      {FEATURES.map((feature, i) => {
-        const cardCount = FEATURES.length;
-        const step = 1 / cardCount;
-        const nextCardsProgress = Math.max(0, (scrollProgress - (i + 1) * step) / (1 - (i + 1) * step));
-        const progressScale = i === cardCount - 1 ? 1 : Math.max(0.85, 1 - nextCardsProgress * 0.15);
-
-        return (
-          <article
-            key={feature.title}
-            className="feature-stack-card"
-            style={
-              {
-                zIndex: i,
-                top: `calc(100px + ${i * 32}px)`,
-                marginBottom: i === cardCount - 1 ? "0" : "70vh",
-                transform: `scale(${progressScale})`,
-                opacity: 1,
-                "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
-                "--feature-index": i,
-              } as React.CSSProperties
-            }
+    <div className="features-stack-shell">
+      <div className="features-carousel">
+        <div className="features-carousel-viewport">
+          <div
+            className="features-carousel-track"
+            style={{ transform: `translateX(-${currentIndex * 100}%)` }}
           >
-            <div className="feature-stack-panel">
-              <div className="feature-stack-badge">{i + 1}</div>
-              <div className="feature-marker-dot" />
-              <div className="feature-stack-copy">
-                <div className="feature-icon-wrap feature-stack-icon mb-6">
-                  <feature.Icon className="w-10 h-10" />
+            {FEATURES.map((feature, i) => (
+              <article
+                key={feature.title}
+                className="feature-stack-card"
+                style={
+                  {
+                    "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
+                    "--feature-index": i,
+                  } as React.CSSProperties
+                }
+              >
+                <div className="feature-stack-panel">
+                  <div className="feature-stack-badge">{i + 1}</div>
+                  <div className="feature-marker-dot" />
+                  <div className="feature-stack-copy">
+                    <div className="feature-icon-wrap feature-stack-icon mb-6">
+                      <feature.Icon className="w-10 h-10" />
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      <span className="feature-kicker">{feature.title}</span>
+                      <h3 className="feature-title text-3xl font-black tracking-tight">
+                        {feature.title}
+                      </h3>
+                      <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
+                        {feature.desc}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-4">
-                  <span className="feature-kicker">{feature.title}</span>
-                  <h3 className="feature-title text-3xl font-black tracking-tight">
-                    {feature.title}
-                  </h3>
-                  <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
-                    {feature.desc}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </article>
-        );
-      })}
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="features-carousel-controls">
+          <button
+            type="button"
+            className="features-carousel-btn"
+            onClick={handlePrev}
+            aria-label="Previous feature"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="features-carousel-dots" aria-label="Feature slides">
+            {FEATURES.map((feature, i) => (
+              <button
+                key={feature.title}
+                type="button"
+                className={`features-carousel-dot ${i === currentIndex ? "is-active" : ""}`}
+                onClick={() => setCurrentIndex(i)}
+                aria-label={`Go to ${feature.title}`}
+                aria-pressed={i === currentIndex}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="features-carousel-btn"
+            onClick={handleNext}
+            aria-label="Next feature"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -639,17 +658,10 @@ export default function LandingPage() {
         <section id="faq" className="faq-section" aria-labelledby="faq-heading">
           <div ref={faqRef} className="reveal-item faq-inner">
             <span className="section-tag">FAQ</span>
-            <h2 id="faq-heading" className="section-title">
+            <h2 id="faq-heading" className="section-title mb-16">
               Questions People Ask Before Using Stranger Chat Sites
             </h2>
-            <div className="faq-list">
-              {FAQS.map((faq) => (
-                <article key={faq.question} className="faq-card">
-                  <h3 className="feature-title">{faq.question}</h3>
-                  <p className="feature-desc">{faq.answer}</p>
-                </article>
-              ))}
-            </div>
+            <FaqCards items={FAQS} embedded />
           </div>
         </section>
 
