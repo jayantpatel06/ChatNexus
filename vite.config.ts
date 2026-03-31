@@ -21,11 +21,6 @@ export default defineConfig(() => {
         workbox: {
           cleanupOutdatedCaches: true,
         },
-        devOptions: {
-          enabled: true,
-          type: "module",
-          navigateFallback: "index.html",
-        },
       }),
     ],
     envDir: process.cwd(),
@@ -33,7 +28,6 @@ export default defineConfig(() => {
       alias: {
         "@": path.resolve(process.cwd(), "client", "src"),
         "@shared": path.resolve(process.cwd(), "shared"),
-        "@assets": path.resolve(process.cwd(), "attached_assets"),
       },
     },
     root: path.resolve(process.cwd(), "client"),

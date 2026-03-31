@@ -29,7 +29,7 @@ import { registerUserSchema, loginUserSchema } from "@shared/schema";
 import { z } from "zod";
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation, guestLoginMutation } =
+  const { user, isLoading, loginMutation, registerMutation, guestLoginMutation } =
     useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
@@ -110,7 +110,10 @@ export default function AuthPage() {
         path="/auth"
         robots="noindex, nofollow"
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
+      <PagePreloader
+        ready={!isLoading}
+        onComplete={() => setLoaded(true)}
+      />
       <div className="landing-root min-h-screen">
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />

@@ -3,14 +3,22 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Seo, getSiteUrl } from "@/components/seo";
 import {
-  ArrowDownToLine,
   ArrowRight,
   ChevronDown,
   Fingerprint,
+  Gauge,
+  Globe,
   Shield,
   Users,
+  VenetianMask,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useAuth } from "@/providers/auth-provider";
 import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
@@ -23,6 +31,8 @@ import {
   AmbientOrbs,
 } from "@/components/effects";
 import gsap from "gsap";
+import { Global } from "recharts";
+import GlobalChat from "./global-chat-page";
 type FaqItem = {
   category: string;
   question: string;
@@ -160,7 +170,10 @@ export default function LandingPage() {
         keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus"
         structuredData={seoStructuredData}
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
+      <PagePreloader
+        ready={!isLoading}
+        onComplete={() => setLoaded(true)}
+      />
 
       {/* ═══════ Main Content ═══════ */}
       <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
@@ -226,40 +239,64 @@ export default function LandingPage() {
 
         {/* ═══════ About ═══════ */}
         <section id="about" className="about-section">
-          <div ref={aboutRef} className="reveal-item about-inner">
-            <span className="section-tag">About</span>
-            <h2 className="section-title">
-              The Fastest Way to Talk to Strangers Online
-            </h2>
-            <p className="about-text">
-              ChatNexus is a modern Omegle alternative designed for people who
-              want to meet new friends, chat anonymously, and join global
-              conversations instantly. We focus on frictionless entry,
-              privacy-first flows, and a mobile-friendly experience so you can
-              start chatting with strangers in seconds—no long signup required.
-            </p>
-            <div className="about-features-grid max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 px-4 mt-10">
-              <div className="feature-card">
-                <h3 className="feature-title">Start Fast</h3>
-                <p className="feature-desc">
-                  Guest access lets you join a stranger chat session
-                  immediately—no account needed.
+          <div ref={aboutRef} className="reveal-item about-bento-shell">
+            <div className="about-bento-head">
+              <span className="section-tag">About</span>
+            </div>
+            <div className="about-bento-grid">
+              <article className="about-bento-card about-bento-card--top-left">
+                <h3 className="about-bento-title">Start Fast</h3>
+                <p className="about-bento-text">
+                  Guest access lets you jump into a stranger chat session
+                  immediately, so the first conversation starts in seconds
+                  instead of after a long signup flow.
                 </p>
-              </div>
-              <div className="feature-card">
-                <h3 className="feature-title">Stay Anonymous</h3>
-                <p className="feature-desc">
-                  Lightweight identity and privacy-first design keep your
-                  conversations safe and anonymous.
+              </article>
+              <article className="about-bento-card about-bento-card--top-right">
+                <h3 className="about-bento-title">Stay Anonymous</h3>
+                <p className="about-bento-text">
+                  Lightweight identity and privacy-first design keep the focus
+                  on the conversation, helping you talk freely without exposing
+                  more personal information than you want to share.
                 </p>
-              </div>
-              <div className="feature-card">
-                <h3 className="feature-title">Chat Anywhere</h3>
-                <p className="feature-desc">
-                  Mobile-friendly screens and PWA support help you join random
-                  conversations from any device.
+              </article>
+              <article className="about-bento-card about-bento-card--middle-left">
+                <h3 className="about-bento-title">Join Global Conversations</h3>
+                <p className="about-bento-text">
+                  ChatNexus is built for people who want to meet new friends,
+                  discover live rooms, and move between random conversations
+                  with a real-time interface that feels immediate and social.
                 </p>
-              </div>
+              </article>
+              <article className="about-bento-card about-bento-card--middle-right">
+                <h3 className="about-bento-title">Chat Anywhere</h3>
+                <p className="about-bento-text">
+                  Mobile-friendly layouts and PWA support help you move between
+                  desktop and phone without losing the speed, simplicity, or
+                  comfort of the experience.
+                </p>
+              </article>
+              <article className="about-bento-card about-bento-card--bottom-left">
+                <h3 className="about-bento-title">Built for Real Time</h3>
+                <p className="about-bento-text">
+                  Frictionless entry, modern messaging, and fast live updates
+                  make every chat feel responsive, lightweight, and easy to
+                  continue.
+                </p>
+              </article>
+              <article className="about-bento-card about-bento-card--statement">
+                <h2 className="about-bento-heading">
+                  The Fastest Way to Talk to Strangers Online.
+                </h2>
+                <p className="about-bento-lead">
+                  ChatNexus is a modern Omegle alternative designed for people
+                  who want to meet new friends, chat anonymously, and join
+                  global conversations instantly. We focus on frictionless
+                  entry, privacy-first flows, and a mobile-friendly experience
+                  so you can start chatting with strangers in seconds, no long
+                  signup required.
+                </p>
+              </article>
             </div>
           </div>
         </section>
@@ -268,10 +305,14 @@ export default function LandingPage() {
         <section id="faq" className="faq-section" aria-labelledby="faq-heading">
           <div ref={faqRef} className="reveal-item faq-inner">
             <span className="section-tag">FAQ</span>
-            <h2 id="faq-heading" className="section-title mb-16">
-              Questions People Ask Before Using Stranger Chat Sites
+            <h2 id="faq-heading" className="section-title faq-title">
+              Common Questions & Answers
             </h2>
-            <FaqCards items={LANDING_FAQS} />
+            <p className="section-desc faq-subtitle">
+              Find out all the essential details about our platform and how it can
+              serve your needs.
+            </p>
+            <FaqAccordion items={LANDING_FAQS} />
           </div>
         </section>
 
@@ -316,38 +357,26 @@ export default function LandingPage() {
 function BentoFeatures() {
   return (
     <div className="mx-auto mt-12 grid w-full max-w-[1100px] grid-cols-1 gap-6 px-4 md:grid-cols-3">
-      <div className="group relative overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-2xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
-        <div className="relative mb-4">
-          <span className="bg-gradient-to-br from-white to-white/60 bg-clip-text text-4xl font-bold text-transparent lg:text-5xl">
-            100%
-          </span>
-          <svg
-            className="pointer-events-none absolute -inset-4 h-[calc(100%+2rem)] w-[calc(100%+2rem)] text-brand-primary opacity-60"
-            viewBox="0 0 100 50"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            preserveAspectRatio="none"
-          >
-            <path
-              d="M10,25 C10,5 90,5 90,25 C90,45 10,45 10,25"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              className="drop-shadow-[0_0_8px_rgba(var(--brand-primary-rgb),0.5)]"
-            />
-          </svg>
+      <div className="bento-feature-card group relative flex flex-col items-center overflow-hidden rounded-3xl p-8 text-center md:col-span-1">
+        <div className="bento-feature-icon-shell relative mb-6 rounded-full p-4">
+          <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
+          <VenetianMask className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h3 className="text-lg font-semibold tracking-wide text-white">
+        <h3 className="bento-feature-title mb-3 text-lg font-semibold tracking-wide">
           Anonymous
         </h3>
+        <p className="text-sm leading-relaxed text-brand-muted">
+          Start conversations instantly without exposing your identity or
+          getting blocked by a long signup flow.
+        </p>
       </div>
 
-      <div className="group relative flex flex-col items-center overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 text-center shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
-        <div className="relative mb-6 rounded-full border border-white/5 bg-white/5 p-4 transition-colors group-hover:bg-white/10">
+      <div className="bento-feature-card group relative flex flex-col items-center overflow-hidden rounded-3xl p-8 text-center md:col-span-1">
+        <div className="bento-feature-icon-shell relative mb-6 rounded-full p-4">
           <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
-          <Fingerprint className="h-8 w-8 text-white/80" strokeWidth={1.5} />
+          <Fingerprint className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h3 className="mb-3 text-lg font-semibold text-white">
+        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
           Secure by default
         </h3>
         <p className="text-sm leading-relaxed text-brand-muted">
@@ -356,57 +385,26 @@ function BentoFeatures() {
         </p>
       </div>
 
-      <div className="group relative flex flex-col items-center overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 text-center shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
-        <div className="pointer-events-none absolute left-0 right-0 top-6 flex h-24 flex-col justify-between px-6">
-          <div className="mb-2 flex w-full items-center justify-between text-[10px] text-white/30">
-            <span className="flex items-center gap-1">
-              <ArrowDownToLine className="h-3 w-3" />
-              Connect
-            </span>
-            <span>&lt; 50 ms</span>
-          </div>
-          <svg
-            className="h-full w-full opacity-40 transition-opacity group-hover:opacity-70"
-            viewBox="0 0 100 30"
-            preserveAspectRatio="none"
-          >
-            <path
-              d="M0,25 Q10,10 20,20 T40,15 T60,25 T80,5 T100,20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="text-white"
-            />
-            <path
-              d="M0,25 Q10,10 20,20 T40,15 T60,25 T80,5 T100,20 L100,30 L0,30 Z"
-              fill="url(#spark-gradient)"
-              opacity="0.1"
-            />
-            <defs>
-              <linearGradient id="spark-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="currentColor" className="text-white" />
-                <stop offset="100%" stopColor="transparent" />
-              </linearGradient>
-            </defs>
-          </svg>
+      <div className="bento-feature-card group relative flex flex-col items-center overflow-hidden rounded-3xl p-8 text-center md:col-span-1">
+        <div className="bento-feature-icon-shell relative mb-6 rounded-full p-4">
+          <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
+          <Gauge className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <div className="mt-auto pt-24">
-          <h3 className="mb-3 text-lg font-semibold text-white">
-            Ultra-low latency
-          </h3>
-          <p className="text-sm leading-relaxed text-brand-muted">
-            Every millisecond counts. Our distributed backend brings latency
-            down, feeling faster than light.
-          </p>
-        </div>
+        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
+          Ultra-low latency
+        </h3>
+        <p className="text-sm leading-relaxed text-brand-muted">
+          Every millisecond counts. Our distributed backend brings latency
+          down, feeling faster than light.
+        </p>
       </div>
 
-      <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-2 md:flex-row">
+      <div className="bento-feature-card group relative flex flex-col overflow-hidden rounded-3xl p-8 md:col-span-2 md:flex-row">
         <div className="relative z-10 flex flex-col justify-center md:w-[45%]">
-          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/5 bg-white/5 transition-colors group-hover:bg-white/10">
-            <Shield className="h-5 w-5 text-white/80" strokeWidth={1.5} />
+          <div className="bento-feature-icon-shell mb-6 flex h-12 w-12 items-center justify-center rounded-full">
+            <Globe className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
           </div>
-          <h3 className="mb-3 text-xl font-semibold text-white">
+          <h3 className="bento-feature-title mb-3 text-xl font-semibold">
             Global reach
           </h3>
           <p className="max-w-sm text-sm leading-relaxed text-brand-muted">
@@ -430,119 +428,49 @@ function BentoFeatures() {
         </div>
       </div>
 
-      <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
-        <div className="z-10 mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/5 bg-white/5 transition-colors group-hover:bg-white/10">
-          <Users className="h-5 w-5 text-white/80" strokeWidth={1.5} />
+      <div className="bento-feature-card group relative flex flex-col items-center overflow-hidden rounded-3xl p-8 text-center md:col-span-1">
+        <div className="bento-feature-icon-shell relative z-10 mb-6 flex h-12 w-12 items-center justify-center rounded-full">
+          <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
+          <Users className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
         </div>
-        <div className="z-10 mb-20 mt-auto">
-          <h3 className="mb-3 text-lg font-semibold text-white">
-            Make connections
-          </h3>
-          <p className="text-sm leading-relaxed text-brand-muted">
-            Meet friends securely. Join a random session instantly.
-          </p>
-        </div>
-
-        <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-3 opacity-80 transition-opacity group-hover:opacity-100">
-          <div className="flex translate-x-2 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-3 pr-1 transition-transform duration-500 group-hover:-translate-x-2">
-            <span className="text-[10px] font-medium text-white/70">Guest_92</span>
-            <Avatar className="h-6 w-6 border border-white/10">
-              <AvatarFallback className="bg-gradient-to-tr from-brand-primary to-purple-500 text-[8px] text-white">
-                G
-              </AvatarFallback>
-            </Avatar>
-          </div>
-
-          <div className="flex -translate-x-4 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-1 pr-3 transition-transform duration-700 group-hover:translate-x-2">
-            <Avatar className="h-6 w-6 border border-white/10">
-              <AvatarFallback className="bg-gradient-to-tr from-cyan-500 to-blue-500 text-[8px] text-white">
-                X
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-[10px] font-medium text-white/70">Stranger</span>
-          </div>
-
-          <div className="flex translate-x-4 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-3 pr-1 transition-transform duration-1000 group-hover:-translate-x-4">
-            <span className="text-[10px] font-medium text-white/70">Guest_14</span>
-            <Avatar className="h-6 w-6 border border-white/10">
-              <AvatarFallback className="bg-gradient-to-tr from-orange-500 to-amber-500 text-[8px] text-white">
-                G
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </div>
+        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
+          Make connections
+        </h3>
+        <p className="text-sm leading-relaxed text-brand-muted">
+          Meet friends securely. Join a random session instantly.
+        </p>
       </div>
     </div>
   );
 }
 
-function FaqCards({ items }: { items: readonly FaqItem[] }) {
-  const [currentFaqIndex, setCurrentFaqIndex] = useState(0);
-  const currentFaq = items[currentFaqIndex] ?? items[0];
-
-  const handlePrev = () => {
-    setCurrentFaqIndex((previousIndex) =>
-      previousIndex === 0 ? items.length - 1 : previousIndex - 1,
-    );
-  };
-
-  const handleNext = () => {
-    setCurrentFaqIndex((previousIndex) =>
-      previousIndex === items.length - 1 ? 0 : previousIndex + 1,
-    );
-  };
-
-  if (!currentFaq) {
-    return null;
-  }
-
+function FaqAccordion({ items }: { items: readonly FaqItem[] }) {
   return (
-    <div className="flex flex-col items-center justify-center">
-      <div className="relative mb-8 flex items-center justify-center">
-        {Array.from({ length: 12 }).map((_, index) => (
-          <div
-            key={index}
-            className="absolute h-96 w-80 rounded-3xl"
-            style={{
-              background: `hsl(${(index * 30) % 360}, 60%, 60%)`,
-              transform: `rotate(${index * 15}deg) scale(1.05)`,
-              zIndex: 0,
-              opacity: 0.15,
-            }}
-          />
-        ))}
-        <div className="relative z-10 flex h-96 w-80 flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-2xl">
-          <span className="mb-4 self-start rounded-full bg-gray-200 px-4 py-1 text-sm text-gray-700">
-            {currentFaq.category}
-          </span>
-          <h2 className="mb-4 text-left text-2xl font-semibold text-gray-900">
-            {currentFaq.question}
-          </h2>
-          <p className="mt-auto text-left text-base text-gray-700">
-            {currentFaq.answer}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-8">
-        <button
-          type="button"
-          onClick={handlePrev}
-          className="rounded-full px-4 py-2 text-2xl text-white transition hover:bg-gray-800"
-          aria-label="Previous FAQ"
+    <Accordion
+      type="single"
+      collapsible
+      defaultValue="faq-0"
+      className="faq-accordion"
+    >
+      {items.map((item, index) => (
+        <AccordionItem
+          key={item.question}
+          value={`faq-${index}`}
+          className="faq-accordion-item border-0"
         >
-          &#60;
-        </button>
-        <span className="text-lg text-white">Swipe</span>
-        <button
-          type="button"
-          onClick={handleNext}
-          className="rounded-full px-4 py-2 text-2xl text-white transition hover:bg-gray-800"
-          aria-label="Next FAQ"
-        >
-          &#62;
-        </button>
-      </div>
-    </div>
+          <AccordionTrigger className="faq-accordion-trigger py-0 hover:no-underline">
+            <span className="faq-accordion-header">
+              <span className="faq-accordion-index">{index + 1}</span>
+              <span className="faq-accordion-question">{item.question}</span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="faq-accordion-content">
+            <div className="faq-accordion-answer-wrap">
+              <p className="faq-accordion-answer">{item.answer}</p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
   );
 }

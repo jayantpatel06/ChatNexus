@@ -1,74 +1,109 @@
 # ChatNexus
 
-Real-time anonymous and account-based chat built with React, Express, Socket.IO, Prisma, and PostgreSQL.
+Real-time chat built with React, Vite, Express, Socket.IO, Prisma, and PostgreSQL.
 
 Website: https://chatnexus.me
 
-## Overview
+## What It Does
 
-ChatNexus is a full-stack chat application with:
+ChatNexus supports:
 
 - guest and registered-user access
-- private direct messaging
+- one-to-one private chat
 - global chat
 - typing indicators and online presence
-- image/gifs/webp attachments
-- PWA support
+- image and GIF sharing
 - SEO-friendly public pages
+- installable PWA support
 
-The frontend is served from Vite during development and from the Express server in production.
+In development, the frontend runs through Vite middleware inside the Express server. In production, Express serves the built frontend and API from the same app.
 
-## Tech Stack
+## Stack
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Wouter, React Query
 - Backend: Node.js, Express, Socket.IO, JWT
 - Database: PostgreSQL with Prisma
 - Cache: Redis optional
-- Motion/UI: GSAP, Lucide
+- Tooling: TypeScript, esbuild, vite-plugin-pwa
 
-## Project Structure
+## Repo Layout
 
 ```text
 client/
-  public/
+  public/           static assets, manifest, public metadata files
   src/
-    app/         # routing and app-level wiring
-    chat/        # chat-specific UI and hooks
-    components/  # shared UI pieces
-    hooks/       # reusable hooks
-    lib/         # shared helpers and client utilities
-    pages/       # route-level pages
-    providers/   # auth/socket providers
-    styles/      # shared global styles
+    app/            app shell and route guards
+    chat/           private chat UI and chat state
+    components/     shared UI and layout components
+    hooks/          reusable hooks
+    lib/            client helpers and utilities
+    pages/          route-level pages
+    providers/      auth and socket providers
 
 server/
-  api/           # HTTP route registration
-  db/            # Prisma and DB helpers
-  lib/           # server utilities
-  middleware/    # auth/rate-limit middleware
-  index.ts       # server bootstrap
-  socket.ts      # Socket.IO server and events
-  storage.ts     # storage/data orchestration
+  api/              Express route registration
+  db/               Prisma bootstrap and DB helpers
+  lib/              server utilities
+  middleware/       auth and rate-limit middleware
+  index.ts          server bootstrap
+  seo.ts            route SEO config and sitemap metadata
+  socket.ts         Socket.IO event handling
+  storage.ts        storage and persistence orchestration
 
 shared/
-  schema.ts      # shared Zod/types used across client/server
+  schema.ts         shared Zod schemas and app types
 
 prisma/
-  schema.prisma
+  schema.prisma     database schema
 ```
 
 ## Requirements
 
-- Node.js 20+ recommended
+- Node.js 20+
 - npm
-- PostgreSQL database
+- PostgreSQL
 - Redis optional
+
+## Quick Start
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy the environment file:
+
+```bash
+cp .env.example .env
+```
+
+3. Fill in the required variables.
+
+4. Generate Prisma client and apply schema:
+
+```bash
+npm run db:generate
+npm run db:push
+```
+
+5. Start development:
+
+```bash
+npm run dev
+```
+
+6. Type-check the project:
+
+```bash
+npm run check
+```
 
 ## Environment Variables
 
-Copy [`.env.example`](./.env.example) to `.env` and fill in the values.
+Copy [`.env.example`](./.env.example) to `.env`.
 
-### Required
+Required:
 
 ```env
 DATABASE_URL=
@@ -78,59 +113,37 @@ SITE_URL=
 VITE_SITE_URL=
 ```
 
-### Common
+Common:
 
 ```env
 DIRECT_URL=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-SUPPORT_REQUESTS_PATH=runtime/support-requests.ndjson
 SESSION_SECRET=
+SUPPORT_REQUESTS_PATH=runtime/support-requests.ndjson
 ```
 
-### Notes
+Notes:
 
-- `JWT_SECRET` is required for token signing and verification.
-- `SESSION_SECRET` is only kept as a backward-compatible fallback. Prefer `JWT_SECRET`.
+- `JWT_SECRET` is required. The server fails fast if it is missing.
+- `SESSION_SECRET` is retained only as a fallback for older code paths.
 - `FRONTEND_URL` is used for production Socket.IO CORS.
-- `VITE_*` variables are exposed to the browser.
-- `SUPPORT_REQUESTS_PATH` stores help-center submissions as newline-delimited JSON on disk.
-- GIF search uses the current hardcoded Tenor integration in the client.
+- `SITE_URL` and `VITE_SITE_URL` are used for canonical URLs, sitemap output, and public SEO metadata.
+- `SUPPORT_REQUESTS_PATH` controls where help-center submissions are stored on disk.
 
-## Installation
-
-```bash
-npm install
-```
-
-Prisma client is also generated automatically on `postinstall`, but you can run it manually:
-
-```bash
-npm run db:generate
-```
-
-## Development
-
-Start the full app in development:
+## Scripts
 
 ```bash
 npm run dev
-```
-
-Type-check the project:
-
-```bash
+npm run build
+npm start
 npm run check
-```
-
-Useful database commands:
-
-```bash
 npm run db:generate
 npm run db:push
 npm run db:migrate
 npm run db:studio
+npm run pm2:start
 ```
 
 ## Production
@@ -147,73 +160,49 @@ Start:
 npm start
 ```
 
-PM2 option:
+PM2:
 
 ```bash
 npm run pm2:start
 ```
-
-## Database Setup
-
-This project is designed around PostgreSQL and Prisma.
-
-Typical Supabase setup:
-
-1. Create a Supabase project.
-2. Copy the Postgres connection string into `DATABASE_URL`.
-3. Set `DIRECT_URL` if you want a separate direct connection for Prisma operations.
-4. Run:
-
-```bash
-npm run db:generate
-npm run db:push
-```
-
-If you are using Prisma migrations instead of `db push`, use:
-
-```bash
-npm run db:migrate
-```
-
-## Deployment Notes
-
-Before starting the production server, make sure all required env vars are present.
 
 Recommended deployment flow:
 
 1. Install dependencies.
 2. Set environment variables.
 3. Run `npm run build`.
-4. Start with `npm start` or `npm run pm2:start`.
-5. Put the app behind a reverse proxy such as Nginx if serving on a VPS.
+4. Start the server with `npm start` or PM2.
+5. Put the app behind a reverse proxy such as Nginx if needed.
 
-## Current Status
+## SEO and PWA
 
-- `npm run check` is the current verification command in the repo.
-- No dedicated automated test suite is included yet.
-- PWA assets and service worker support are configured through Vite.
+- Public pages have route-specific SEO metadata managed on the server.
+- `robots.txt` and `sitemap.xml` are served dynamically by Express.
+- The web manifest lives at [client/public/manifest.json](./client/public/manifest.json).
+- The service worker is registered from the client entry and is intended for production builds, not normal local dev.
 
 ## Troubleshooting
 
-### Browser asks for old `.tsx` module files
-
-This usually means a stale service worker or cached app shell is still active.
+### Old cached frontend files or broken modules
 
 Clear site data, unregister the service worker in DevTools, and reload.
 
 ### Server fails at startup
 
-Check these first:
+Check:
 
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `FRONTEND_URL`
 
-The server now fails fast when critical configuration is missing.
+### GIF picker does not load results
 
-### GIF picker does not work
+Check whether Tenor requests are blocked by browser extensions, privacy tools, or network policies.
 
-Check that Tenor requests are not being blocked by the browser, extensions, or network policies.
+## Current Status
+
+- `npm run check` is the primary verification command in the repo.
+- No dedicated automated test suite is included yet.
 
 ## License
 

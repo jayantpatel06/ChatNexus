@@ -80,7 +80,7 @@ export function TiltCard({
       ease: "power2.out",
     });
     if (glare.current) {
-      glare.current.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(130,57,255,0.18) 0%, transparent 70%)`;
+      glare.current.style.background = `radial-gradient(circle at ${x}px ${y}px, var(--ln-glare-color) 0%, transparent 70%)`;
     }
   }, []);
 
@@ -199,26 +199,153 @@ export function CustomCursor() {
   );
 }
 
-export function PagePreloader({ onComplete }: { onComplete: () => void }) {
+type PagePreloaderProps = {
+  onComplete: () => void;
+  ready?: boolean;
+  watchSelector?: string;
+};
+
+function waitForWindowLoad(signal: AbortSignal) {
+  if (typeof window === "undefined" || document.readyState === "complete") {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const handleLoad = () => {
+      window.removeEventListener("load", handleLoad);
+      resolve();
+    };
+
+    const handleAbort = () => {
+      window.removeEventListener("load", handleLoad);
+      resolve();
+    };
+
+    window.addEventListener("load", handleLoad, { once: true });
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+function waitForFonts(signal: AbortSignal) {
+  const fonts = (document as Document & {
+    fonts?: { ready: Promise<unknown> };
+  }).fonts;
+
+  if (!fonts?.ready) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const finish = () => resolve();
+    void fonts.ready.then(finish, finish);
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+
+function waitForImages(root: ParentNode | null, signal: AbortSignal) {
+  const images = Array.from((root ?? document).querySelectorAll("img")).filter(
+    (image) => image.loading !== "lazy",
+  );
+
+  if (images.length === 0) {
+    return Promise.resolve();
+  }
+
+  return Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete) {
+            resolve();
+            return;
+          }
+
+          const finish = () => {
+            image.removeEventListener("load", finish);
+            image.removeEventListener("error", finish);
+            resolve();
+          };
+
+          image.addEventListener("load", finish, { once: true });
+          image.addEventListener("error", finish, { once: true });
+          signal.addEventListener("abort", finish, { once: true });
+        }),
+    ),
+  ).then(() => undefined);
+}
+
+export function PagePreloader({
+  onComplete,
+  ready = true,
+  watchSelector = ".landing-root",
+}: PagePreloaderProps) {
   const preloaderRef = useRef<HTMLDivElement>(null);
+  const onCompleteRef = useRef(onComplete);
+  const didCompleteRef = useRef(false);
 
   useEffect(() => {
-    const tl = gsap.timeline({
-      onComplete,
-    });
-    tl.to(preloaderRef.current, {
-      opacity: 0,
-      duration: 0.6,
-      delay: 0.8,
-      ease: "power3.inOut",
-      pointerEvents: "none",
-    });
+    onCompleteRef.current = onComplete;
   }, [onComplete]);
+
+  useEffect(() => {
+    if (!ready || didCompleteRef.current) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    let isActive = true;
+
+    const finish = () => {
+      if (!isActive || didCompleteRef.current) {
+        return;
+      }
+
+      didCompleteRef.current = true;
+      onCompleteRef.current();
+    };
+
+    const waitForReady = async () => {
+      await Promise.all([
+        waitForWindowLoad(abortController.signal),
+        waitForFonts(abortController.signal),
+      ]);
+
+      if (!isActive) {
+        return;
+      }
+
+      const root = document.querySelector(watchSelector);
+      await waitForImages(root, abortController.signal);
+
+      if (!isActive || !preloaderRef.current) {
+        return;
+      }
+
+      gsap.killTweensOf(preloaderRef.current);
+      gsap.to(preloaderRef.current, {
+        opacity: 0,
+        duration: 0.35,
+        ease: "power2.out",
+        pointerEvents: "none",
+        onComplete: finish,
+      });
+    };
+
+    void waitForReady();
+
+    return () => {
+      isActive = false;
+      abortController.abort();
+      if (preloaderRef.current) {
+        gsap.killTweensOf(preloaderRef.current);
+      }
+    };
+  }, [ready, watchSelector]);
 
   return (
     <div ref={preloaderRef} className="preloader">
       <div className="preloader-ring">
-        <MessageCircle className="w-8 h-8 text-[#8239FF]" />
+        <MessageCircle className="w-8 h-8 text-brand-primary" />
       </div>
     </div>
   );
