@@ -6,8 +6,8 @@ export type ThemePreference = "light" | "dark";
 
 export function getStoredTheme(): ThemePreference | null {
   if (typeof window === "undefined") return null;
-  const v = localStorage.getItem(THEME_STORAGE_KEY);
-  if (v === "dark" || v === "light") return v;
+  const value = localStorage.getItem(THEME_STORAGE_KEY);
+  if (value === "dark" || value === "light") return value;
   return null;
 }
 
@@ -33,8 +33,8 @@ export function persistTheme(theme: ThemePreference): void {
 }
 
 export function toggleStoredTheme(currentIsDark: boolean): ThemePreference {
-  const next: ThemePreference = currentIsDark ? "light" : "dark";
-  applyTheme(next);
-  persistTheme(next);
-  return next;
+  const nextTheme: ThemePreference = currentIsDark ? "light" : "dark";
+  applyTheme(nextTheme);
+  persistTheme(nextTheme);
+  return nextTheme;
 }

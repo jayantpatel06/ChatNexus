@@ -1,5 +1,5 @@
 {
-  "name": "rest-express",
+  "name": "chatnexus",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -16,8 +16,6 @@
     "pm2:start": "pm2 start dist/index.js --name chatnexus"
   },
   "dependencies": {
-    "@giphy/js-fetch-api": "^5.7.0",
-    "@giphy/react-components": "^10.1.1",
     "@hookform/resolvers": "^3.10.0",
     "@prisma/client": "^6.19.2",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -87,7 +85,6 @@
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.21.0",
-    "typescript": "5.6.3",
     "vaul": "^1.1.2",
     "vite": "^5.4.21",
     "wouter": "^3.9.0",

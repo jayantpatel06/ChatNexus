@@ -33,7 +33,9 @@ export const insertMessageSchema = z.object({
 });
 
 // Type exports using Prisma generated types
-export type User = PrismaUser;
+export type DbUser = PrismaUser;
+export type PublicUser = Omit<PrismaUser, "gmail" | "passwordHash">;
+export type User = PublicUser;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;

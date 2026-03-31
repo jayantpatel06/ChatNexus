@@ -2,13 +2,14 @@ import {
   insertAttachmentSchema,
   insertGlobalMessageSchema,
   insertMessageSchema,
+  type User,
 } from "@shared/schema";
 import type { Server } from "http";
 import type { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as IOServer } from "socket.io";
 import { verifyToken } from "./lib/jwt";
 import { messageRateLimiter } from "./middleware/rate-limit";
-import { getConversationId } from "./data/repositories/message.repository";
+import { getConversationId } from "./db/message";
 import { storage } from "./storage";
 
 declare module "socket.io" {
@@ -45,8 +46,116 @@ const SOCKET_CONFIG = {
   ATTACHMENT_MAX_AGE_MS: 24 * 60 * 60 * 1000,
 };
 
+const privateMessageAttachmentSchema = insertAttachmentSchema.omit({
+  messageId: true,
+});
+
 const guestDisconnectionTimes = new Map<number, number>();
 const pendingOfflineUpdates = new Map<number, NodeJS.Timeout>();
+const connectedSocketIdsByUser = new Map<number, Set<string>>();
+
+function getSocketCorsOrigin() {
+  if (process.env.NODE_ENV !== "production") {
+    return ["http://localhost:5173", "http://localhost:5000"];
+  }
+
+  const configuredOrigins = (process.env.FRONTEND_URL ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (configuredOrigins.length === 0) {
+    throw new Error("FRONTEND_URL must be set in production for Socket.IO CORS");
+  }
+
+  return configuredOrigins.length === 1 ? configuredOrigins[0] : configuredOrigins;
+}
+
+function addConnectedSocket(userId: number, socketId: string): boolean {
+  const existingSocketIds = connectedSocketIdsByUser.get(userId);
+  const socketIds = existingSocketIds ?? new Set<string>();
+  const wasOnline = socketIds.size > 0;
+
+  socketIds.add(socketId);
+  connectedSocketIdsByUser.set(userId, socketIds);
+
+  return !wasOnline;
+}
+
+function removeConnectedSocket(userId: number, socketId: string): boolean {
+  const socketIds = connectedSocketIdsByUser.get(userId);
+  if (!socketIds) {
+    return false;
+  }
+
+  socketIds.delete(socketId);
+
+  if (socketIds.size === 0) {
+    connectedSocketIdsByUser.delete(userId);
+    return true;
+  }
+
+  return false;
+}
+
+function hasActiveSocketForUser(userId: number): boolean {
+  return (connectedSocketIdsByUser.get(userId)?.size ?? 0) > 0;
+}
+
+function getConnectedUserIds(): Set<number> {
+  return new Set(connectedSocketIdsByUser.keys());
+}
+
+export async function getSidebarUsersForUser(userId: number): Promise<User[]> {
+  const connectedUserIds = getConnectedUserIds();
+  const [friendUsers, connectedUsers] = await Promise.all([
+    storage.getFriendUsers(userId),
+    storage.getUsersByIds(Array.from(connectedUserIds)),
+  ]);
+
+  const sidebarUsers = new Map<number, User>();
+
+  for (const connectedUser of connectedUsers) {
+    if (connectedUser.userId !== userId) {
+      sidebarUsers.set(connectedUser.userId, {
+        ...connectedUser,
+        isOnline: true,
+      });
+    }
+  }
+
+  for (const friendUser of friendUsers) {
+    if (friendUser.userId !== userId) {
+      sidebarUsers.set(friendUser.userId, {
+        ...friendUser,
+        isOnline: connectedUserIds.has(friendUser.userId),
+      });
+    }
+  }
+
+  return Array.from(sidebarUsers.values()).sort(
+    (left, right) =>
+      Number(right.isOnline) - Number(left.isOnline) ||
+      left.username.localeCompare(right.username),
+  );
+}
+
+export async function emitSidebarUsers(
+  io: SocketIOServer,
+  targetUserIds?: Iterable<number>,
+): Promise<void> {
+  const recipientIds =
+    targetUserIds === undefined
+      ? Array.from(getConnectedUserIds())
+      : Array.from(new Set(Array.from(targetUserIds)));
+
+  await Promise.all(
+    recipientIds.map(async (userId) => {
+      const users = await getSidebarUsersForUser(userId);
+      io.to(`user:${userId}`).emit("online_users_updated", { users });
+    }),
+  );
+}
 
 function createPresenceBroadcaster(io: SocketIOServer) {
   let presenceBroadcastScheduled = false;
@@ -56,9 +165,12 @@ function createPresenceBroadcaster(io: SocketIOServer) {
     presenceBroadcastScheduled = true;
 
     setTimeout(async () => {
-      presenceBroadcastScheduled = false;
-      const onlineUsers = await storage.getOnlineUsers();
-      io.emit("online_users_updated", { users: onlineUsers });
+      try {
+        presenceBroadcastScheduled = false;
+        await emitSidebarUsers(io);
+      } catch (error) {
+        console.error("Failed to broadcast sidebar users:", error);
+      }
     }, SOCKET_CONFIG.PRESENCE_BROADCAST_DELAY_MS);
   };
 }
@@ -114,12 +226,7 @@ function startPeriodicCleanup(
 
       const deletedExpiredMessages = await cleanupExpiredEphemeralMessages(now);
 
-      const connectedUserIds = new Set<number>();
-      io.sockets.sockets.forEach((socket) => {
-        if (socket.userId) {
-          connectedUserIds.add(socket.userId);
-        }
-      });
+      const connectedUserIds = getConnectedUserIds();
 
       const deletedUsers = await cleanupGuestUsers(now, connectedUserIds);
       await cleanupOfflineUsers(connectedUserIds);
@@ -138,79 +245,55 @@ async function handlePrivateMessage(
   io: SocketIOServer,
   data: PrivateMessagePayload,
 ): Promise<void> {
+  const clientMessageId = data.clientMessageId;
+
   try {
     if (!socket.userId || !data.receiverId || (!data.message && !data.attachment)) {
-      return;
+      throw new Error("Invalid private message payload");
     }
 
     if (!data.message && !data.attachment?.url) {
-      return;
+      throw new Error("Private messages need text or an attachment");
     }
 
     const conversationId = getConversationId(socket.userId, data.receiverId);
 
-    const tempMessage = {
-      msgId: Date.now(),
+    const validatedMessage = insertMessageSchema.parse({
       senderId: socket.userId,
       receiverId: data.receiverId,
       conversationId,
       message: data.message || "Sent an attachment",
-      timestamp: new Date(),
-      attachments: data.attachment?.url
-        ? [
-            {
-              id: Date.now(),
-              url: data.attachment.url,
-              filename: data.attachment.filename,
-              fileType: data.attachment.fileType,
-            },
-          ]
-        : [],
-    };
-
-    io.to(`user:${data.receiverId}`).emit("new_message", { message: tempMessage });
-
-    socket.emit("message_sent", {
-      message: tempMessage,
-      clientMessageId: data.clientMessageId,
     });
 
-    const senderId = socket.userId;
-    const receiverId = data.receiverId;
-    const messageText = data.message;
-    const attachment = data.attachment;
-    const clientMessageId = data.clientMessageId;
+    const validatedAttachment = data.attachment?.url
+      ? privateMessageAttachmentSchema.parse({
+          url: data.attachment.url,
+          filename: data.attachment.filename,
+          fileType: data.attachment.fileType,
+        })
+      : undefined;
 
-    process.nextTick(async () => {
-      try {
-        const validatedMessage = insertMessageSchema.parse({
-          senderId,
-          receiverId,
-          conversationId,
-          message: messageText || "Sent an attachment",
-        });
+    const persistedMessage = await storage.createMessageWithAttachments(
+      validatedMessage,
+      validatedAttachment,
+    );
 
-        const savedMessage = await storage.createMessage(validatedMessage);
+    io.to(`user:${data.receiverId}`).emit("new_message", {
+      message: persistedMessage,
+    });
 
-        if (attachment) {
-          const attachmentData = insertAttachmentSchema.parse({
-            messageId: savedMessage.msgId,
-            url: attachment.url,
-            filename: attachment.filename,
-            fileType: attachment.fileType,
-          });
-          await storage.createAttachment(attachmentData);
-        }
-      } catch (dbError) {
-        console.error("Error saving message to database:", dbError);
-        socket.emit("message_save_error", {
-          clientMessageId,
-          error: "Failed to persist message",
-        });
-      }
+    socket.emit("message_sent", {
+      message: persistedMessage,
+      clientMessageId,
     });
   } catch (error) {
     console.error("Socket.IO private_message error:", error);
+    if (clientMessageId) {
+      socket.emit("message_save_error", {
+        clientMessageId,
+        error: "Failed to send message",
+      });
+    }
   }
 }
 
@@ -268,6 +351,7 @@ function handleTypingStop(
 
 async function handleDisconnect(
   socket: Socket,
+  io: SocketIOServer,
   broadcastOnlineUsers: () => Promise<void>,
 ): Promise<void> {
   console.log("Socket.IO client disconnected");
@@ -275,9 +359,19 @@ async function handleDisconnect(
   if (!socket.userId) return;
 
   const userId = socket.userId;
+  removeConnectedSocket(userId, socket.id);
+
+  const existingPendingOffline = pendingOfflineUpdates.get(userId);
+  if (existingPendingOffline) {
+    clearTimeout(existingPendingOffline);
+  }
 
   const offlineTimeout = setTimeout(async () => {
     pendingOfflineUpdates.delete(userId);
+
+    if (hasActiveSocketForUser(userId)) {
+      return;
+    }
 
     const user = await storage.getUser(userId);
 
@@ -303,10 +397,7 @@ async function handleDisconnect(
 export function createSocketServer(httpServer: Server) {
   return new IOServer(httpServer, {
     cors: {
-      origin:
-        process.env.NODE_ENV === "production"
-          ? process.env.FRONTEND_URL || true
-          : ["http://localhost:5173", "http://localhost:5000"],
+      origin: getSocketCorsOrigin(),
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -339,6 +430,7 @@ export function setupSocketHandlers(io: SocketIOServer): void {
     console.log("Socket.IO connection established");
 
     if (socket.userId) {
+      const becameOnline = addConnectedSocket(socket.userId, socket.id);
       const pendingOffline = pendingOfflineUpdates.get(socket.userId);
       if (pendingOffline) {
         clearTimeout(pendingOffline);
@@ -348,7 +440,9 @@ export function setupSocketHandlers(io: SocketIOServer): void {
         );
       }
 
-      await storage.updateUserOnlineStatus(socket.userId, true);
+      if (becameOnline) {
+        await storage.updateUserOnlineStatus(socket.userId, true);
+      }
       socket.join(`user:${socket.userId}`);
       guestDisconnectionTimes.delete(socket.userId);
       await broadcastOnlineUsers();
@@ -390,7 +484,7 @@ export function setupSocketHandlers(io: SocketIOServer): void {
     });
 
     socket.on("disconnect", async () => {
-      await handleDisconnect(socket, broadcastOnlineUsers);
+      await handleDisconnect(socket, io, broadcastOnlineUsers);
     });
   });
 

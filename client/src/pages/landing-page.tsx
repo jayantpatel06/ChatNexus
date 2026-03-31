@@ -1,33 +1,19 @@
 import "./landing-page.css";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
 import { Seo, getSiteUrl } from "@/components/seo";
 import {
-  MessageCircle,
-  Zap,
-  Users,
-  ShieldCheck,
-  MessageSquare,
-  Globe,
-  Lock,
-  Twitter,
-  Linkedin,
-  Github,
+  ArrowDownToLine,
   ArrowRight,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Send,
-  Instagram,
+  Fingerprint,
+  Shield,
+  Users,
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import {
-  applyTheme,
-  getStoredTheme,
-  persistTheme,
-  type ThemePreference,
-} from "@/lib/theme";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/providers/auth-provider";
+import PageFooter from "@/components/page-footer";
+import SiteNav from "@/components/site-nav";
 import {
   useReveal,
   useParallax,
@@ -36,52 +22,14 @@ import {
   PagePreloader,
   AmbientOrbs,
 } from "@/components/effects";
-import FaqCards from "@/components/faq-cards";
 import gsap from "gsap";
+type FaqItem = {
+  category: string;
+  question: string;
+  answer: string;
+};
 
-/* ───────────────────────── constants ───────────────────────── */
-
-const FEATURES = [
-  {
-    Icon: Zap,
-    title: "Lightning Fast",
-    desc: "Real-time message delivery with zero latency. Stay connected in the exact moment.",
-  },
-  {
-    Icon: ShieldCheck,
-    title: "Secure & Private",
-    desc: "End-to-end encrypted conversations. Your privacy is our number one priority.",
-  },
-  {
-    Icon: Users,
-    title: "Global Communities",
-    desc: "Join chat rooms world-wide, meet people with shared interests, and grow your network.",
-  },
-  {
-    Icon: MessageSquare,
-    title: "Rich Messaging",
-    desc: "Share images, files, and express yourself with a state-of-the-art rich text editor.",
-  },
-  {
-    Icon: Globe,
-    title: "Access Anywhere",
-    desc: "A responsive experience that works flawlessly on desktop, tablet, and mobile.",
-  },
-  {
-    Icon: Lock,
-    title: "Complete Control",
-    desc: "Manage presence, message permissions, and fully customise your notifications.",
-  },
-];
-
-const SOCIALS = [
-  { Icon: Twitter, href: "https://twitter.com", label: "Twitter" },
-  { Icon: Github, href: "https://github.com", label: "GitHub" },
-  { Icon: Linkedin, href: "https://linkedin.com", label: "LinkedIn" },
-  { Icon: MessageCircle, href: "https://discord.com", label: "Discord" },
-];
-
-const FAQS = [
+const LANDING_FAQS: readonly FaqItem[] = [
   {
     category: "Product",
     question: "What makes ChatNexus a strong Omegle alternative?",
@@ -100,245 +48,9 @@ const FAQS = [
     answer:
       "Yes. The interface is responsive, installable as a PWA, and designed for real-time chatting across desktop and mobile devices.",
   },
-];
+] as const;
 
-function FeaturesStack() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const cardCount = FEATURES.length;
-
-  const handlePrev = useCallback(() => {
-    setCurrentIndex((prev) => (prev === 0 ? cardCount - 1 : prev - 1));
-  }, [cardCount]);
-
-  const handleNext = useCallback(() => {
-    setCurrentIndex((prev) => (prev === cardCount - 1 ? 0 : prev + 1));
-  }, [cardCount]);
-
-  return (
-    <div className="features-stack-shell">
-      <div className="features-carousel">
-        <div className="features-carousel-viewport">
-          <div
-            className="features-carousel-track"
-            style={{ transform: `translateX(-${currentIndex * 100}%)` }}
-          >
-            {FEATURES.map((feature, i) => (
-              <article
-                key={feature.title}
-                className="feature-stack-card"
-                style={
-                  {
-                    "--feature-accent-rotation": `${i % 2 === 0 ? -6 : 6}deg`,
-                    "--feature-index": i,
-                  } as React.CSSProperties
-                }
-              >
-                <div className="feature-stack-panel">
-                  <div className="feature-stack-badge">{i + 1}</div>
-                  <div className="feature-marker-dot" />
-                  <div className="feature-stack-copy">
-                    <div className="feature-icon-wrap feature-stack-icon mb-6">
-                      <feature.Icon className="w-10 h-10" />
-                    </div>
-                    <div className="flex flex-col gap-4">
-                      <span className="feature-kicker">{feature.title}</span>
-                      <h3 className="feature-title text-3xl font-black tracking-tight">
-                        {feature.title}
-                      </h3>
-                      <p className="feature-desc text-xl leading-relaxed text-brand-muted max-w-[480px]">
-                        {feature.desc}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="features-carousel-controls">
-          <button
-            type="button"
-            className="features-carousel-btn"
-            onClick={handlePrev}
-            aria-label="Previous feature"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div className="features-carousel-dots" aria-label="Feature slides">
-            {FEATURES.map((feature, i) => (
-              <button
-                key={feature.title}
-                type="button"
-                className={`features-carousel-dot ${i === currentIndex ? "is-active" : ""}`}
-                onClick={() => setCurrentIndex(i)}
-                aria-label={`Go to ${feature.title}`}
-                aria-pressed={i === currentIndex}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            className="features-carousel-btn"
-            onClick={handleNext}
-            aria-label="Next feature"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ThemeAnimationStart =
-  | "bottom-up"
-  | "top-down"
-  | "left-right"
-  | "right-left";
-
-function createThemeTransitionCss(
-  start: ThemeAnimationStart = "bottom-up",
-  blur = false,
-) {
-  const getClipPath = (direction: ThemeAnimationStart) => {
-    switch (direction) {
-      case "top-down":
-        return {
-          from: "polygon(0% 0%, 100% 0%, 100% 0%, 0% 0%)",
-          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
-        };
-      case "left-right":
-        return {
-          from: "polygon(0% 0%, 0% 0%, 0% 100%, 0% 100%)",
-          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
-        };
-      case "right-left":
-        return {
-          from: "polygon(100% 0%, 100% 0%, 100% 100%, 100% 100%)",
-          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
-        };
-      case "bottom-up":
-      default:
-        return {
-          from: "polygon(0% 100%, 100% 100%, 100% 100%, 0% 100%)",
-          to: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
-        };
-    }
-  };
-
-  const clipPath = getClipPath(start);
-
-  return `
-    ::view-transition-group(root) {
-      animation-duration: 0.7s;
-      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    ::view-transition-new(root) {
-      animation-name: landing-theme-reveal-${start}${blur ? "-blur" : ""};
-      ${blur ? "filter: blur(2px);" : ""}
-    }
-
-    ::view-transition-old(root),
-    .dark::view-transition-old(root) {
-      animation: none;
-      z-index: -1;
-    }
-
-    .dark::view-transition-new(root) {
-      animation-name: landing-theme-reveal-${start}${blur ? "-blur" : ""};
-      ${blur ? "filter: blur(2px);" : ""}
-    }
-
-    @keyframes landing-theme-reveal-${start}${blur ? "-blur" : ""} {
-      from {
-        clip-path: ${clipPath.from};
-        ${blur ? "filter: blur(8px);" : ""}
-      }
-      ${blur ? "50% { filter: blur(4px); }" : ""}
-      to {
-        clip-path: ${clipPath.to};
-        ${blur ? "filter: blur(0px);" : ""}
-      }
-    }
-  `;
-}
-
-function AnimatedThemeToggle({ className }: { className?: string }) {
-  const [isDark, setIsDark] = useState(() =>
-    typeof window !== "undefined"
-      ? (getStoredTheme() ??
-          (document.documentElement.classList.contains("dark")
-            ? "dark"
-            : "light")) === "dark"
-      : false,
-  );
-
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    const viewTransitionDocument = document as Document & {
-      startViewTransition?: (callback: () => void) => void;
-    };
-    const nextTheme: ThemePreference = isDark ? "light" : "dark";
-    const styleId = "landing-theme-transition-styles";
-    const css = createThemeTransitionCss("bottom-up", false);
-
-    let styleElement = document.getElementById(
-      styleId,
-    ) as HTMLStyleElement | null;
-    if (!styleElement) {
-      styleElement = document.createElement("style");
-      styleElement.id = styleId;
-      document.head.appendChild(styleElement);
-    }
-    styleElement.textContent = css;
-
-    const switchTheme = () => {
-      applyTheme(nextTheme);
-      persistTheme(nextTheme);
-      setIsDark(nextTheme === "dark");
-    };
-
-    if (!viewTransitionDocument.startViewTransition) {
-      switchTheme();
-      return;
-    }
-
-    viewTransitionDocument.startViewTransition(switchTheme);
-  }, [isDark]);
-
-  return (
-    <button
-      type="button"
-      className={`landing-theme-toggle ${className ?? ""}`.trim()}
-      onClick={toggleTheme}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      <span className="sr-only">Toggle theme</span>
-      <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g className={`landing-theme-toggle__core${isDark ? " is-dark" : ""}`}>
-          <path
-            d="M120 67.5C149.25 67.5 172.5 90.75 172.5 120C172.5 149.25 149.25 172.5 120 172.5"
-            fill="white"
-          />
-          <path
-            d="M120 67.5C90.75 67.5 67.5 90.75 67.5 120C67.5 149.25 90.75 172.5 120 172.5"
-            fill="black"
-          />
-        </g>
-        <path
-          className={`landing-theme-toggle__ring${isDark ? " is-dark" : ""}`}
-          d="M120 3.75C55.5 3.75 3.75 55.5 3.75 120C3.75 184.5 55.5 236.25 120 236.25C184.5 236.25 236.25 184.5 236.25 120C236.25 55.5 184.5 3.75 120 3.75ZM120 214.5V172.5C90.75 172.5 67.5 149.25 67.5 120C67.5 90.75 90.75 67.5 120 67.5V25.5C172.5 25.5 214.5 67.5 214.5 120C214.5 172.5 172.5 214.5 120 214.5Z"
-          fill="white"
-        />
-      </svg>
-    </button>
-  );
-}
+/* ───────────────────────── constants ───────────────────────── */
 
 export default function LandingPage() {
   const { user, isLoading } = useAuth();
@@ -372,7 +84,7 @@ export default function LandingPage() {
     {
       "@context": "https://schema.org",
       "@type": "FAQPage",
-      mainEntity: FAQS.map((faq) => ({
+      mainEntity: LANDING_FAQS.map((faq) => ({
         "@type": "Question",
         name: faq.question,
         acceptedAnswer: {
@@ -420,52 +132,10 @@ export default function LandingPage() {
       );
   }, [loaded]);
 
-  /* ── nav glass + scroll-spy ── */
-  const navRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const sections = [
-      "hero",
-      "features",
-      "about",
-      "stranger-chat",
-      "faq",
-      "support",
-    ];
-    const handle = () => {
-      if (!navRef.current) return;
-      const cur = window.scrollY;
-      if (cur > 80) {
-        navRef.current.classList.add("nav-scrolled");
-      } else {
-        navRef.current.classList.remove("nav-scrolled");
-      }
-      /* scroll-spy: highlight active pill link (use layout position in document — offsetTop is wrong inside position:relative .landing-root) */
-      const sectionTop = (id: string) => {
-        const el = document.getElementById(id);
-        if (!el) return Number.POSITIVE_INFINITY;
-        return el.getBoundingClientRect().top + window.scrollY;
-      };
-      let activeId = sections[0];
-      for (const id of sections) {
-        if (sectionTop(id) - 120 <= cur) activeId = id;
-      }
-      navRef.current.querySelectorAll(".nav-pill-link").forEach((a) => {
-        a.classList.toggle("active", a.getAttribute("href") === `#${activeId}`);
-      });
-    };
-    window.addEventListener("scroll", handle, { passive: true });
-    window.addEventListener("hashchange", handle);
-    handle(); // run once on mount
-    return () => {
-      window.removeEventListener("scroll", handle);
-      window.removeEventListener("hashchange", handle);
-    };
-  }, []);
-
-  /* ── section reveal refs (each .reveal-item needs a ref or it stays opacity:0) ── */
+  /* ── section reveal refs ── */
   const sectionTitleRef = useReveal(0.2);
   const aboutRef = useReveal(0.15);
-  const strangerChatRef = useReveal(0.12);
+  const connectRef = useReveal(0.12);
   const faqRef = useReveal(0.12);
   const footerRef = useReveal(0.15);
 
@@ -493,57 +163,12 @@ export default function LandingPage() {
       <PagePreloader onComplete={() => setLoaded(true)} />
 
       {/* ═══════ Main Content ═══════ */}
-      <div className="landing-root">
+      <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />
 
         {/* ═══════ Floating Nav ═══════ */}
-        <nav ref={navRef} className="landing-nav">
-          <div className="nav-inner">
-            <div className="nav-brand">
-              <div className="nav-logo">
-                <img
-                  src="/assets/images/image.png"
-                  alt="ChatNexus Logo"
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
-              <span className="nav-name">ChatNexus</span>
-            </div>
-
-            <div className="nav-pill">
-              <a href="#hero" className="nav-pill-link active">
-                Home
-              </a>
-              <a href="#features" className="nav-pill-link">
-                Features
-              </a>
-              <a href="#about" className="nav-pill-link">
-                About
-              </a>
-              <a href="#faq" className="nav-pill-link">
-                FAQs
-              </a>
-              <Link href="/help-center" className="nav-pill-link">
-                Support
-              </Link>
-            </div>
-
-            <div className="nav-actions">
-              <AnimatedThemeToggle />
-              <MagneticWrap>
-                <Link href={dest}>
-                  <Button className="nav-cta">
-                    <span className="nav-cta-label">
-                      {user ? "Dashboard" : "Get Started"}
-                    </span>
-                    <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
-                  </Button>
-                </Link>
-              </MagneticWrap>
-            </div>
-          </div>
-        </nav>
+        <SiteNav />
 
         {/* ═══════ Hero ═══════ */}
         <section id="hero" className="hero">
@@ -596,7 +221,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <FeaturesStack />
+          <BentoFeatures />
         </section>
 
         {/* ═══════ About ═══════ */}
@@ -613,20 +238,6 @@ export default function LandingPage() {
               privacy-first flows, and a mobile-friendly experience so you can
               start chatting with strangers in seconds—no long signup required.
             </p>
-            <div className="about-stats">
-              <div className="about-stat">
-                <span className="about-stat-num">10K+</span>
-                <span className="about-stat-label">Active Users</span>
-              </div>
-              <div className="about-stat">
-                <span className="about-stat-num">1M+</span>
-                <span className="about-stat-label">Messages Sent</span>
-              </div>
-              <div className="about-stat">
-                <span className="about-stat-num">99.9%</span>
-                <span className="about-stat-label">Uptime</span>
-              </div>
-            </div>
             <div className="about-features-grid max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 px-4 mt-10">
               <div className="feature-card">
                 <h3 className="feature-title">Start Fast</h3>
@@ -653,264 +264,285 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ═══════ Footer ═══════ */}
-
+        {/* ═══════ FAQs ═══════ */}
         <section id="faq" className="faq-section" aria-labelledby="faq-heading">
           <div ref={faqRef} className="reveal-item faq-inner">
             <span className="section-tag">FAQ</span>
             <h2 id="faq-heading" className="section-title mb-16">
               Questions People Ask Before Using Stranger Chat Sites
             </h2>
-            <FaqCards items={FAQS} embedded />
+            <FaqCards items={LANDING_FAQS} />
           </div>
         </section>
 
-        <footer
-          id="support"
-          ref={footerRef}
-          className="reveal-item landing-footer w-full px-4 md:px-8 py-16"
-        >
-          <div className="max-w-[1200px] mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 ">
-              {/* Brand Column */}
-              <div className="flex flex-col gap-6 md:col-span-1">
-                <h2 className="text-2xl font-bold text-brand-primary">
-                  ChatNexus
-                </h2>
-                <p className="text-brand-muted leading-relaxed text-[15px]">
-                  The architect of future communication.
-                  <br />
-                  We build tools that empower humanity to
-                  <br />
-                  think faster and solve deeper.
-                </p>
-              </div>
-
-              {/* Platform Column */}
-              <div className="flex flex-col gap-4">
-                <h3 className="text-brand-text font-semibold mb-2">Platform</h3>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
-                >
-                  <span>Documentation</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
-                >
-                  <span>API Status</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
-                >
-                  <span>Enterprise Integrations</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-brand-muted hover:text-brand-text transition-colors text-[15px]"
-                >
-                  <span>Custom Solutions</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-              </div>
-
-              {/* Company Column */}
-              <div className="flex flex-col gap-4">
-                <h3 className="text-white font-semibold mb-2">Company</h3>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
-                >
-                  <span>About ChatNexus</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="/help-center"
-                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
-                >
-                  <span>Contact Us</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
-                >
-                  <span>Privacy Policy</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="#"
-                  className="footer-fancy-link text-[#a0aec0] hover:text-white transition-colors text-[15px]"
-                >
-                  <span>Terms of Service</span>
-                  <svg
-                    className="footer-fancy-link__icon"
-                    fill="none"
-                    viewBox="0 0 10 10"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1.004 9.166 9.337.833m0 0v8.333m0-8.333H1.004"
-                      stroke="currentColor"
-                      strokeWidth="1.25"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-              </div>
-
-              {/* Subscribe Column */}
-              <div className="flex flex-col gap-4">
-                <h3 className="text-brand-text font-semibold mb-2">
-                  Subscribe
-                </h3>
-                <span className="text-sm">Sign up to get feature updates.</span>
-                <div className="relative">
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    className="w-full rounded-xl border border-brand-border bg-brand-card py-3 px-4 text-brand-text text-[15px] placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-primary/40 transition-all"
-                  />
-                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary hover:text-brand-text transition-colors">
-                    <Send className="w-5 h-5" />
+        {/* ═══════ Connect ═══════ */}
+        <section id="support" className="about-section" style={{ paddingTop: "40px", paddingBottom: "60px" }}>
+          <div ref={connectRef} className="reveal-item about-inner">
+            <span className="section-tag">Connect</span>
+            <h2 className="section-title">Ready to Meet Someone New?</h2>
+            <p className="about-text">
+              Whether you're looking for a quick conversation with a stranger,
+              want to join the global chat room, or just need a space to be
+              yourself — ChatNexus has you covered. No signup walls, no ads,
+              just instant, real conversations.
+            </p>
+            <div className="hero-cta-row">
+              <MagneticWrap>
+                <Link href={dest}>
+                  <button className="hero-btn-primary">
+                    <span>{user ? "Open Dashboard" : "Start Chatting Now"}</span>
+                    <ArrowRight className="w-5 h-5" />
                   </button>
-                </div>
-                <div className="flex gap-8">
-                  <a
-                    href="#"
-                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
-                  >
-                    <Twitter className="w-[18px] h-[18px]" />
-                  </a>
-                  <a
-                    href="#"
-                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
-                  >
-                    <Github className="w-[18px] h-[18px]" />
-                  </a>
-                  <a
-                    href="#"
-                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
-                  >
-                    <Instagram className="w-[18px] h-[18px]" />
-                  </a>
-                  <a
-                    href="#"
-                    className="w-10 h-10 rounded-full border border-brand-border bg-brand-card flex items-center justify-center text-brand-text hover:bg-brand-sidebar transition-colors"
-                  >
-                    <Linkedin className="w-[18px] h-[18px]" />
-                  </a>
-                </div>
-              </div>
+                </Link>
+              </MagneticWrap>
+              <MagneticWrap>
+                <Link href="/contact" className="hero-btn-secondary">
+                  Contact Us
+                </Link>
+              </MagneticWrap>
             </div>
           </div>
-        </footer>
+        </section>
+
+        {/* ═══════ Footer ═══════ */}
+        <div ref={footerRef} className="reveal-item">
+          <PageFooter />
+        </div>
       </div>
     </>
+  );
+}
+
+function BentoFeatures() {
+  return (
+    <div className="mx-auto mt-12 grid w-full max-w-[1100px] grid-cols-1 gap-6 px-4 md:grid-cols-3">
+      <div className="group relative overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-2xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
+        <div className="relative mb-4">
+          <span className="bg-gradient-to-br from-white to-white/60 bg-clip-text text-4xl font-bold text-transparent lg:text-5xl">
+            100%
+          </span>
+          <svg
+            className="pointer-events-none absolute -inset-4 h-[calc(100%+2rem)] w-[calc(100%+2rem)] text-brand-primary opacity-60"
+            viewBox="0 0 100 50"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M10,25 C10,5 90,5 90,25 C90,45 10,45 10,25"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="drop-shadow-[0_0_8px_rgba(var(--brand-primary-rgb),0.5)]"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold tracking-wide text-white">
+          Anonymous
+        </h3>
+      </div>
+
+      <div className="group relative flex flex-col items-center overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 text-center shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
+        <div className="relative mb-6 rounded-full border border-white/5 bg-white/5 p-4 transition-colors group-hover:bg-white/10">
+          <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
+          <Fingerprint className="h-8 w-8 text-white/80" strokeWidth={1.5} />
+        </div>
+        <h3 className="mb-3 text-lg font-semibold text-white">
+          Secure by default
+        </h3>
+        <p className="text-sm leading-relaxed text-brand-muted">
+          No signups required to chat. We don't track your identity or store
+          chat logs to ensure your privacy.
+        </p>
+      </div>
+
+      <div className="group relative flex flex-col items-center overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 text-center shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
+        <div className="pointer-events-none absolute left-0 right-0 top-6 flex h-24 flex-col justify-between px-6">
+          <div className="mb-2 flex w-full items-center justify-between text-[10px] text-white/30">
+            <span className="flex items-center gap-1">
+              <ArrowDownToLine className="h-3 w-3" />
+              Connect
+            </span>
+            <span>&lt; 50 ms</span>
+          </div>
+          <svg
+            className="h-full w-full opacity-40 transition-opacity group-hover:opacity-70"
+            viewBox="0 0 100 30"
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M0,25 Q10,10 20,20 T40,15 T60,25 T80,5 T100,20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="text-white"
+            />
+            <path
+              d="M0,25 Q10,10 20,20 T40,15 T60,25 T80,5 T100,20 L100,30 L0,30 Z"
+              fill="url(#spark-gradient)"
+              opacity="0.1"
+            />
+            <defs>
+              <linearGradient id="spark-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="currentColor" className="text-white" />
+                <stop offset="100%" stopColor="transparent" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div className="mt-auto pt-24">
+          <h3 className="mb-3 text-lg font-semibold text-white">
+            Ultra-low latency
+          </h3>
+          <p className="text-sm leading-relaxed text-brand-muted">
+            Every millisecond counts. Our distributed backend brings latency
+            down, feeling faster than light.
+          </p>
+        </div>
+      </div>
+
+      <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-2 md:flex-row">
+        <div className="relative z-10 flex flex-col justify-center md:w-[45%]">
+          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/5 bg-white/5 transition-colors group-hover:bg-white/10">
+            <Shield className="h-5 w-5 text-white/80" strokeWidth={1.5} />
+          </div>
+          <h3 className="mb-3 text-xl font-semibold text-white">
+            Global reach
+          </h3>
+          <p className="max-w-sm text-sm leading-relaxed text-brand-muted">
+            Match with users globally in real-time. We focus on frictionless
+            entry, privacy-first flows, and a mobile-friendly experience.
+          </p>
+        </div>
+
+        <div className="pointer-events-none absolute bottom-0 right-0 top-0 hidden w-1/2 opacity-30 transition-opacity duration-700 group-hover:opacity-60 md:block">
+          <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <circle cx="20" cy="20" r="1" fill="#fff" opacity="0.3" />
+            <circle cx="30" cy="20" r="1" fill="#fff" opacity="0.3" />
+            <circle cx="40" cy="20" r="1" fill="#fff" opacity="0.3" />
+            <path
+              d="M10,80 L15,85 L20,70 L25,75 L30,55 L35,65 L40,80 L50,60 L60,85 L70,50 L75,65 L80,50 L85,45 L90,65 L95,40"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="1"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/5 bg-[#0a0a0a]/50 p-8 shadow-xl backdrop-blur-md transition-colors duration-500 hover:bg-[#0a0a0a]/80 md:col-span-1">
+        <div className="z-10 mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/5 bg-white/5 transition-colors group-hover:bg-white/10">
+          <Users className="h-5 w-5 text-white/80" strokeWidth={1.5} />
+        </div>
+        <div className="z-10 mb-20 mt-auto">
+          <h3 className="mb-3 text-lg font-semibold text-white">
+            Make connections
+          </h3>
+          <p className="text-sm leading-relaxed text-brand-muted">
+            Meet friends securely. Join a random session instantly.
+          </p>
+        </div>
+
+        <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-3 opacity-80 transition-opacity group-hover:opacity-100">
+          <div className="flex translate-x-2 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-3 pr-1 transition-transform duration-500 group-hover:-translate-x-2">
+            <span className="text-[10px] font-medium text-white/70">Guest_92</span>
+            <Avatar className="h-6 w-6 border border-white/10">
+              <AvatarFallback className="bg-gradient-to-tr from-brand-primary to-purple-500 text-[8px] text-white">
+                G
+              </AvatarFallback>
+            </Avatar>
+          </div>
+
+          <div className="flex -translate-x-4 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-1 pr-3 transition-transform duration-700 group-hover:translate-x-2">
+            <Avatar className="h-6 w-6 border border-white/10">
+              <AvatarFallback className="bg-gradient-to-tr from-cyan-500 to-blue-500 text-[8px] text-white">
+                X
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-[10px] font-medium text-white/70">Stranger</span>
+          </div>
+
+          <div className="flex translate-x-4 items-center gap-2 rounded-full border border-white/10 bg-black/40 py-1 pl-3 pr-1 transition-transform duration-1000 group-hover:-translate-x-4">
+            <span className="text-[10px] font-medium text-white/70">Guest_14</span>
+            <Avatar className="h-6 w-6 border border-white/10">
+              <AvatarFallback className="bg-gradient-to-tr from-orange-500 to-amber-500 text-[8px] text-white">
+                G
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaqCards({ items }: { items: readonly FaqItem[] }) {
+  const [currentFaqIndex, setCurrentFaqIndex] = useState(0);
+  const currentFaq = items[currentFaqIndex] ?? items[0];
+
+  const handlePrev = () => {
+    setCurrentFaqIndex((previousIndex) =>
+      previousIndex === 0 ? items.length - 1 : previousIndex - 1,
+    );
+  };
+
+  const handleNext = () => {
+    setCurrentFaqIndex((previousIndex) =>
+      previousIndex === items.length - 1 ? 0 : previousIndex + 1,
+    );
+  };
+
+  if (!currentFaq) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <div className="relative mb-8 flex items-center justify-center">
+        {Array.from({ length: 12 }).map((_, index) => (
+          <div
+            key={index}
+            className="absolute h-96 w-80 rounded-3xl"
+            style={{
+              background: `hsl(${(index * 30) % 360}, 60%, 60%)`,
+              transform: `rotate(${index * 15}deg) scale(1.05)`,
+              zIndex: 0,
+              opacity: 0.15,
+            }}
+          />
+        ))}
+        <div className="relative z-10 flex h-96 w-80 flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-2xl">
+          <span className="mb-4 self-start rounded-full bg-gray-200 px-4 py-1 text-sm text-gray-700">
+            {currentFaq.category}
+          </span>
+          <h2 className="mb-4 text-left text-2xl font-semibold text-gray-900">
+            {currentFaq.question}
+          </h2>
+          <p className="mt-auto text-left text-base text-gray-700">
+            {currentFaq.answer}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-8">
+        <button
+          type="button"
+          onClick={handlePrev}
+          className="rounded-full px-4 py-2 text-2xl text-white transition hover:bg-gray-800"
+          aria-label="Previous FAQ"
+        >
+          &#60;
+        </button>
+        <span className="text-lg text-white">Swipe</span>
+        <button
+          type="button"
+          onClick={handleNext}
+          className="rounded-full px-4 py-2 text-2xl text-white transition hover:bg-gray-800"
+          aria-label="Next FAQ"
+        >
+          &#62;
+        </button>
+      </div>
+    </div>
   );
 }

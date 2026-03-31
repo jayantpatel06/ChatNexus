@@ -5,13 +5,9 @@ type SeoProps = {
   description: string;
   path?: string;
   image?: string;
-  /** Open Graph default image width in px (logo-512 is 512×512). */
   imageWidth?: number;
-  /** Open Graph default image height in px. */
   imageHeight?: number;
-  /** og:site_name and Organization-style branding. */
   siteName?: string;
-  /** og:locale (e.g. en_US). */
   locale?: string;
   keywords?: string;
   robots?: string;
@@ -22,6 +18,13 @@ const DEFAULT_IMAGE = "/assets/images/logo-512.png";
 const DEFAULT_SITE_NAME = "ChatNexus";
 const DEFAULT_LOCALE = "en_US";
 const DEFAULT_OG_IMAGE_SIZE = 512;
+const DEFAULT_ROBOTS =
+  "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+const STRUCTURED_DATA_ID = "seo-structured-data";
+
+function removeHeadElement(selector: string) {
+  document.head.querySelector(selector)?.remove();
+}
 
 function upsertMeta(
   selector: string,
@@ -76,6 +79,45 @@ function resolveUrl(siteUrl: string, path = "/") {
   return new URL(path, `${siteUrl}/`).toString();
 }
 
+function isNoindexRobots(robots: string) {
+  return /(?:^|,\s*)noindex(?:$|,\s*)/i.test(robots);
+}
+
+function buildDefaultStructuredData({
+  title,
+  description,
+  canonicalUrl,
+  siteRootUrl,
+  siteName,
+  locale,
+}: {
+  title: string;
+  description: string;
+  canonicalUrl: string;
+  siteRootUrl: string;
+  siteName: string;
+  locale: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: title,
+    description,
+    url: canonicalUrl,
+    inLanguage: locale.replace("_", "-"),
+    isPartOf: {
+      "@type": "WebSite",
+      name: siteName,
+      url: siteRootUrl,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: siteName,
+      url: siteRootUrl,
+    },
+  };
+}
+
 export function Seo({
   title,
   description,
@@ -86,15 +128,27 @@ export function Seo({
   siteName = DEFAULT_SITE_NAME,
   locale = DEFAULT_LOCALE,
   keywords,
-  robots = "index, follow",
+  robots = DEFAULT_ROBOTS,
   structuredData,
 }: SeoProps) {
   useEffect(() => {
     const siteUrl = resolveSiteUrl();
     const canonicalUrl = resolveUrl(siteUrl, path);
     const imageUrl = resolveUrl(siteUrl, image);
+    const siteRootUrl = resolveUrl(siteUrl, "/");
     const imageAlt =
       title.includes(siteName) ? title : `${title} | ${siteName}`;
+    const effectiveStructuredData = isNoindexRobots(robots)
+      ? undefined
+      : structuredData ??
+        buildDefaultStructuredData({
+          title,
+          description,
+          canonicalUrl,
+          siteRootUrl,
+          siteName,
+          locale,
+        });
 
     document.title = title;
 
@@ -103,7 +157,13 @@ export function Seo({
       { name: "description" },
       description,
     );
-    upsertMeta('meta[name="keywords"]', { name: "keywords" }, keywords ?? "");
+
+    if (keywords?.trim()) {
+      upsertMeta('meta[name="keywords"]', { name: "keywords" }, keywords);
+    } else {
+      removeHeadElement('meta[name="keywords"]');
+    }
+
     upsertMeta('meta[name="robots"]', { name: "robots" }, robots);
 
     upsertMeta('meta[property="og:title"]', { property: "og:title" }, title);
@@ -159,29 +219,30 @@ export function Seo({
     );
 
     upsertLink('link[rel="canonical"]', { rel: "canonical" }, canonicalUrl);
-
-    const bingVerify = import.meta.env.VITE_BING_SITE_VERIFICATION?.trim();
-    if (bingVerify) {
-      upsertMeta(
-        'meta[name="msvalidate.01"]',
-        { name: "msvalidate.01" },
-        bingVerify,
-      );
-    }
+    upsertLink(
+      'link[rel="alternate"][hreflang="en"]',
+      { rel: "alternate", hreflang: "en" },
+      canonicalUrl,
+    );
+    upsertLink(
+      'link[rel="alternate"][hreflang="x-default"]',
+      { rel: "alternate", hreflang: "x-default" },
+      canonicalUrl,
+    );
 
     let script = document.getElementById(
-      "structured-data",
+      STRUCTURED_DATA_ID,
     ) as HTMLScriptElement | null;
 
-    if (structuredData) {
+    if (effectiveStructuredData) {
       if (!script) {
         script = document.createElement("script");
-        script.id = "structured-data";
+        script.id = STRUCTURED_DATA_ID;
         script.type = "application/ld+json";
         document.head.appendChild(script);
       }
 
-      script.textContent = JSON.stringify(structuredData);
+      script.textContent = JSON.stringify(effectiveStructuredData);
     } else if (script) {
       script.remove();
     }

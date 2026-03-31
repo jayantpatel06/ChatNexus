@@ -1,91 +1,220 @@
-# ChatNexus - Real-time Chat Application
+# ChatNexus
 
-Website(slow): https://chatnexus.up.railway.app
-Website(fast): http://13.127.203.99:80
+Real-time anonymous and account-based chat built with React, Express, Socket.IO, Prisma, and PostgreSQL.
+
+Website: https://chatnexus.me
 
 ## Overview
 
-ChatNexus is a full-stack real-time chat application built with React, Express, Socket.IO, and Supabase. Features include guest/member authentication, private messaging, global chat room, typing indicators, emoji picker, file attachments, and persistent chat history.
+ChatNexus is a full-stack chat application with:
 
-## Features
+- guest and registered-user access
+- private direct messaging
+- global chat
+- typing indicators and online presence
+- image/gifs/webp attachments
+- PWA support
+- SEO-friendly public pages
 
-- **Private & Global Chat**: 1-to-1 messaging and public chat room
-- **Dual Auth System**: Guest (temporary) or registered member accounts
-- **Real-time**: Instant messaging, typing indicators, online presence
-- **Mobile-Optimized**: Responsive design with keyboard handling
-- **Rich Messages**: Emoji picker, file attachments, URL previews
+The frontend is served from Vite during development and from the Express server in production.
 
 ## Tech Stack
 
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
-- **Backend**: Node.js, Express, Socket.IO, JWT
-- **Database**: Supabase (PostgreSQL) with Prisma ORM
-
-## Quick Start
-
-```bash
-# Install dependencies
-npm install
-
-# Generate Prisma client
-npm run db:generate
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build && npm start
-```
-
-## Environment Variables
-
-Create `.env` file:
-
-```
-DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres"
-SUPABASE_URL="https://[PROJECT-REF].supabase.co"
-SUPABASE_SERVICE_ROLE_KEY="[YOUR-SERVICE-ROLE-KEY]"
-SESSION_SECRET=your_session_secret
-NODE_ENV=development
-```
+- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Wouter, React Query
+- Backend: Node.js, Express, Socket.IO, JWT
+- Database: PostgreSQL with Prisma
+- Cache: Redis optional
+- Motion/UI: GSAP, Lucide
 
 ## Project Structure
 
+```text
+client/
+  public/
+  src/
+    app/         # routing and app-level wiring
+    chat/        # chat-specific UI and hooks
+    components/  # shared UI pieces
+    hooks/       # reusable hooks
+    lib/         # shared helpers and client utilities
+    pages/       # route-level pages
+    providers/   # auth/socket providers
+    styles/      # shared global styles
+
+server/
+  api/           # HTTP route registration
+  db/            # Prisma and DB helpers
+  lib/           # server utilities
+  middleware/    # auth/rate-limit middleware
+  index.ts       # server bootstrap
+  socket.ts      # Socket.IO server and events
+  storage.ts     # storage/data orchestration
+
+shared/
+  schema.ts      # shared Zod/types used across client/server
+
+prisma/
+  schema.prisma
 ```
-client/     - React frontend
-server/     - Express backend + Socket.IO
-shared/     - Shared TypeScript schemas
-prisma/     - Database schema
-```
 
-## Deployment (Render)
+## Requirements
 
-1. Push code to GitHub
-2. Create Web Service on [render.com](https://render.com)
-3. Set build command: `npm install && npm run build`
-4. Set start command: `npm start`
-5. Add environment variables in Render dashboard
-
-## Deployment (AWS EC2)
-
-1. SSH into your EC2 instance.
-2. Clone your repository and cd into the project directory.
-3. Install Node.js (v18+ recommended), npm, and (optionally) pm2.
-4. Set up your environment variables. Copy `.env.example` to `.env` and fill in production values.
-5. Build the project:
-   ```bash
-   npm install
-   npm run build
-   ```
-6. Start the server:
-   ```bash
-   npm start
-   # or with pm2 for reliability
-   pm2 start dist/index.js --name chatnexus
-   ```
-7. Ensure your security group allows inbound traffic on the required ports (80/443 for HTTP/HTTPS).
-8. (Recommended) Use a reverse proxy (Nginx) for HTTPS and static file serving.
+- Node.js 20+ recommended
+- npm
+- PostgreSQL database
+- Redis optional
 
 ## Environment Variables
 
-See `.env.example` for all required variables. Set these securely on your EC2 instance.
+Copy [`.env.example`](./.env.example) to `.env` and fill in the values.
+
+### Required
+
+```env
+DATABASE_URL=
+JWT_SECRET=
+FRONTEND_URL=
+SITE_URL=
+VITE_SITE_URL=
+```
+
+### Common
+
+```env
+DIRECT_URL=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPPORT_REQUESTS_PATH=runtime/support-requests.ndjson
+SESSION_SECRET=
+```
+
+### Notes
+
+- `JWT_SECRET` is required for token signing and verification.
+- `SESSION_SECRET` is only kept as a backward-compatible fallback. Prefer `JWT_SECRET`.
+- `FRONTEND_URL` is used for production Socket.IO CORS.
+- `VITE_*` variables are exposed to the browser.
+- `SUPPORT_REQUESTS_PATH` stores help-center submissions as newline-delimited JSON on disk.
+- GIF search uses the current hardcoded Tenor integration in the client.
+
+## Installation
+
+```bash
+npm install
+```
+
+Prisma client is also generated automatically on `postinstall`, but you can run it manually:
+
+```bash
+npm run db:generate
+```
+
+## Development
+
+Start the full app in development:
+
+```bash
+npm run dev
+```
+
+Type-check the project:
+
+```bash
+npm run check
+```
+
+Useful database commands:
+
+```bash
+npm run db:generate
+npm run db:push
+npm run db:migrate
+npm run db:studio
+```
+
+## Production
+
+Build:
+
+```bash
+npm run build
+```
+
+Start:
+
+```bash
+npm start
+```
+
+PM2 option:
+
+```bash
+npm run pm2:start
+```
+
+## Database Setup
+
+This project is designed around PostgreSQL and Prisma.
+
+Typical Supabase setup:
+
+1. Create a Supabase project.
+2. Copy the Postgres connection string into `DATABASE_URL`.
+3. Set `DIRECT_URL` if you want a separate direct connection for Prisma operations.
+4. Run:
+
+```bash
+npm run db:generate
+npm run db:push
+```
+
+If you are using Prisma migrations instead of `db push`, use:
+
+```bash
+npm run db:migrate
+```
+
+## Deployment Notes
+
+Before starting the production server, make sure all required env vars are present.
+
+Recommended deployment flow:
+
+1. Install dependencies.
+2. Set environment variables.
+3. Run `npm run build`.
+4. Start with `npm start` or `npm run pm2:start`.
+5. Put the app behind a reverse proxy such as Nginx if serving on a VPS.
+
+## Current Status
+
+- `npm run check` is the current verification command in the repo.
+- No dedicated automated test suite is included yet.
+- PWA assets and service worker support are configured through Vite.
+
+## Troubleshooting
+
+### Browser asks for old `.tsx` module files
+
+This usually means a stale service worker or cached app shell is still active.
+
+Clear site data, unregister the service worker in DevTools, and reload.
+
+### Server fails at startup
+
+Check these first:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `FRONTEND_URL`
+
+The server now fails fast when critical configuration is missing.
+
+### GIF picker does not work
+
+Check that Tenor requests are not being blocked by the browser, extensions, or network policies.
+
+## License
+
+MIT

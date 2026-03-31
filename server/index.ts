@@ -1,11 +1,8 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 
 import type { NextFunction, Request, Response } from "express";
-import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-
-dotenv.config();
 
 const APP_HOST = "0.0.0.0";
 
@@ -33,21 +30,17 @@ function requestLoggingMiddleware(
 ) {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+      const contentLength = res.getHeader("content-length");
+      const sizeSuffix =
+        typeof contentLength === "number" || typeof contentLength === "string"
+          ? ` ${contentLength}b`
+          : "";
+
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms${sizeSuffix}`;
 
       if (logLine.length > 80) {
         logLine = logLine.slice(0, 77) + "...";
@@ -66,7 +59,17 @@ app.use(express.urlencoded({ extended: false }));
 app.use(requestLoggingMiddleware);
 
 (async () => {
-  const server = await registerRoutes(app);
+  const [{ registerRoutes }, { ensureDatabaseReady }, { assertJwtSecretConfigured }] =
+    await Promise.all([
+      import("./api/routes"),
+      import("./db/prisma"),
+      import("./lib/jwt"),
+    ]);
+
+  assertJwtSecretConfigured();
+  await ensureDatabaseReady();
+
+  const server = registerRoutes(app);
 
   app.use(errorHandler);
 
@@ -86,4 +89,7 @@ app.use(requestLoggingMiddleware);
       log(`serving on port ${port}`);
     },
   );
-})();
+})().catch((error) => {
+  console.error("Server bootstrap failed:", error);
+  process.exit(1);
+});

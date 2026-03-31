@@ -23,6 +23,8 @@ out/
 .cache/
 .parcel-cache/
 .vite/
+client/dev-dist/
+runtime/
 
 # TypeScript
 *.tsbuildinfo

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/providers/auth-provider";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,13 +145,27 @@ export default function AuthPage() {
               </div>
               <div className="max-w-md space-y-8">
                 <h1 className="text-5xl font-extrabold leading-tight tracking-tight">
-                  See real-time moments from your next close friends.
+                  Meet strangers. Start conversations. Stay anonymous.
                 </h1>
                 <p className="text-base text-muted-foreground dark:text-white/70">
-                  Join anonymous conversations, discover new communities, and
-                  start chatting instantly.
+                  ChatNexus connects you with real people for real-time
+                  conversations — no long signup, no data harvesting. Just
+                  fast, secure, anonymous chat.
                 </p>
-               
+                <div className="flex gap-6 text-sm text-muted-foreground dark:text-white/50">
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-bold text-foreground dark:text-white">10K+</span>
+                    <span>Active users</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-bold text-foreground dark:text-white">1M+</span>
+                    <span>Messages sent</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-bold text-foreground dark:text-white">&lt;50ms</span>
+                    <span>Latency</span>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -438,8 +452,10 @@ export default function AuthPage() {
                 </Button>
 
                 <p className="text-center text-sm text-muted-foreground dark:text-white/55">
-                  By continuing, you agree to our Terms of Service and Privacy
-                  Policy.
+                  By continuing, you agree to our{" "}
+                  <Link href="/terms" className="underline hover:text-foreground dark:hover:text-white transition-colors">Terms of Service</Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="underline hover:text-foreground dark:hover:text-white transition-colors">Privacy Policy</Link>.
                 </p>
               </div>
             </section>

@@ -1,21 +1,25 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { User } from "@shared/schema";
+import { QueryClient, type QueryFunction } from "@tanstack/react-query";
+import type { User } from "@shared/schema";
 
-// Token storage key
 const TOKEN_KEY = "chatnexus_jwt";
 const USER_KEY = "chatnexus_user";
 
-// Get token from localStorage
+export type JwtPayload = {
+  exp?: number;
+  iat?: number;
+  sub?: number;
+  username?: string;
+  isGuest?: boolean;
+};
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-// Set token in localStorage
 export function setStoredToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-// Remove token from localStorage
 export function removeStoredToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
@@ -40,21 +44,16 @@ export function removeStoredUser(): void {
   localStorage.removeItem(USER_KEY);
 }
 
-type JwtPayload = {
-  exp?: number;
-  iat?: number;
-  sub?: number;
-  username?: string;
-  isGuest?: boolean;
-};
-
 export function decodeStoredToken(token: string): JwtPayload | null {
   try {
     const [, payload] = token.split(".");
     if (!payload) return null;
 
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
     return JSON.parse(atob(padded)) as JwtPayload;
   } catch {
     return null;
@@ -75,13 +74,13 @@ export async function apiRequest(
 ): Promise<Response> {
   const token = getStoredToken();
   const headers: Record<string, string> = {};
-  
+
   if (data) {
     headers["Content-Type"] = "application/json";
   }
-  
+
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(url, {
@@ -94,7 +93,27 @@ export async function apiRequest(
   return res;
 }
 
+export async function readJsonResponse<T>(res: Response): Promise<T> {
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await res.text();
+    const trimmed = text.trimStart().toLowerCase();
+
+    if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")) {
+      throw new Error(
+        "The backend route is not active yet. Restart the server and try again.",
+      );
+    }
+
+    throw new Error("Expected a JSON response from the API.");
+  }
+
+  return (await res.json()) as T;
+}
+
 type UnauthorizedBehavior = "returnNull" | "throw";
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
@@ -102,9 +121,9 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const token = getStoredToken();
     const headers: Record<string, string> = {};
-    
+
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+      headers.Authorization = `Bearer ${token}`;
     }
 
     const res = await fetch(queryKey.join("/") as string, {

@@ -15,10 +15,3 @@ export const getAvatarColor = (username: string) => {
   return `var(--avatar-${index})`;
 };
 
-// React Query key constants
-export const QUERY_KEYS = {
-  GLOBAL_MESSAGES: ["/api/global-messages"],
-  ONLINE_USERS: ["/api/users/online"],
-  USER: ["/api/user"],
-  messageHistory: (userId: number) => ["/api/messages/history", userId],
-} as const;

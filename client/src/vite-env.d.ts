@@ -2,5 +2,5 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_BING_SITE_VERIFICATION?: string;
+  readonly VITE_SITE_URL?: string;
 }

@@ -5,6 +5,13 @@ import { createServer as createViteServer, createLogger, type UserConfigExport }
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import {
+  applySeoToHtml,
+  getSiteUrl,
+  isAssetLikePath,
+  normalizePathname,
+  resolveSeoPage,
+} from "./seo";
 
 const viteLogger = createLogger();
 
@@ -23,6 +30,34 @@ export function log(message: string, source = "express") {
   });
 
   console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+function setRobotsHeader(
+  res: express.Response,
+  robots: string,
+) {
+  if (/noindex/i.test(robots)) {
+    res.setHeader("X-Robots-Tag", robots);
+  } else {
+    res.removeHeader("X-Robots-Tag");
+  }
+}
+
+function sendSeoDocument(
+  res: express.Response,
+  pathname: string,
+  template: string,
+  siteUrl: string,
+) {
+  const seoPage = resolveSeoPage(pathname);
+  const html = applySeoToHtml(template, seoPage, siteUrl);
+
+  setRobotsHeader(res, seoPage.robots);
+
+  res
+    .status(seoPage.statusCode)
+    .set({ "Content-Type": "text/html; charset=utf-8" })
+    .end(html);
 }
 
 export async function setupVite(app: Express, server: Server) {
@@ -51,6 +86,12 @@ export async function setupVite(app: Express, server: Server) {
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+    const pathname = normalizePathname(req.path);
+
+    if (isAssetLikePath(pathname)) {
+      res.status(404).end();
+      return;
+    }
 
     try {
       const clientTemplate = path.resolve(
@@ -66,7 +107,7 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      sendSeoDocument(res, pathname, page, getSiteUrl(req));
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -76,6 +117,7 @@ export async function setupVite(app: Express, server: Server) {
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
+  let cachedTemplate: string | null = null;
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
@@ -83,10 +125,27 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, { index: false }));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  app.use("*", async (req, res, next) => {
+    const pathname = normalizePathname(req.path);
+    if (isAssetLikePath(pathname)) {
+      res.status(404).end();
+      return;
+    }
+
+    try {
+      if (!cachedTemplate) {
+        cachedTemplate = await fs.promises.readFile(
+          path.resolve(distPath, "index.html"),
+          "utf-8",
+        );
+      }
+
+      sendSeoDocument(res, pathname, cachedTemplate, getSiteUrl(req));
+    } catch (error) {
+      next(error);
+    }
   });
 }
