@@ -20,6 +20,12 @@ export default defineConfig(() => {
         ],
         workbox: {
           cleanupOutdatedCaches: true,
+          navigateFallbackDenylist: [
+            /^\/sitemap\.xml$/,
+            /^\/robots\.txt$/,
+            /^\/favicon\.ico$/,
+            /^\/manifest\.json$/,
+          ],
         },
       }),
     ],

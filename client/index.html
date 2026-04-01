@@ -98,6 +98,7 @@
       sizes="180x180"
       href="/assets/images/apple-touch-icon.png"
     />
+    <link rel="shortcut icon" href="/favicon.ico" />
     
     <link id="seo-canonical" rel="canonical" href="%VITE_SITE_URL%/" />
     <link rel="manifest" href="/manifest.json" />
@@ -132,8 +133,16 @@
         "publisher": {
           "@type": "Organization",
           "name": "ChatNexus",
-          "url": "%VITE_SITE_URL%/"
-        }
+          "url": "%VITE_SITE_URL%/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "%VITE_SITE_URL%/assets/images/logo-512.png",
+            "width": 512,
+            "height": 512
+          },
+          "image": "%VITE_SITE_URL%/assets/images/logo-512.png"
+        },
+        "image": "%VITE_SITE_URL%/assets/images/logo-512.png"
       }
     </script>
     <title>ChatNexus | Anonymous Stranger Chat</title>

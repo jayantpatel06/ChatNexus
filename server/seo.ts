@@ -45,9 +45,30 @@ export const DEFAULT_SITE_NAME = "ChatNexus";
 export const DEFAULT_OG_LOCALE = "en_US";
 export const DEFAULT_LANGUAGE = "en-US";
 export const DEFAULT_IMAGE_PATH = "/assets/images/logo-512.png";
+export const DEFAULT_LOGO_WIDTH = 512;
+export const DEFAULT_LOGO_HEIGHT = 512;
 export const INDEXABLE_ROBOTS =
   "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 export const NOINDEX_ROBOTS = "noindex, nofollow";
+
+function buildOrganizationStructuredData(siteUrl: string) {
+  const logoUrl = resolveAbsoluteUrl(siteUrl, DEFAULT_IMAGE_PATH);
+
+  return {
+    "@type": "Organization",
+    name: DEFAULT_SITE_NAME,
+    url: `${siteUrl}/`,
+    description:
+      "Anonymous stranger chat, random conversations, and global messaging.",
+    logo: {
+      "@type": "ImageObject",
+      url: logoUrl,
+      width: DEFAULT_LOGO_WIDTH,
+      height: DEFAULT_LOGO_HEIGHT,
+    },
+    image: logoUrl,
+  };
+}
 
 const HOME_FAQS = [
   {
@@ -87,11 +108,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     structuredData: (siteUrl, canonicalUrl) => [
       {
         "@context": "https://schema.org",
-        "@type": "Organization",
-        name: DEFAULT_SITE_NAME,
-        url: `${siteUrl}/`,
-        description:
-          "Anonymous stranger chat, random conversations, and global messaging.",
+        ...buildOrganizationStructuredData(siteUrl),
       },
       {
         "@context": "https://schema.org",
@@ -101,6 +118,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
         description:
           "Anonymous stranger chat, random conversations, and global messaging.",
         inLanguage: "en",
+        publisher: buildOrganizationStructuredData(siteUrl),
       },
       {
         "@context": "https://schema.org",
@@ -111,6 +129,8 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
         url: canonicalUrl,
         description:
           "ChatNexus is an Omegle alternative for anonymous stranger chat, random conversations, and global messaging.",
+        image: resolveAbsoluteUrl(siteUrl, DEFAULT_IMAGE_PATH),
+        publisher: buildOrganizationStructuredData(siteUrl),
         offers: {
           "@type": "Offer",
           price: "0",
@@ -368,10 +388,12 @@ function buildDefaultStructuredData(
       url: `${siteUrl}/`,
     },
     publisher: {
-      "@type": "Organization",
-      name: DEFAULT_SITE_NAME,
-      url: `${siteUrl}/`,
+      ...buildOrganizationStructuredData(siteUrl),
     },
+    primaryImageOfPage: resolveAbsoluteUrl(
+      siteUrl,
+      page.image ?? DEFAULT_IMAGE_PATH,
+    ),
   };
 }
 

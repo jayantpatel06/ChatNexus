@@ -1,6 +1,7 @@
 /** Persists light/dark via `localStorage` key `theme` and `<html class="dark">`. */
 
 export const THEME_STORAGE_KEY = "theme";
+export const DEFAULT_THEME: ThemePreference = "dark";
 
 export type ThemePreference = "light" | "dark";
 
@@ -20,11 +21,14 @@ export function applyTheme(theme: ThemePreference): void {
   }
 }
 
-/** Call once before React mounts so all routes respect saved preference (no flash). */
+/** Call once before React mounts so first-time visitors start in dark mode and saved choices persist. */
 export function initThemeFromStorage(): void {
-  const stored = getStoredTheme();
-  if (stored) {
-    applyTheme(stored);
+  const storedTheme = getStoredTheme();
+  const theme = storedTheme ?? DEFAULT_THEME;
+  applyTheme(theme);
+
+  if (!storedTheme) {
+    persistTheme(theme);
   }
 }
 

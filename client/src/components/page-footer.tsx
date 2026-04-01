@@ -37,7 +37,7 @@ function FooterLink({
       className={cn(
         "site-footer__link group relative inline-flex items-center",
         "before:pointer-events-none before:absolute before:left-0 before:top-[1.5em] before:h-[0.05em] before:w-full before:bg-current before:content-['']",
-        "before:origin-center before:scale-x-0 before:transition-transform before:duration-300 before:ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "before:origin-center before:scale-x-0 before:transition-transform before:duration-300 before:[transition-timing-function:cubic-bezier(0.4,0,0.2,1)]",
         "hover:before:scale-x-100",
         className,
       )}

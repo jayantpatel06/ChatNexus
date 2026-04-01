@@ -91,6 +91,10 @@ async function persistSupportRequest(request: SupportRequestRecord): Promise<voi
 }
 
 function registerSystemRoutes(app: Express) {
+  app.get("/favicon.ico", (_req, res) => {
+    res.redirect(301, "/assets/images/logo-48.png");
+  });
+
   app.get("/robots.txt", (req, res) => {
     const siteUrl = getSiteUrl(req);
 
