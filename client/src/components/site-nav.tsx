@@ -1,10 +1,11 @@
 import "./site-nav.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { MagneticWrap } from "@/components/effects";
+import { cn } from "@/lib/utils";
 import {
   applyTheme,
   getStoredTheme,
@@ -86,7 +87,11 @@ function createThemeTransitionCss(
   `;
 }
 
-function AnimatedThemeToggle({ className }: { className?: string }) {
+export const ThemeToggleButton2 = ({
+  className = "",
+}: {
+  className?: string;
+}) => {
   const [isDark, setIsDark] = useState(() =>
     typeof window !== "undefined"
       ? (getStoredTheme() ??
@@ -95,6 +100,7 @@ function AnimatedThemeToggle({ className }: { className?: string }) {
             : "light")) === "dark"
       : false,
   );
+  const clipPathId = useId().replace(/:/g, "");
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"));
@@ -135,31 +141,74 @@ function AnimatedThemeToggle({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      className={`landing-theme-toggle ${className ?? ""}`.trim()}
+      className={cn(
+        "landing-theme-toggle rounded-full transition-all duration-300 active:scale-95",
+        className,
+      )}
       onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-pressed={isDark}
     >
       <span className="sr-only">Toggle theme</span>
-      <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g className={`landing-theme-toggle__core${isDark ? " is-dark" : ""}`}>
-          <path
-            d="M120 67.5C149.25 67.5 172.5 90.75 172.5 120C172.5 149.25 149.25 172.5 120 172.5"
-            fill="white"
+      <svg
+        className="landing-theme-toggle__icon"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        fill="currentColor"
+        strokeLinecap="round"
+        viewBox="0 0 32 32"
+      >
+        <defs>
+          <clipPath id={clipPathId}>
+            <path
+              d="M0-5h30a1 1 0 0 0 9 13v24H0Z"
+              style={{
+                transform: isDark ? "translate(-12px, 10px)" : "translate(0px, 0px)",
+                transformOrigin: "center",
+                transformBox: "fill-box",
+                transition: "transform 0.35s ease-in-out",
+              }}
+            />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipPathId})`}>
+          <circle
+            cx="16"
+            cy="16"
+            r="8"
+            style={{
+              transform: isDark ? "scale(1.25)" : "scale(1)",
+              transformOrigin: "center",
+              transformBox: "fill-box",
+              transition: "transform 0.35s ease-in-out",
+            }}
           />
-          <path
-            d="M120 67.5C90.75 67.5 67.5 90.75 67.5 120C67.5 149.25 90.75 172.5 120 172.5"
-            fill="black"
-          />
+          <g
+            stroke="currentColor"
+            strokeWidth="1.5"
+            style={{
+              opacity: isDark ? 0 : 1,
+              transform: isDark ? "rotate(-100deg) scale(0.5)" : "rotate(0deg) scale(1)",
+              transformOrigin: "center",
+              transformBox: "fill-box",
+              transition:
+                "transform 0.35s ease-in-out, opacity 0.35s ease-in-out",
+            }}
+          >
+            <path d="M16 5.5v-4" />
+            <path d="M16 30.5v-4" />
+            <path d="M1.5 16h4" />
+            <path d="M26.5 16h4" />
+            <path d="m23.4 8.6 2.8-2.8" />
+            <path d="m5.7 26.3 2.9-2.9" />
+            <path d="m5.8 5.8 2.8 2.8" />
+            <path d="m23.4 23.4 2.9 2.9" />
+          </g>
         </g>
-        <path
-          className={`landing-theme-toggle__ring${isDark ? " is-dark" : ""}`}
-          d="M120 3.75C55.5 3.75 3.75 55.5 3.75 120C3.75 184.5 55.5 236.25 120 236.25C184.5 236.25 236.25 184.5 236.25 120C236.25 55.5 184.5 3.75 120 3.75ZM120 214.5V172.5C90.75 172.5 67.5 149.25 67.5 120C67.5 90.75 90.75 67.5 120 67.5V25.5C172.5 25.5 214.5 67.5 214.5 120C214.5 172.5 172.5 214.5 120 214.5Z"
-          fill="white"
-        />
       </svg>
     </button>
   );
-}
+};
 
 export default function SiteNav() {
   const { user } = useAuth();
@@ -221,17 +270,31 @@ export default function SiteNav() {
   return (
     <nav ref={navRef} className="site-nav">
       <div className="nav-inner">
-        <Link href="/">
+        <Link href="/" className="nav-brand-link nav-brand-link--desktop">
           <div className="nav-brand">
             <div className="nav-logo">
               <img
                 src="/assets/images/image.png"
                 alt="ChatNexus Logo"
-                className="h-10 w-auto object-contain"
+                className="nav-logo-img"
               />
             </div>
             <span className="nav-name">ChatNexus</span>
           </div>
+        </Link>
+
+        <Link href="/" className="nav-mobile-logo-link" aria-label="ChatNexus home">
+          <div className="nav-logo">
+            <img
+              src="/assets/images/image.png"
+              alt="ChatNexus Logo"
+              className="nav-logo-img"
+            />
+          </div>
+        </Link>
+
+        <Link href="/" className="nav-mobile-name-link">
+          <span className="nav-name nav-name--mobile">ChatNexus</span>
         </Link>
 
         <div className="nav-pill">
@@ -243,7 +306,7 @@ export default function SiteNav() {
         </div>
 
         <div className="nav-actions">
-          <AnimatedThemeToggle />
+          <ThemeToggleButton2 />
           <MagneticWrap>
             <Link href={dest}>
               <Button className="nav-cta">

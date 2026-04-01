@@ -24,7 +24,6 @@ import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
 import {
   useReveal,
-  useParallax,
   MagneticWrap,
   CustomCursor,
   PagePreloader,
@@ -41,22 +40,34 @@ type FaqItem = {
 
 const LANDING_FAQS: readonly FaqItem[] = [
   {
-    category: "Product",
-    question: "What makes ChatNexus a strong Omegle alternative?",
+    category: "Getting Started",
+    question: "How do I start chatting on ChatNexus?",
     answer:
-      "ChatNexus focuses on fast anonymous chat, guest access, mobile-friendly messaging, and public conversations that help new users jump into live discussions quickly.",
+      "Open ChatNexus, enter as a guest or sign in, and jump straight into a conversation. You can explore live rooms or start a private random chat in just a few taps.",
   },
   {
     category: "Access",
-    question: "Can I talk to strangers without a long signup flow?",
+    question: "Can I use ChatNexus without creating an account?",
     answer:
-      "Yes. New users can use guest access to start chatting quickly, then create an account later if they want a more persistent profile.",
+      "Yes. Guest access is built in, so you can start talking to strangers first and decide later if you want a more permanent profile.",
+  },
+  {
+    category: "Privacy",
+    question: "Are my chats private and anonymous?",
+    answer:
+      "ChatNexus is designed around anonymous entry and privacy-first flows, so you can meet new people without sharing more information than you want to.",
   },
   {
     category: "Devices",
-    question: "Does ChatNexus work on phones and desktops?",
+    question: "Does ChatNexus work on mobile and desktop?",
     answer:
-      "Yes. The interface is responsive, installable as a PWA, and designed for real-time chatting across desktop and mobile devices.",
+      "Yes. The interface is responsive, installable as a PWA, and built to feel fast on phones, tablets, and desktop browsers.",
+  },
+  {
+    category: "Features",
+    question: "What can I do besides one-to-one stranger chat?",
+    answer:
+      "You can join global rooms, move between live conversations quickly, and use ChatNexus for both casual discovery and more active community chat.",
   },
 ] as const;
 
@@ -65,7 +76,6 @@ const LANDING_FAQS: readonly FaqItem[] = [
 export default function LandingPage() {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const scrollY = useParallax();
   const siteUrl = getSiteUrl();
   const seoStructuredData = [
     {
@@ -178,7 +188,6 @@ export default function LandingPage() {
       {/* ═══════ Main Content ═══════ */}
       <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
         <CustomCursor />
-        <AmbientOrbs scrollY={scrollY} />
 
         {/* ═══════ Floating Nav ═══════ */}
         <SiteNav />
@@ -242,6 +251,14 @@ export default function LandingPage() {
           <div ref={aboutRef} className="reveal-item about-bento-shell">
             <div className="about-bento-head">
               <span className="section-tag">About</span>
+              <h2 className="section-title about-bento-section-title">
+                The Fastest Way to Talk to Strangers Online
+              </h2>
+              <p className="about-bento-lead">
+                  A modern Omegle alternative designed for people
+                  who want to meet new friends and join
+                  global conversations instantly.
+                </p>
             </div>
             <div className="about-bento-grid">
               <article className="about-bento-card about-bento-card--top-left">
@@ -253,11 +270,11 @@ export default function LandingPage() {
                 </p>
               </article>
               <article className="about-bento-card about-bento-card--top-right">
-                <h3 className="about-bento-title">Stay Anonymous</h3>
+                <h3 className="about-bento-title">Built for Real Time</h3>
                 <p className="about-bento-text">
-                  Lightweight identity and privacy-first design keep the focus
-                  on the conversation, helping you talk freely without exposing
-                  more personal information than you want to share.
+                  Frictionless entry, modern messaging, and fast live updates
+                  make every chat feel responsive, lightweight, and easy to
+                  continue.
                 </p>
               </article>
               <article className="about-bento-card about-bento-card--middle-left">
@@ -276,27 +293,6 @@ export default function LandingPage() {
                   comfort of the experience.
                 </p>
               </article>
-              <article className="about-bento-card about-bento-card--bottom-left">
-                <h3 className="about-bento-title">Built for Real Time</h3>
-                <p className="about-bento-text">
-                  Frictionless entry, modern messaging, and fast live updates
-                  make every chat feel responsive, lightweight, and easy to
-                  continue.
-                </p>
-              </article>
-              <article className="about-bento-card about-bento-card--statement">
-                <h2 className="about-bento-heading">
-                  The Fastest Way to Talk to Strangers Online.
-                </h2>
-                <p className="about-bento-lead">
-                  ChatNexus is a modern Omegle alternative designed for people
-                  who want to meet new friends, chat anonymously, and join
-                  global conversations instantly. We focus on frictionless
-                  entry, privacy-first flows, and a mobile-friendly experience
-                  so you can start chatting with strangers in seconds, no long
-                  signup required.
-                </p>
-              </article>
             </div>
           </div>
         </section>
@@ -304,20 +300,18 @@ export default function LandingPage() {
         {/* ═══════ FAQs ═══════ */}
         <section id="faq" className="faq-section" aria-labelledby="faq-heading">
           <div ref={faqRef} className="reveal-item faq-inner">
-            <span className="section-tag">FAQ</span>
-            <h2 id="faq-heading" className="section-title faq-title">
-              Common Questions & Answers
-            </h2>
-            <p className="section-desc faq-subtitle">
-              Find out all the essential details about our platform and how it can
-              serve your needs.
-            </p>
+            <div className="faq-head">
+              <span className="section-tag">FAQ</span>
+              <h2 id="faq-heading" className="section-title faq-title">
+                Common Questions & Answers
+              </h2>
+            </div>
             <FaqAccordion items={LANDING_FAQS} />
           </div>
         </section>
 
         {/* ═══════ Connect ═══════ */}
-        <section id="support" className="about-section" style={{ paddingTop: "40px", paddingBottom: "60px" }}>
+        <section id="support" className="about-section" style={{ paddingTop: "20px", paddingBottom: "44px" }}>
           <div ref={connectRef} className="reveal-item about-inner">
             <span className="section-tag">Connect</span>
             <h2 className="section-title">Ready to Meet Someone New?</h2>
@@ -414,14 +408,18 @@ function BentoFeatures() {
         </div>
 
         <div className="pointer-events-none absolute bottom-0 right-0 top-0 hidden w-1/2 opacity-30 transition-opacity duration-700 group-hover:opacity-60 md:block">
-          <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <circle cx="20" cy="20" r="1" fill="#fff" opacity="0.3" />
-            <circle cx="30" cy="20" r="1" fill="#fff" opacity="0.3" />
-            <circle cx="40" cy="20" r="1" fill="#fff" opacity="0.3" />
+          <svg
+            className="bento-feature-map h-full w-full"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            <circle cx="20" cy="20" r="1" fill="currentColor" opacity="0.3" />
+            <circle cx="30" cy="20" r="1" fill="currentColor" opacity="0.3" />
+            <circle cx="40" cy="20" r="1" fill="currentColor" opacity="0.3" />
             <path
               d="M10,80 L15,85 L20,70 L25,75 L30,55 L35,65 L40,80 L50,60 L60,85 L70,50 L75,65 L80,50 L85,45 L90,65 L95,40"
               fill="none"
-              stroke="#fff"
+              stroke="currentColor"
               strokeWidth="1"
             />
           </svg>
@@ -449,7 +447,6 @@ function FaqAccordion({ items }: { items: readonly FaqItem[] }) {
     <Accordion
       type="single"
       collapsible
-      defaultValue="faq-0"
       className="faq-accordion"
     >
       {items.map((item, index) => (
@@ -459,15 +456,13 @@ function FaqAccordion({ items }: { items: readonly FaqItem[] }) {
           className="faq-accordion-item border-0"
         >
           <AccordionTrigger className="faq-accordion-trigger py-0 hover:no-underline">
-            <span className="faq-accordion-header">
-              <span className="faq-accordion-index">{index + 1}</span>
+            <span className="faq-accordion-row">
               <span className="faq-accordion-question">{item.question}</span>
+              <span className="faq-accordion-plus" aria-hidden="true" />
             </span>
           </AccordionTrigger>
           <AccordionContent className="faq-accordion-content">
-            <div className="faq-accordion-answer-wrap">
-              <p className="faq-accordion-answer">{item.answer}</p>
-            </div>
+            <p className="faq-accordion-answer">{item.answer}</p>
           </AccordionContent>
         </AccordionItem>
       ))}

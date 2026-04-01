@@ -23,8 +23,8 @@ html {
   --brand-primary: #08b2e3;
   --brand-primary-hover: #0698c4;
   --brand-accent: #08b2e3;
-  --brand-text: #161514;
-  --brand-muted: #121314;
+  --brand-text: #1a1817;
+  --brand-muted: #000000;
   /* Balanced so cards and inputs stay legible without muddying the cream base */
   --brand-border: rgba(8, 178, 227, 0.18);
   --brand-footer: var(--brand-bg);
@@ -81,7 +81,7 @@ html {
   --brand-primary-hover: #6ec4f3;
   --brand-accent: #65a7ca;
   --brand-text: #f6fbfb;
-  --brand-muted: #f4f7f5;
+  --brand-muted: #e1ebe4;
   --brand-border: rgba(143, 215, 255, 0.2);
   --brand-footer: #0f171b;
   --brand-msg-sent: #8fd7ff;
