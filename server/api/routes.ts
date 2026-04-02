@@ -1,4 +1,5 @@
-import { appendFile, mkdir } from "fs/promises";
+import { appendFile, mkdir, unlink } from "fs/promises";
+import { spawn } from "child_process";
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
@@ -20,10 +21,27 @@ import { registerChatRoutes } from "./chat";
 import { jwtAuth } from "../middleware/jwt-auth";
 import { registerUserRoutes } from "./users";
 
+const MAX_UPLOAD_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+const NORMALIZED_VIDEO_MIME_TYPE = "video/mp4";
+
 const upload = multer({
   dest: "uploads/",
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: MAX_UPLOAD_FILE_SIZE_BYTES,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype.startsWith("image/") ||
+      ALLOWED_UPLOAD_VIDEO_TYPES.has(file.mimetype)
+    ) {
+      cb(null, true);
+      return;
+    }
+
+    const error = new Error("Only images, MP4, and WebM files are allowed.");
+    (error as Error & { status?: number }).status = 400;
+    cb(error);
   },
 });
 
@@ -88,6 +106,85 @@ async function persistSupportRequest(request: SupportRequestRecord): Promise<voi
   const supportRequestsPath = resolveSupportRequestsPath();
   await mkdir(path.dirname(supportRequestsPath), { recursive: true });
   await appendFile(supportRequestsPath, `${JSON.stringify(request)}\n`, "utf8");
+}
+
+async function deleteUploadedFile(filePath: string) {
+  await unlink(filePath).catch(() => undefined);
+}
+
+function runFfmpeg(args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const ffmpeg = spawn("ffmpeg", args, {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+
+    let stderr = "";
+
+    ffmpeg.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("error", reject);
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(stderr.trim() || `ffmpeg exited with code ${code ?? -1}`));
+    });
+  });
+}
+
+async function normalizeUploadedVideo(file: Express.Multer.File) {
+  const inputPath = file.path;
+  const outputFilename = `${file.filename}.mp4`;
+  const outputPath = path.join(path.dirname(inputPath), outputFilename);
+  const parsedOriginalName = path.parse(file.originalname);
+  const normalizedOriginalName = `${parsedOriginalName.name || "video"}.mp4`;
+
+  try {
+    await runFfmpeg([
+      "-y",
+      "-i",
+      inputPath,
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0?",
+      "-movflags",
+      "+faststart",
+      "-vf",
+      "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "28",
+      "-tag:v",
+      "avc1",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      outputPath,
+    ]);
+
+    await deleteUploadedFile(inputPath);
+
+    return {
+      url: `/uploads/${outputFilename}`,
+      filename: normalizedOriginalName,
+      fileType: NORMALIZED_VIDEO_MIME_TYPE,
+    };
+  } catch (error) {
+    await deleteUploadedFile(outputPath);
+    throw error;
+  }
 }
 
 function registerSystemRoutes(app: Express) {
@@ -167,15 +264,48 @@ function registerSupportRoutes(app: Express) {
 
 function registerUploadRoutes(app: Express) {
   app.use("/uploads", express.static("uploads"));
-  app.post("/api/upload", jwtAuth, upload.single("file"), (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
+  app.post("/api/upload", jwtAuth, (req, res, next) => {
+    upload.single("file")(req, res, (error) => {
+      if (error) {
+        if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(400)
+            .json({ message: "File size must be less than 5MB" });
+        }
 
-    res.json({
-      url: `/uploads/${req.file.filename}`,
-      filename: req.file.originalname,
-      fileType: req.file.mimetype,
+        next(error);
+        return;
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const uploadedFile = req.file;
+
+      const respondWithUpload = async () => {
+        if (ALLOWED_UPLOAD_VIDEO_TYPES.has(uploadedFile.mimetype)) {
+          try {
+            const normalizedVideo = await normalizeUploadedVideo(uploadedFile);
+            return res.json(normalizedVideo);
+          } catch (processingError) {
+            console.error("Video normalization failed:", processingError);
+            await deleteUploadedFile(uploadedFile.path);
+            return res.status(500).json({
+              message:
+                "Video processing failed. Try a different video or upload from another device.",
+            });
+          }
+        }
+
+        return res.json({
+          url: `/uploads/${uploadedFile.filename}`,
+          filename: uploadedFile.originalname,
+          fileType: uploadedFile.mimetype,
+        });
+      };
+
+      void respondWithUpload().catch(next);
     });
   });
 }

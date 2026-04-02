@@ -13,6 +13,8 @@ ChatNexus supports:
 - global chat
 - typing indicators and online presence
 - image and GIF sharing
+- in-chat camera capture with a full-screen mobile camera UI, flip-camera control on supported phones, and `mp4` / `webm` uploads up to 5 MB
+- uploaded videos are normalized to a browser-safe MP4 format for more reliable playback across phones and desktop
 - compact attachment thumbnails with animated in-chat lightbox preview
 - SEO-friendly public pages
 - installable PWA support
@@ -62,6 +64,7 @@ prisma/
 
 - Node.js 20+
 - npm
+- FFmpeg available on the server PATH for uploaded video normalization
 - PostgreSQL
 - Redis optional
 
@@ -196,6 +199,7 @@ Check:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `FRONTEND_URL`
+- `ffmpeg` is installed and available on the server PATH if video uploads are enabled
 
 ### GIF picker does not load results
 

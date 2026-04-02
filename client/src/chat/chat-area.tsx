@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { User, Message, FriendRequest } from "@shared/schema";
 import {
+  Camera,
   Heart,
   Phone,
   Video,
@@ -18,6 +19,7 @@ import {
   Loader2,
   Clock,
   Handshake,
+  RefreshCw,
   Search,
   TrendingUp,
   UserPlus,
@@ -46,6 +48,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
 import { getStoredTheme } from "@/lib/theme";
@@ -63,6 +66,8 @@ const TENOR_CLIENT_KEY = "chatnexus";
 const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
 const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
 const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const ATTACHMENT_INPUT_ACCEPT = "image/*,video/mp4,video/webm";
 
 function isImageMessageUrl(url: string): boolean {
   return IMAGE_MEDIA_URL_PATTERN.test(url) || TENOR_MEDIA_URL_PATTERN.test(url);
@@ -70,6 +75,26 @@ function isImageMessageUrl(url: string): boolean {
 
 function isVideoMessageUrl(url: string): boolean {
   return VIDEO_MEDIA_URL_PATTERN.test(url);
+}
+
+function isUploadableAttachmentType(fileType: string): boolean {
+  return (
+    fileType.startsWith("image/") ||
+    fileType === "video/mp4" ||
+    fileType === "video/webm"
+  );
+}
+
+function isVideoAttachmentType(fileType: string): boolean {
+  return fileType.startsWith("video/");
+}
+
+function getVideoMimeTypeFromUrl(url: string): string | undefined {
+  if (VIDEO_MEDIA_URL_PATTERN.test(url)) {
+    return url.toLowerCase().includes(".webm") ? "video/webm" : "video/mp4";
+  }
+
+  return undefined;
 }
 
 function getStandaloneMediaMessageUrl(content: string): string | null {
@@ -205,6 +230,8 @@ export function ChatArea({
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const lastTypingUserIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
 
   // Track scroll position for loading older messages
@@ -226,6 +253,14 @@ export function ChatArea({
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(
     null,
   );
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">(
+    isMobile ? "environment" : "user",
+  );
+  const [availableCameraCount, setAvailableCameraCount] = useState(1);
 
   // Fetch message history when user is selected (cursor-based) with caching
   const {
@@ -778,6 +813,340 @@ export function ChatArea({
       : `c-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }, []);
 
+  const resetFileInput = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  const refreshAvailableCameras = useCallback(async () => {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.enumerateDevices
+    ) {
+      setAvailableCameraCount(1);
+      return;
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(
+        (device) => device.kind === "videoinput",
+      );
+      setAvailableCameraCount(Math.max(videoInputs.length, 1));
+    } catch {
+      setAvailableCameraCount(1);
+    }
+  }, []);
+
+  const stopCameraStream = useCallback(() => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.pause();
+      cameraVideoRef.current.srcObject = null;
+    }
+
+    setIsCameraLoading(false);
+  }, []);
+
+  const startCameraStream = useCallback(async () => {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setCameraError("Camera access is not supported in this browser.");
+      return;
+    }
+
+    stopCameraStream();
+    setCameraError(null);
+    setIsCameraLoading(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: isMobile
+          ? {
+              facingMode: cameraFacingMode,
+            }
+          : true,
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      await refreshAvailableCameras();
+
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+        await cameraVideoRef.current.play().catch(() => undefined);
+      }
+    } catch (error) {
+      console.error("Camera access failed", error);
+      setCameraError("Camera access was denied or is currently unavailable.");
+    } finally {
+      setIsCameraLoading(false);
+    }
+  }, [cameraFacingMode, isMobile, refreshAvailableCameras, stopCameraStream]);
+
+  useEffect(() => {
+    setCameraFacingMode(isMobile ? "environment" : "user");
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!isCameraOpen) {
+      stopCameraStream();
+      return;
+    }
+
+    void startCameraStream();
+
+    return () => {
+      stopCameraStream();
+    };
+  }, [isCameraOpen, startCameraStream, stopCameraStream]);
+
+  const handleFlipCamera = useCallback(() => {
+    if (!isMobile || availableCameraCount < 2 || isCameraLoading) {
+      return;
+    }
+
+    setCameraFacingMode((currentFacingMode) =>
+      currentFacingMode === "environment" ? "user" : "environment",
+    );
+  }, [availableCameraCount, isCameraLoading, isMobile]);
+
+  const sendAttachmentFile = useCallback(
+    async (file: File) => {
+      if (!selectedUser || !user) return false;
+
+      if (!canSendPrivateMessage()) {
+        return false;
+      }
+
+      if (!isUploadableAttachmentType(file.type)) {
+        toast({
+          title: "Unsupported file type",
+          description: "Only images, MP4, and WebM files are allowed.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        toast({
+          title: "File too large",
+          description: "File size must be less than 5MB",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      const attachmentId = generateClientMessageId();
+
+      const pendingAttachment: PendingAttachment = {
+        id: attachmentId,
+        file,
+        previewUrl,
+        progress: 0,
+        status: "uploading",
+      };
+      setPendingAttachments((prev) => [...prev, pendingAttachment]);
+
+      const optimisticMessage: OptimisticMessage = {
+        msgId: -Date.now(),
+        senderId: user.userId,
+        receiverId: selectedUser.userId,
+        conversationId: null,
+        message: "",
+        timestamp: new Date(),
+        isOptimistic: true,
+        isSending: true,
+        clientMessageId: attachmentId,
+      };
+      addOptimisticMessage(optimisticMessage);
+      userSentMessageRef.current = true;
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        setPendingAttachments((prev) =>
+          prev.map((pending) =>
+            pending.id === attachmentId
+              ? { ...pending, progress: 50 }
+              : pending,
+          ),
+        );
+
+        const token = getStoredToken();
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!res.ok) {
+          let message = "Upload failed";
+          try {
+            const data = (await res.json()) as { message?: string };
+            if (data.message) {
+              message = data.message;
+            }
+          } catch {
+            // Fallback to default message for non-JSON responses.
+          }
+          throw new Error(message);
+        }
+
+        const uploaded = (await res.json()) as {
+          url: string;
+          filename: string;
+          fileType: string;
+        };
+
+        setPendingAttachments((prev) =>
+          prev.map((pending) =>
+            pending.id === attachmentId
+              ? { ...pending, progress: 90, status: "sending" }
+              : pending,
+          ),
+        );
+
+        const didSend = sendMessage(
+          selectedUser.userId,
+          "",
+          {
+            url: uploaded.url,
+            filename: uploaded.filename,
+            fileType: uploaded.fileType,
+          },
+          attachmentId,
+        );
+
+        if (!didSend) {
+          setPendingAttachments((prev) =>
+            prev.map((pending) =>
+              pending.id === attachmentId
+                ? { ...pending, status: "error" }
+                : pending,
+            ),
+          );
+
+          setTimeout(() => {
+            setPendingAttachments((prev) =>
+              prev.filter((pending) => pending.id !== attachmentId),
+            );
+            removeOptimisticMessage(attachmentId);
+            URL.revokeObjectURL(previewUrl);
+          }, 2000);
+
+          userSentMessageRef.current = false;
+          handleSendUnavailable("Attachment not sent. Reconnect and try again.");
+          return false;
+        }
+
+        setTimeout(() => {
+          setPendingAttachments((prev) =>
+            prev.filter((pending) => pending.id !== attachmentId),
+          );
+          URL.revokeObjectURL(previewUrl);
+        }, 500);
+
+        return true;
+      } catch (error) {
+        console.error("Attachment upload failed", error);
+
+        setPendingAttachments((prev) =>
+          prev.map((pending) =>
+            pending.id === attachmentId
+              ? { ...pending, status: "error" }
+              : pending,
+          ),
+        );
+
+        setTimeout(() => {
+          setPendingAttachments((prev) =>
+            prev.filter((pending) => pending.id !== attachmentId),
+          );
+          removeOptimisticMessage(attachmentId);
+          URL.revokeObjectURL(previewUrl);
+        }, 2000);
+
+        userSentMessageRef.current = false;
+        toast({
+          title: "Upload failed",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to upload file. Please try again.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    },
+    [
+      selectedUser,
+      user,
+      canSendPrivateMessage,
+      toast,
+      generateClientMessageId,
+      addOptimisticMessage,
+      sendMessage,
+      removeOptimisticMessage,
+      handleSendUnavailable,
+    ],
+  );
+
+  const handleCapturePhoto = useCallback(async () => {
+    const videoElement = cameraVideoRef.current;
+
+    if (!videoElement || !videoElement.videoWidth || !videoElement.videoHeight) {
+      setCameraError("Camera preview is still loading. Try again in a moment.");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCameraError("Unable to capture a photo from the camera.");
+      return;
+    }
+
+    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    setIsCapturingPhoto(true);
+    setCameraError(null);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+
+    if (!blob) {
+      setIsCapturingPhoto(false);
+      setCameraError("Unable to capture a photo from the camera.");
+      return;
+    }
+
+    const file = new File([blob], `camera-capture-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+    const didSend = await sendAttachmentFile(file);
+
+    setIsCapturingPhoto(false);
+    if (didSend) {
+      setIsCameraOpen(false);
+    }
+  }, [sendAttachmentFile]);
+
+  const closeCamera = useCallback(() => {
+    setIsCameraOpen(false);
+    setCameraError(null);
+  }, []);
+
   const sendGifMessage = useCallback(
     (gifUrl: string) => {
       const normalizedGifUrl = gifUrl.trim();
@@ -977,153 +1346,11 @@ export function ChatArea({
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedUser || !user) return;
+    resetFileInput();
 
-    if (!canSendPrivateMessage()) {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      return;
-    }
+    if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "File size must be less than 5MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Create preview URL for immediate display
-    const previewUrl = URL.createObjectURL(file);
-    const attachmentId = generateClientMessageId();
-
-    // Add pending attachment for loading preview
-    const pendingAttachment: PendingAttachment = {
-      id: attachmentId,
-      file,
-      previewUrl,
-      progress: 0,
-      status: "uploading",
-    };
-    setPendingAttachments((prev) => [...prev, pendingAttachment]);
-
-    // Create optimistic message with attachment preview
-    const optimisticMessage: OptimisticMessage = {
-      msgId: -Date.now(), // Negative temp ID
-      senderId: user.userId,
-      receiverId: selectedUser.userId,
-      conversationId: null, // Will be set by server
-      message: "", // Use 'message' to match Prisma schema
-      timestamp: new Date(),
-      isOptimistic: true,
-      isSending: true,
-      clientMessageId: attachmentId,
-    };
-    addOptimisticMessage(optimisticMessage);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      // Update progress to show uploading
-      setPendingAttachments((prev) =>
-        prev.map((p) => (p.id === attachmentId ? { ...p, progress: 50 } : p)),
-      );
-
-      const token = getStoredToken();
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const uploaded = await res.json(); // { url, filename, fileType }
-
-      // Update status to sending
-      setPendingAttachments((prev) =>
-        prev.map((p) =>
-          p.id === attachmentId ? { ...p, progress: 90, status: "sending" } : p,
-        ),
-      );
-
-      // Send message with attachment via socket, with clientMessageId for tracking
-      const didSend = sendMessage(
-        selectedUser.userId,
-        "",
-        {
-          url: uploaded.url,
-          filename: uploaded.filename,
-          fileType: uploaded.fileType,
-        },
-        attachmentId,
-      );
-      if (!didSend) {
-        setPendingAttachments((prev) =>
-          prev.map((p) =>
-            p.id === attachmentId ? { ...p, status: "error" } : p,
-          ),
-        );
-
-        setTimeout(() => {
-          setPendingAttachments((prev) =>
-            prev.filter((p) => p.id !== attachmentId),
-          );
-          removeOptimisticMessage(attachmentId);
-          URL.revokeObjectURL(previewUrl);
-        }, 2000);
-
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-
-        handleSendUnavailable("Attachment not sent. Reconnect and try again.");
-        return;
-      }
-
-      // Remove pending attachment and optimistic message after short delay
-      setTimeout(() => {
-        setPendingAttachments((prev) =>
-          prev.filter((p) => p.id !== attachmentId),
-        );
-        // Clean up the preview URL
-        URL.revokeObjectURL(previewUrl);
-      }, 500);
-
-      // Clear input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch (error) {
-      console.error("Attachment upload failed", error);
-
-      // Update status to error
-      setPendingAttachments((prev) =>
-        prev.map((p) =>
-          p.id === attachmentId ? { ...p, status: "error" } : p,
-        ),
-      );
-
-      // Remove after showing error briefly
-      setTimeout(() => {
-        setPendingAttachments((prev) =>
-          prev.filter((p) => p.id !== attachmentId),
-        );
-        removeOptimisticMessage(attachmentId);
-        URL.revokeObjectURL(previewUrl);
-      }, 2000);
-
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload file. Please try again.",
-        variant: "destructive",
-      });
-    }
+    await sendAttachmentFile(file);
   };
 
   const handleAddFriend = () => {
@@ -1230,6 +1457,82 @@ export function ChatArea({
     clearChatMutation.isPending || clearAttachmentsMutation.isPending;
   const isLightboxOpen = imagePreview !== null;
   const lightboxSrc = imagePreview?.url ?? "";
+  const canFlipCamera = isMobile && availableCameraCount > 1;
+
+  const cameraViewport = (
+    <div className="relative flex-1 overflow-hidden bg-black">
+      <video
+        ref={cameraVideoRef}
+        autoPlay
+        playsInline
+        muted
+        className="h-full w-full bg-black object-cover"
+      />
+
+      {(isCameraLoading || cameraError) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/72 p-6 text-center">
+          <div className="space-y-4 text-white">
+            {isCameraLoading ? (
+              <>
+                <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+                <p className="text-sm">Starting camera...</p>
+              </>
+            ) : (
+              <>
+                <p className="max-w-xs text-sm">{cameraError}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCameraError(null);
+                    void startCameraStream();
+                  }}
+                >
+                  Retry camera
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-8 flex items-center justify-center gap-3 px-4">
+        <Button
+          type="button"
+          size="icon"
+          className="pointer-events-auto h-11 w-11 rounded-full border border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70 disabled:opacity-45"
+          onClick={() => void handleFlipCamera()}
+          disabled={!canFlipCamera}
+          aria-label="Flip camera"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          className="pointer-events-auto h-16 w-16 rounded-full border-4 border-white bg-white text-black shadow-2xl hover:bg-white/90"
+          onClick={() => void handleCapturePhoto()}
+          disabled={isCameraLoading || isCapturingPhoto || !!cameraError}
+          aria-label="Capture photo"
+        >
+          {isCapturingPhoto ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : (
+            <Camera className="h-6 w-6" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          className="pointer-events-auto h-11 w-11 rounded-full border border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+          onClick={closeCamera}
+          aria-label="Cancel camera"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -1262,6 +1565,36 @@ export function ChatArea({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isMobile ? (
+        <AnimatePresence>
+          {isCameraOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[110] bg-background"
+            >
+              <div className="flex h-full flex-col">{cameraViewport}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      ) : (
+        <Dialog
+          open={isCameraOpen}
+          onOpenChange={(open) => {
+            setIsCameraOpen(open);
+            if (!open) {
+              setCameraError(null);
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl overflow-hidden border-brand-border bg-background p-0 [&>button]:hidden">
+            <DialogTitle className="sr-only">Capture and send</DialogTitle>
+            <div className="flex h-[min(80vh,42rem)] flex-col">{cameraViewport}</div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <AlertDialog
         open={confirmDialogAction !== null}
@@ -1532,7 +1865,7 @@ export function ChatArea({
             ref={fileInputRef}
             className="hidden"
             onChange={handleFileSelect}
-            accept="image/*"
+            accept={ATTACHMENT_INPUT_ACCEPT}
           />
           <Button
             variant="ghost"
@@ -1543,6 +1876,21 @@ export function ChatArea({
             onClick={() => fileInputRef.current?.click()}
           >
             <Paperclip className="w-4 h-4 text-muted-foreground" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 flex-shrink-0"
+            title="Capture photo"
+            data-testid="button-open-camera"
+            onClick={() => {
+              setShowEmojiPicker(false);
+              setShowGifPicker(false);
+              setCameraError(null);
+              setIsCameraOpen(true);
+            }}
+          >
+            <Camera className="w-4 h-4 text-muted-foreground" />
           </Button>
 
           {/* Message Input */}
@@ -1665,16 +2013,7 @@ const MessageContent = ({
 
         if (isVideo) {
           return (
-            <div
-              key={index}
-              className="my-2 max-w-sm overflow-hidden rounded-sm border border-border"
-            >
-              <video
-                src={part}
-                controls
-                className="h-auto max-h-60 w-full bg-black"
-              />
-            </div>
+            <InlineVideoPreview key={index} url={part} />
           );
         }
 
@@ -1695,6 +2034,44 @@ const MessageContent = ({
     </div>
   );
 };
+
+function InlineVideoPreview({ url }: { url: string }) {
+  const [hasError, setHasError] = useState(false);
+  const mimeType = getVideoMimeTypeFromUrl(url);
+
+  if (hasError) {
+    return (
+      <div className="my-2 flex max-w-[16rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
+        <span className="text-xs text-muted-foreground">
+          Video preview blocked by host
+        </span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-xs text-blue-500 hover:underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Open video link
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-2 max-w-sm overflow-hidden rounded-2xl border border-brand-border bg-black shadow-sm">
+      <video
+        controls
+        playsInline
+        preload="metadata"
+        className="h-auto max-h-72 w-full bg-black"
+        onError={() => setHasError(true)}
+      >
+        <source src={url} type={mimeType} />
+      </video>
+    </div>
+  );
+}
 
 function InlineImagePreview({
   url,
@@ -1853,6 +2230,65 @@ function AttachmentThumbnail({
   );
 }
 
+function VideoAttachmentCard({
+  src,
+  title,
+  mimeType,
+  showOverlay = false,
+  overlayLabel,
+}: {
+  src: string;
+  title: string;
+  mimeType?: string;
+  showOverlay?: boolean;
+  overlayLabel?: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const resolvedMimeType = mimeType ?? getVideoMimeTypeFromUrl(src);
+
+  if (hasError && !showOverlay) {
+    return (
+      <div className="flex max-w-[16rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
+        <span className="text-xs text-muted-foreground">
+          Video preview unavailable
+        </span>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-xs text-blue-500 hover:underline"
+        >
+          Open video link
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-black shadow-sm">
+      <video
+        controls={!showOverlay}
+        muted={showOverlay}
+        playsInline
+        preload="metadata"
+        className="max-h-72 w-full min-w-[14rem] bg-black object-contain sm:min-w-[16rem]"
+        title={title}
+        onError={() => setHasError(true)}
+      >
+        <source src={src} type={resolvedMimeType} />
+      </video>
+      {showOverlay && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+          <div className="flex flex-col items-center gap-2 text-white">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-xs">{overlayLabel ?? "Uploading..."}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MessageBubble = memo(function MessageBubble({
   message,
   isOwnMessage,
@@ -1910,7 +2346,14 @@ const MessageBubble = memo(function MessageBubble({
         <div className="overflow-hidden transition-all duration-300">
           {pendingAttachment && (
             <div className="flex flex-wrap gap-2">
-              <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm sm:h-32 sm:w-32">
+              <div
+                className={cn(
+                  "relative overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm",
+                  isVideoAttachmentType(pendingAttachment.file.type)
+                    ? "w-full max-w-xs sm:max-w-sm"
+                    : "h-28 w-28 sm:h-32 sm:w-32",
+                )}
+              >
                 {pendingAttachment.file.type.startsWith("image/") ? (
                   <div className="relative">
                     <img
@@ -1937,6 +2380,18 @@ const MessageBubble = memo(function MessageBubble({
                       </div>
                     </div>
                   </div>
+                ) : isVideoAttachmentType(pendingAttachment.file.type) ? (
+                  <VideoAttachmentCard
+                    src={pendingAttachment.previewUrl}
+                    title={pendingAttachment.file.name}
+                    mimeType={pendingAttachment.file.type}
+                    showOverlay
+                    overlayLabel={
+                      pendingAttachment.status === "uploading"
+                        ? "Uploading..."
+                        : "Sending..."
+                    }
+                  />
                 ) : (
                   <div className="flex h-full items-center gap-2 px-3 py-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1962,6 +2417,12 @@ const MessageBubble = memo(function MessageBubble({
                     <AttachmentThumbnail
                       attachment={attachment}
                       onPreview={onImagePreview}
+                    />
+                  ) : isVideoAttachmentType(attachment.fileType) ? (
+                    <VideoAttachmentCard
+                      src={attachment.url}
+                      title={attachment.filename}
+                      mimeType={attachment.fileType}
                     />
                   ) : (
                     <div className="flex items-center gap-2 px-3 py-2">
