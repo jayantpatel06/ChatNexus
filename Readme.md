@@ -13,6 +13,7 @@ ChatNexus supports:
 - global chat
 - typing indicators and online presence
 - image and GIF sharing
+- compact attachment thumbnails with animated in-chat lightbox preview
 - SEO-friendly public pages
 - installable PWA support
 
@@ -20,7 +21,7 @@ In development, the frontend runs through Vite middleware inside the Express ser
 
 ## Stack
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Wouter, React Query
+- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Wouter, React Query, Framer Motion
 - Backend: Node.js, Express, Socket.IO, JWT
 - Database: PostgreSQL with Prisma
 - Cache: Redis optional

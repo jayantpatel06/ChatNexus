@@ -14,6 +14,7 @@ import {
   Smile,
   Send,
   ArrowLeft,
+  Expand,
   Loader2,
   Clock,
   Handshake,
@@ -45,6 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AnimatePresence, motion } from "framer-motion";
 import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
 import { getStoredTheme } from "@/lib/theme";
 import EmojiPicker, {
@@ -117,6 +119,12 @@ type FriendshipStatusResponse = {
   friendship: unknown | null;
   pendingRequest: FriendRequestRecord | null;
   pendingDirection: "incoming" | "outgoing" | null;
+};
+
+type ChatAttachment = NonNullable<MessageWithAttachments["attachments"]>[number];
+
+type ImagePreviewState = {
+  url: string;
 };
 
 function stripConversationAttachments(messages: Message[]): Message[] {
@@ -215,6 +223,9 @@ export function ChatArea({
   const [confirmDialogAction, setConfirmDialogAction] = useState<
     "chat" | "attachments" | null
   >(null);
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(
+    null,
+  );
 
   // Fetch message history when user is selected (cursor-based) with caching
   const {
@@ -1217,9 +1228,41 @@ export function ChatArea({
 
   const isConfirmDialogPending =
     clearChatMutation.isPending || clearAttachmentsMutation.isPending;
+  const isLightboxOpen = imagePreview !== null;
+  const lightboxSrc = imagePreview?.url ?? "";
 
   return (
     <>
+      <AnimatePresence>
+        {isLightboxOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-sm sm:p-8"
+            onClick={() => setImagePreview(null)}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+              onClick={() => setImagePreview(null)}
+            >
+              <X className="h-8 w-8" />
+            </Button>
+            <motion.img
+              src={lightboxSrc}
+              alt="Preview"
+              className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl outline-none"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              referrerPolicy="no-referrer"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AlertDialog
         open={confirmDialogAction !== null}
         onOpenChange={(open) => {
@@ -1438,6 +1481,7 @@ export function ChatArea({
               sender={sender}
               isOptimistic={isOptimistic}
               pendingAttachment={pendingAttachment}
+              onImagePreview={setImagePreview}
             />
           );
         })}
@@ -1586,7 +1630,13 @@ export function ChatArea({
   );
 }
 
-const MessageContent = ({ content }: { content: string }) => {
+const MessageContent = ({
+  content,
+  onImagePreview,
+}: {
+  content: string;
+  onImagePreview: (preview: ImagePreviewState) => void;
+}) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = content.split(urlRegex);
 
@@ -1605,19 +1655,11 @@ const MessageContent = ({ content }: { content: string }) => {
 
         if (isImage) {
           return (
-            <div
+            <InlineImagePreview
               key={index}
-              className="my-2 max-w-sm overflow-hidden rounded-sm"
-              style={{ border: "1px solid rgba(128,128,128,0.3)" }}
-            >
-              <img
-                src={part}
-                alt="Preview"
-                className="h-auto max-h-60 w-full cursor-pointer object-contain"
-                onClick={() => window.open(part, "_blank")}
-                loading="lazy"
-              />
-            </div>
+              url={part}
+              onImagePreview={onImagePreview}
+            />
           );
         }
 
@@ -1642,6 +1684,7 @@ const MessageContent = ({ content }: { content: string }) => {
             href={part}
             target="_blank"
             rel="noopener noreferrer"
+            referrerPolicy="no-referrer"
             className="break-all text-blue-500 hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1652,6 +1695,53 @@ const MessageContent = ({ content }: { content: string }) => {
     </div>
   );
 };
+
+function InlineImagePreview({
+  url,
+  onImagePreview,
+}: {
+  url: string;
+  onImagePreview: (preview: ImagePreviewState) => void;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return (
+      <div className="my-2 flex max-w-[14rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
+        <span className="text-xs text-muted-foreground">
+          Preview blocked by host
+        </span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          referrerPolicy="no-referrer"
+          className="break-all text-xs text-blue-500 hover:underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Open image link
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="my-2 block w-full max-w-[11rem] overflow-hidden rounded-2xl border border-brand-border bg-muted/30 text-left transition-transform duration-200 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      onClick={() => onImagePreview({ url })}
+    >
+      <img
+        src={url}
+        alt="Preview"
+        className="h-28 w-full object-cover sm:h-32"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setHasError(true)}
+      />
+    </button>
+  );
+}
 
 function FriendRequestCard({
   request,
@@ -1717,18 +1807,66 @@ function FriendRequestCard({
   );
 }
 
+function AttachmentThumbnail({
+  attachment,
+  onPreview,
+}: {
+  attachment: ChatAttachment;
+  onPreview: (preview: ImagePreviewState) => void;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  return (
+    <div className="w-28 sm:w-32">
+      <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm sm:h-32 sm:w-32">
+        {hasError ? (
+          <div className="flex h-full w-full items-center justify-center p-3 text-center text-[11px] text-muted-foreground">
+            Image unavailable
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onClick={() => onPreview({ url: attachment.url })}
+              title="Preview attachment"
+            >
+              <img
+                src={attachment.url}
+                alt="Preview"
+                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setHasError(true)}
+              />
+              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/65 via-black/10 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
+                  <Expand className="h-3 w-3" />
+                  Preview
+                </span>
+              </div>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const MessageBubble = memo(function MessageBubble({
   message,
   isOwnMessage,
   sender,
   isOptimistic,
   pendingAttachment,
+  onImagePreview,
 }: {
   message: Message;
   isOwnMessage: boolean;
   sender: User | null;
   isOptimistic?: boolean;
   pendingAttachment?: PendingAttachment | null;
+  onImagePreview: (preview: ImagePreviewState) => void;
 }) {
   const attachments = (message as MessageWithAttachments).attachments || [];
   const normalizedMessage =
@@ -1771,14 +1909,14 @@ const MessageBubble = memo(function MessageBubble({
       >
         <div className="overflow-hidden transition-all duration-300">
           {pendingAttachment && (
-            <div className="space-y-2">
-              <div className="relative overflow-hidden rounded-xl border border-brand-border">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm sm:h-32 sm:w-32">
                 {pendingAttachment.file.type.startsWith("image/") ? (
                   <div className="relative">
                     <img
                       src={pendingAttachment.previewUrl}
                       alt={pendingAttachment.file.name}
-                      className="h-auto max-w-full opacity-60"
+                      className="h-28 w-28 object-cover opacity-60 sm:h-32 sm:w-32"
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                       <div className="flex flex-col items-center gap-2 text-white">
@@ -1800,7 +1938,7 @@ const MessageBubble = memo(function MessageBubble({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 px-3 py-2">
+                  <div className="flex h-full items-center gap-2 px-3 py-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="flex-1 truncate text-sm">
                       {pendingAttachment.file.name}
@@ -1819,49 +1957,12 @@ const MessageBubble = memo(function MessageBubble({
           {!pendingAttachment && attachments.length > 0 ? (
             <div className="space-y-2">
               {attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="group relative overflow-hidden rounded-xl border border-brand-border"
-                >
+                <div key={attachment.id}>
                   {attachment.fileType.startsWith("image/") ? (
-                    <div className="relative">
-                      <img
-                        src={attachment.url}
-                        alt={attachment.filename}
-                        className="h-auto max-w-full cursor-pointer transition-opacity hover:opacity-95"
-                        onClick={() => window.open(attachment.url, "_blank")}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                          (
-                            e.target as HTMLImageElement
-                          ).parentElement!.innerHTML =
-                            '<span class="text-xs italic opacity-70">Image expired or deleted</span>';
-                        }}
-                      />
-                      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-8 w-8 rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(attachment.url, "_blank");
-                          }}
-                          title="Open in new tab"
-                        >
-                          <MoreVertical className="h-4 w-4 rotate-90" />
-                        </Button>
-                        <a
-                          href={attachment.url}
-                          download={attachment.filename}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Download"
-                        >
-                          <ArrowLeft className="h-4 w-4 rotate-[-90deg]" />
-                        </a>
-                      </div>
-                    </div>
+                    <AttachmentThumbnail
+                      attachment={attachment}
+                      onPreview={onImagePreview}
+                    />
                   ) : (
                     <div className="flex items-center gap-2 px-3 py-2">
                       <Paperclip className="h-4 w-4" />
@@ -1888,7 +1989,10 @@ const MessageBubble = memo(function MessageBubble({
                       : "rounded-tl-none border border-brand-border bg-brand-msg-received text-brand-msg-received-text"
                   }`}
                 >
-                  <MessageContent content={message.message} />
+                  <MessageContent
+                    content={message.message}
+                    onImagePreview={onImagePreview}
+                  />
                 </div>
               )}
             </div>
@@ -1905,7 +2009,10 @@ const MessageBubble = memo(function MessageBubble({
                       }`
                 }
               >
-                <MessageContent content={message.message} />
+                <MessageContent
+                  content={message.message}
+                  onImagePreview={onImagePreview}
+                />
               </div>
             )
           )}
