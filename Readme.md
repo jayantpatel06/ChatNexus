@@ -178,6 +178,7 @@ Recommended deployment flow:
 ## SEO and PWA
 
 - Public pages have route-specific SEO metadata managed on the server.
+- The home and login pages include search-focused titles and descriptions for better branded discovery.
 - `robots.txt` and `sitemap.xml` are served dynamically by Express.
 - The web manifest lives at [client/public/manifest.json](./client/public/manifest.json).
 - The service worker is registered from the client entry and is intended for production builds, not normal local dev.

@@ -32,6 +32,11 @@ import {
 import gsap from "gsap";
 import { Global } from "recharts";
 import GlobalChat from "./global-chat-page";
+
+const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
+const HOME_SEO_DESCRIPTION =
+  "Talk to strangers, make friends, and jump into random chat on ChatNexus. Start anonymous conversations instantly and connect with people worldwide.";
+
 type FaqItem = {
   category: string;
   question: string;
@@ -83,8 +88,7 @@ export default function LandingPage() {
       "@type": "Organization",
       name: "ChatNexus",
       url: `${siteUrl}/`,
-      description:
-        "Anonymous stranger chat, random conversations, and global messaging.",
+      description: HOME_SEO_DESCRIPTION,
     },
     {
       "@context": "https://schema.org",
@@ -93,8 +97,7 @@ export default function LandingPage() {
       applicationCategory: "CommunicationApplication",
       operatingSystem: "Web",
       url: `${siteUrl}/`,
-      description:
-        "ChatNexus is an Omegle alternative for anonymous stranger chat, random conversations, and global messaging.",
+      description: HOME_SEO_DESCRIPTION,
       offers: {
         "@type": "Offer",
         price: "0",
@@ -174,8 +177,8 @@ export default function LandingPage() {
   return (
     <>
       <Seo
-        title="ChatNexus | Anonymous Stranger Chat"
-        description="ChatNexus helps people talk to strangers through anonymous chat, random conversations, and real-time global messaging on desktop and mobile."
+        title={HOME_SEO_TITLE}
+        description={HOME_SEO_DESCRIPTION}
         path="/"
         keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus"
         structuredData={seoStructuredData}

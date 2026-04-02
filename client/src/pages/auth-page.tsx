@@ -28,6 +28,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { registerUserSchema, loginUserSchema } from "@shared/schema";
 import { z } from "zod";
 
+const AUTH_SEO_DESCRIPTION =
+  "Log in, register, or continue as a guest to start chatting on ChatNexus.";
+
 export default function AuthPage() {
   const { user, isLoading, loginMutation, registerMutation, guestLoginMutation } =
     useAuth();
@@ -106,9 +109,8 @@ export default function AuthPage() {
     <>
       <Seo
         title="Login | ChatNexus"
-        description="Sign in or continue as a guest to access ChatNexus."
+        description={AUTH_SEO_DESCRIPTION}
         path="/auth"
-        robots="noindex, nofollow"
       />
       <PagePreloader
         ready={!isLoading}

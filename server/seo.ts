@@ -50,6 +50,11 @@ export const DEFAULT_LOGO_HEIGHT = 512;
 export const INDEXABLE_ROBOTS =
   "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 export const NOINDEX_ROBOTS = "noindex, nofollow";
+export const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
+export const HOME_SEO_DESCRIPTION =
+  "Talk to strangers, make friends, and jump into random chat on ChatNexus. Start anonymous conversations instantly and connect with people worldwide.";
+export const AUTH_SEO_DESCRIPTION =
+  "Log in, register, or continue as a guest to start chatting on ChatNexus.";
 
 function buildOrganizationStructuredData(siteUrl: string) {
   const logoUrl = resolveAbsoluteUrl(siteUrl, DEFAULT_IMAGE_PATH);
@@ -58,8 +63,7 @@ function buildOrganizationStructuredData(siteUrl: string) {
     "@type": "Organization",
     name: DEFAULT_SITE_NAME,
     url: `${siteUrl}/`,
-    description:
-      "Anonymous stranger chat, random conversations, and global messaging.",
+    description: HOME_SEO_DESCRIPTION,
     logo: {
       "@type": "ImageObject",
       url: logoUrl,
@@ -91,13 +95,12 @@ const HOME_FAQS = [
 const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
   {
     path: "/",
-    title: "ChatNexus | Anonymous Stranger Chat",
-    description:
-      "ChatNexus helps people talk to strangers through anonymous chat, random conversations, and real-time global messaging on desktop and mobile.",
-    heading: "Anonymous Stranger Chat That Starts in Seconds",
+    title: HOME_SEO_TITLE,
+    description: HOME_SEO_DESCRIPTION,
+    heading: "Talk to Strangers and Start Conversations Instantly",
     summary: [
-      "ChatNexus is built for instant conversations with strangers, guest access, and live global chat rooms on desktop and mobile.",
-      "Use ChatNexus to start random conversations quickly, explore public discussions, and switch to a more persistent account experience when you need it.",
+      "ChatNexus lets you talk to strangers, meet new people, and jump into live conversations without a long signup flow.",
+      "Use guest access for instant anonymous chat, explore global messaging, and create an account when you want a more persistent profile.",
     ],
     keywords:
       "Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus",
@@ -115,8 +118,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
         "@type": "WebSite",
         name: DEFAULT_SITE_NAME,
         url: `${siteUrl}/`,
-        description:
-          "Anonymous stranger chat, random conversations, and global messaging.",
+        description: HOME_SEO_DESCRIPTION,
         inLanguage: "en",
         publisher: buildOrganizationStructuredData(siteUrl),
       },
@@ -127,8 +129,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
         applicationCategory: "CommunicationApplication",
         operatingSystem: "Web",
         url: canonicalUrl,
-        description:
-          "ChatNexus is an Omegle alternative for anonymous stranger chat, random conversations, and global messaging.",
+        description: HOME_SEO_DESCRIPTION,
         image: resolveAbsoluteUrl(siteUrl, DEFAULT_IMAGE_PATH),
         publisher: buildOrganizationStructuredData(siteUrl),
         offers: {
@@ -250,13 +251,14 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
   {
     path: "/auth",
     title: "Login | ChatNexus",
-    description: "Sign in, register, or continue as a guest to access ChatNexus.",
+    description: AUTH_SEO_DESCRIPTION,
     heading: "Access ChatNexus",
     summary: [
-      "Use this page to log in, create an account, or continue as a guest.",
+      "Use this page to log in, create an account, or continue as a guest to start chatting on ChatNexus.",
     ],
-    robots: NOINDEX_ROBOTS,
-    indexable: false,
+    indexable: true,
+    changefreq: "monthly",
+    priority: "0.7",
     sourceFiles: ["client/src/pages/auth-page.tsx"],
   },
   {
@@ -401,6 +403,7 @@ function buildNoscriptFallback(page: ResolvedSeoPage, siteUrl: string) {
   const links = page.indexable
     ? [
         { href: "/", label: "Home" },
+        { href: "/auth", label: "Login" },
         { href: "/features", label: "Features" },
         { href: "/about", label: "About" },
         { href: "/help-center", label: "Help Center" },
