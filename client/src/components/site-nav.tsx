@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { MagneticWrap } from "@/components/effects";
 import { cn } from "@/lib/utils";
+import { scrollToSectionId } from "@/lib/lenis";
 import {
   applyTheme,
   getStoredTheme,
@@ -252,10 +253,24 @@ export default function SiteNav() {
 
   const dest = user ? "/dashboard" : "/auth";
 
+  const handleLandingSectionClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+      event.preventDefault();
+      const navHeight = navRef.current?.offsetHeight ?? 0;
+      const sectionOffset = hash === "hero" ? 0 : -10;
+      scrollToSectionId(hash, { offset: sectionOffset });
+    },
+    [],
+  );
+
   const renderLink = (label: string, hash: string, path: string) => {
     if (isLanding) {
       return (
-        <a href={`#${hash}`} className="nav-pill-link">
+        <a
+          href={`#${hash}`}
+          className="nav-pill-link"
+          onClick={(event) => handleLandingSectionClick(event, hash)}
+        >
           {label}
         </a>
       );

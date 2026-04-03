@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import "lenis/dist/lenis.css";
 import { registerSW } from "virtual:pwa-register";
 import { initThemeFromStorage } from "@/lib/theme";
 

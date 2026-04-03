@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppRouter } from "@/app/router";
 import { THEME_STORAGE_KEY, applyTheme } from "@/lib/theme";
 import { AuthProvider } from "@/providers/auth-provider";
+import { LenisProvider } from "@/providers/lenis-provider";
 import { SocketProvider } from "@/providers/socket-provider";
 import { queryClient } from "./lib/queryClient";
 
@@ -30,15 +31,17 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <SocketProvider>
-            <Toaster />
-            <div style={APP_BACKGROUND_STYLE}></div>
-            <AppRouter />
-          </SocketProvider>
-        </AuthProvider>
-      </TooltipProvider>
+      <LenisProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <SocketProvider>
+              <Toaster />
+              <div style={APP_BACKGROUND_STYLE}></div>
+              <AppRouter />
+            </SocketProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </LenisProvider>
     </QueryClientProvider>
   );
 }

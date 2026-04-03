@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/providers/auth-provider";
 import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
+import { scrollToSectionId } from "@/lib/lenis";
 import {
   useReveal,
   MagneticWrap,
@@ -164,6 +165,11 @@ export default function LandingPage() {
 
   const dest = user ? "/dashboard" : "/auth";
 
+  const handleSectionCtaClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    scrollToSectionId("features", { offset: -112 });
+  };
+
   useEffect(() => {
     if (!isLoading && user) {
       setLocation("/dashboard");
@@ -189,7 +195,7 @@ export default function LandingPage() {
       />
 
       {/* ═══════ Main Content ═══════ */}
-      <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
+      <div className="landing-root">
         <CustomCursor />
 
         {/* ═══════ Floating Nav ═══════ */}
@@ -224,7 +230,11 @@ export default function LandingPage() {
               </Link>
             </MagneticWrap>
             <MagneticWrap>
-              <a href="#features" className="hero-btn-secondary">
+              <a
+                href="#features"
+                className="hero-btn-secondary"
+                onClick={handleSectionCtaClick}
+              >
                 Explore Features
               </a>
             </MagneticWrap>

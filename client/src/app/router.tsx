@@ -11,6 +11,7 @@ import LandingPage from "@/pages/landing-page";
 import NotFoundPage from "@/pages/not-found-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TermsOfServicePage from "@/pages/terms-of-service-page";
+import { getAppLenis } from "@/lib/lenis";
 import { ProtectedRoute } from "./protected-route";
 
 function RouteScrollRestoration() {
@@ -18,6 +19,13 @@ function RouteScrollRestoration() {
 
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash) {
+      return;
+    }
+
+    const lenis = getAppLenis();
+
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true, force: true });
       return;
     }
 
