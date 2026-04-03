@@ -15,7 +15,8 @@ ChatNexus supports:
 - image and GIF sharing
 - in-chat camera capture with a full-screen mobile camera UI, flip-camera control on supported phones, and `mp4` / `webm` uploads up to 5 MB
 - uploaded videos are normalized to a browser-safe MP4 format for more reliable playback across phones and desktop
-- the chat composer now uses a WhatsApp-like single pill layout: empty drafts show inline camera, attachment, and GIF/emoji actions, typed drafts collapse to a send-only state, and the integrated picker opens a compact tray with tabs plus each picker’s own built-in search field
+- the chat composer now uses a WhatsApp-like single pill layout: empty drafts show inline camera, attachment, and GIF/emoji actions, typed drafts collapse to a send-only state, and the integrated picker opens a floating tray with a narrower anchored width on desktop, the same mobile layout, matching emoji/GIF heights, each picker’s own built-in search field, and outside-tap dismissal
+- private chat message bubbles now use a slimmer rounded style with restored chat bubble colors, larger body text, inline bottom-right timestamps, and tighter vertical stacking for a cleaner WhatsApp-like look
 - Lenis-powered smooth page scrolling is enabled across the app, including landing-page navbar and CTA section jumps, while preserving native nested scrolling inside chat panes and other internal scroll areas
 - compact attachment thumbnails with animated in-chat lightbox preview
 - SEO-friendly public pages

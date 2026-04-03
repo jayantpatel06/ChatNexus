@@ -11,6 +11,7 @@ import {
   Phone,
   Video,
   MoreVertical,
+  Image as ImageIcon,
   Paperclip,
   Smile,
   Send,
@@ -104,7 +105,8 @@ function getStandaloneMediaMessageUrl(content: string): string | null {
     return null;
   }
 
-  return isImageMessageUrl(normalizedContent) || isVideoMessageUrl(normalizedContent)
+  return isImageMessageUrl(normalizedContent) ||
+    isVideoMessageUrl(normalizedContent)
     ? normalizedContent
     : null;
 }
@@ -146,7 +148,9 @@ type FriendshipStatusResponse = {
   pendingDirection: "incoming" | "outgoing" | null;
 };
 
-type ChatAttachment = NonNullable<MessageWithAttachments["attachments"]>[number];
+type ChatAttachment = NonNullable<
+  MessageWithAttachments["attachments"]
+>[number];
 
 type ImagePreviewState = {
   url: string;
@@ -208,8 +212,7 @@ export function ChatArea({
     onlineUsers,
     forceReconnect,
     refreshOnlineUsers,
-  } =
-    useSocket();
+  } = useSocket();
   const {
     liveMessages,
     addOptimisticMessage,
@@ -220,6 +223,7 @@ export function ChatArea({
   const isMobile = useIsMobile();
   const [messageText, setMessageText] = useState("");
   const isTypingRef = useRef(false);
+  const messageTextRef = useRef("");
   const lastGifSendRef = useRef<{
     receiverId: number;
     url: string;
@@ -230,8 +234,10 @@ export function ChatArea({
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const lastTypingUserIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const composerPickerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   // Track scroll position for loading older messages
@@ -257,9 +263,9 @@ export function ChatArea({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">(
-    isMobile ? "environment" : "user",
-  );
+  const [cameraFacingMode, setCameraFacingMode] = useState<
+    "user" | "environment"
+  >(isMobile ? "environment" : "user");
   const [availableCameraCount, setAvailableCameraCount] = useState(1);
 
   // Fetch message history when user is selected (cursor-based) with caching
@@ -301,10 +307,10 @@ export function ChatArea({
 
     const syncTheme = () => {
       setIsDark(
-        ((getStoredTheme() ??
+        (getStoredTheme() ??
           (document.documentElement.classList.contains("dark")
             ? "dark"
-            : "light")) === "dark"),
+            : "light")) === "dark",
       );
     };
 
@@ -319,7 +325,11 @@ export function ChatArea({
 
   const friendshipStatusQuery = useQuery({
     queryKey: ["friendship-status", selectedUser?.userId],
-    enabled: !!selectedUser?.userId && !!user && !selectedUser.isGuest && !user.isGuest,
+    enabled:
+      !!selectedUser?.userId &&
+      !!user &&
+      !selectedUser.isGuest &&
+      !user.isGuest,
     queryFn: async () => {
       const res = await apiRequest(
         "GET",
@@ -345,7 +355,10 @@ export function ChatArea({
     onSuccess: (data) => {
       if (!selectedUser) return;
 
-      queryClient.setQueryData(["friendship-status", selectedUser.userId], data);
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        data,
+      );
       void refreshOnlineUsers();
       toast({
         title: "Friend request sent",
@@ -414,7 +427,10 @@ export function ChatArea({
         throw new Error("No user selected");
       }
 
-      const res = await apiRequest("DELETE", `/api/messages/${selectedUser.userId}`);
+      const res = await apiRequest(
+        "DELETE",
+        `/api/messages/${selectedUser.userId}`,
+      );
       return readJsonResponse<{ deletedMessages: number }>(res);
     },
     onSuccess: (data) => {
@@ -502,8 +518,10 @@ export function ChatArea({
       receiverStatus: FriendshipStatusResponse;
     }) => {
       const isRelevantConversation =
-        (data.senderId === user.userId && data.receiverId === selectedUser.userId) ||
-        (data.senderId === selectedUser.userId && data.receiverId === user.userId);
+        (data.senderId === user.userId &&
+          data.receiverId === selectedUser.userId) ||
+        (data.senderId === selectedUser.userId &&
+          data.receiverId === user.userId);
 
       if (!isRelevantConversation) {
         return;
@@ -511,7 +529,10 @@ export function ChatArea({
 
       const nextStatus =
         data.senderId === user.userId ? data.senderStatus : data.receiverStatus;
-      queryClient.setQueryData(["friendship-status", selectedUser.userId], nextStatus);
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        nextStatus,
+      );
       void refreshOnlineUsers();
 
       if (data.senderId === user.userId && data.status === "accepted") {
@@ -587,7 +608,8 @@ export function ChatArea({
     );
   }, [combinedMessages]);
 
-  const pendingFriendRequest = friendshipStatusQuery.data?.pendingRequest ?? null;
+  const pendingFriendRequest =
+    friendshipStatusQuery.data?.pendingRequest ?? null;
   const pendingFriendRequestDirection =
     friendshipStatusQuery.data?.pendingDirection ?? null;
 
@@ -723,17 +745,17 @@ export function ChatArea({
     }
   }, [typingUsers, selectedUser, isAtBottom, scrollToBottom]);
 
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showGifPicker, setShowGifPicker] = useState(false);
-
-  const onEmojiClick = (emojiData: EmojiClickData) => {
-    setMessageText((prev) => prev + emojiData.emoji);
-    // Keep picker open for multiple emojis
-  };
+  const [activeComposerPicker, setActiveComposerPicker] = useState<
+    "emoji" | "gif" | null
+  >(null);
 
   const setLocalTypingState = useCallback((typing: boolean) => {
     isTypingRef.current = typing;
   }, []);
+
+  useEffect(() => {
+    messageTextRef.current = messageText;
+  }, [messageText]);
 
   const clearTypingTimeout = useCallback(() => {
     if (typingTimeoutRef.current) {
@@ -753,6 +775,100 @@ export function ChatArea({
       setLocalTypingState(false);
     },
     [clearTypingTimeout, setLocalTypingState, stopTyping],
+  );
+
+  const syncTypingForDraft = useCallback(
+    (nextValue: string) => {
+      if (!selectedUser) {
+        return;
+      }
+
+      const trimmedValue = nextValue.trim();
+
+      if (trimmedValue && !isTypingRef.current) {
+        setLocalTypingState(true);
+        startTyping(selectedUser.userId);
+      }
+
+      clearTypingTimeout();
+
+      if (!trimmedValue) {
+        stopLocalTyping(selectedUser.userId);
+        return;
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        stopLocalTyping(selectedUser.userId);
+      }, 1000);
+    },
+    [
+      clearTypingTimeout,
+      selectedUser,
+      setLocalTypingState,
+      startTyping,
+      stopLocalTyping,
+    ],
+  );
+
+  const focusMessageInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      messageInputRef.current?.focus();
+    });
+  }, []);
+
+  const closeComposerPicker = useCallback(() => {
+    setActiveComposerPicker(null);
+  }, []);
+
+  const handlePickerSwitch = useCallback(() => {
+    if (activeComposerPicker) {
+      closeComposerPicker();
+      focusMessageInput();
+      return;
+    }
+
+    messageInputRef.current?.blur();
+    setActiveComposerPicker("gif");
+  }, [activeComposerPicker, closeComposerPicker, focusMessageInput]);
+
+  const handlePickerTabChange = useCallback((tab: "emoji" | "gif") => {
+    messageInputRef.current?.blur();
+    setActiveComposerPicker(tab);
+  }, []);
+
+  useEffect(() => {
+    if (!activeComposerPicker) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+
+      if (!target) {
+        return;
+      }
+
+      if (composerPickerRef.current?.contains(target)) {
+        return;
+      }
+
+      closeComposerPicker();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [activeComposerPicker, closeComposerPicker]);
+
+  const onEmojiClick = useCallback(
+    (emojiData: EmojiClickData) => {
+      const nextValue = `${messageTextRef.current}${emojiData.emoji}`;
+      messageTextRef.current = nextValue;
+      setMessageText(nextValue);
+      syncTypingForDraft(nextValue);
+    },
+    [syncTypingForDraft],
   );
 
   useEffect(() => {
@@ -1043,7 +1159,9 @@ export function ChatArea({
           }, 2000);
 
           userSentMessageRef.current = false;
-          handleSendUnavailable("Attachment not sent. Reconnect and try again.");
+          handleSendUnavailable(
+            "Attachment not sent. Reconnect and try again.",
+          );
           return false;
         }
 
@@ -1102,7 +1220,11 @@ export function ChatArea({
   const handleCapturePhoto = useCallback(async () => {
     const videoElement = cameraVideoRef.current;
 
-    if (!videoElement || !videoElement.videoWidth || !videoElement.videoHeight) {
+    if (
+      !videoElement ||
+      !videoElement.videoWidth ||
+      !videoElement.videoHeight
+    ) {
       setCameraError("Camera preview is still loading. Try again in a moment.");
       return;
     }
@@ -1202,7 +1324,7 @@ export function ChatArea({
         return false;
       }
 
-      setShowGifPicker(false);
+      closeComposerPicker();
       return true;
     },
     [
@@ -1213,6 +1335,7 @@ export function ChatArea({
       addOptimisticMessage,
       sendMessage,
       removeOptimisticMessage,
+      closeComposerPicker,
       handleSendUnavailable,
     ],
   );
@@ -1260,8 +1383,8 @@ export function ChatArea({
     }
 
     setMessageText("");
-    setShowEmojiPicker(false);
-    setShowGifPicker(false);
+    messageTextRef.current = "";
+    closeComposerPicker();
 
     stopLocalTyping(selectedUser.userId);
   }, [
@@ -1273,6 +1396,7 @@ export function ChatArea({
     generateClientMessageId,
     addOptimisticMessage,
     removeOptimisticMessage,
+    closeComposerPicker,
     handleSendUnavailable,
     stopLocalTyping,
   ]);
@@ -1286,33 +1410,14 @@ export function ChatArea({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
+    messageTextRef.current = nextValue;
     setMessageText(nextValue);
-
-    if (!selectedUser) return;
-
-    const trimmedValue = nextValue.trim();
-
-    // Handle typing indicators
-    if (trimmedValue && !isTypingRef.current) {
-      setLocalTypingState(true);
-      startTyping(selectedUser.userId);
-    }
-
-    // Clear previous timeout
-    clearTypingTimeout();
-
-    if (!trimmedValue) {
-      stopLocalTyping(selectedUser.userId);
-      return;
-    }
-
-    // Set new timeout to stop typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      stopLocalTyping(selectedUser.userId);
-    }, 1000);
+    syncTypingForDraft(nextValue);
   };
 
   const handleInputFocus = () => {
+    closeComposerPicker();
+
     // Scroll to bottom when input is focused to ensure visibility
     if (isMobile) {
       setTimeout(() => {
@@ -1457,6 +1562,10 @@ export function ChatArea({
     clearChatMutation.isPending || clearAttachmentsMutation.isPending;
   const isLightboxOpen = imagePreview !== null;
   const lightboxSrc = imagePreview?.url ?? "";
+  const isComposerPickerOpen = activeComposerPicker !== null;
+  const composerPickerHeight = isMobile ? 320 : 320;
+  const hasDraftText = messageText.length > 0;
+  const canSendDraft = messageText.trim().length > 0;
   const canFlipCamera = isMobile && availableCameraCount > 1;
 
   const cameraViewport = (
@@ -1591,7 +1700,9 @@ export function ChatArea({
         >
           <DialogContent className="max-w-3xl overflow-hidden border-brand-border bg-background p-0 [&>button]:hidden">
             <DialogTitle className="sr-only">Capture and send</DialogTitle>
-            <div className="flex h-[min(80vh,42rem)] flex-col">{cameraViewport}</div>
+            <div className="flex h-[min(80vh,42rem)] flex-col">
+              {cameraViewport}
+            </div>
           </DialogContent>
         </Dialog>
       )}
@@ -1631,347 +1742,418 @@ export function ChatArea({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className={cn("flex-1 flex flex-col h-full relative overflow-hidden")}>
+      <div
+        className={cn("flex-1 flex flex-col h-full relative overflow-hidden")}
+      >
         {/* Chat Header */}
-        <div className="bg-card border-b border-border p-4 flex items-center justify-between flex-shrink-0 z-40">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {/* Back button for mobile */}
-          {(showBackButton || isMobile) && onBack && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              className="p-2 flex-shrink-0"
-              title="Back to users"
-              data-testid="button-back-to-users"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          )}
-
-          <div className="relative flex-shrink-0">
-            <div
-              className={`w-10 h-10 ${selectedUser.isGuest ? "bg-gray-500" : "bg-gradient-to-br " + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}
-            >
-              {selectedUser.isGuest
-                ? "G"
-                : getUserInitials(selectedUser.username)}
-            </div>
-          </div>
-          <div className="min-w-0">
-            <h3
-              className="font-semibold text-foreground truncate"
-              data-testid={`text-chat-username-${selectedUser.userId}`}
-            >
-              {selectedUser.username}
-            </h3>
-            <div className="flex items-center gap-1 text-xs">
-              <div
-                className={`w-2 h-2 ${onlineUsers.some((u) => u.userId === selectedUser.userId) ? "bg-green-500" : "bg-gray-400"} rounded-full`}
-              ></div>
-              <span className="text-foreground font-medium">
-                {onlineUsers.some((u) => u.userId === selectedUser.userId)
-                  ? "Online"
-                  : "Offline"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Voice Call"
-            data-testid="button-voice-call"
-          >
-            <Phone className="w-5 h-5 text-muted-foreground" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Video Call"
-            data-testid="button-video-call"
-          >
-            <Video className="w-5 h-5 text-muted-foreground" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+        <div className="bg-card p-2.5 flex items-center justify-between flex-shrink-0 z-40">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {/* Back button for mobile */}
+            {(showBackButton || isMobile) && onBack && (
               <Button
                 variant="ghost"
                 size="sm"
-                title="More Options"
-                data-testid="button-more-options"
+                onClick={onBack}
+                className="p-2 flex-shrink-0"
+                title="Back to users"
+                data-testid="button-back-to-users"
               >
-                <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                <ArrowLeft className="w-5 h-5" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={handleAddFriend}
-                disabled={
-                  addFriendMutation.isPending ||
-                  friendshipStatusQuery.isLoading ||
-                  !!friendshipStatusQuery.data?.isFriend ||
-                  friendshipStatusQuery.data?.pendingDirection === "incoming" ||
-                  friendshipStatusQuery.data?.pendingDirection === "outgoing"
-                }
-              >
-                <Heart className="mr-2 h-4 w-4" />
-                {addFriendMenuLabel}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleClearAttachments}
-                disabled={clearAttachmentsMutation.isPending}
-              >
-                {clearAttachmentsMutation.isPending
-                  ? "Clearing attachments..."
-                  : "Clear attachments"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleClearChat}
-                disabled={clearChatMutation.isPending}
-              >
-                {clearChatMutation.isPending ? "Clearing chat..." : "Clear chat"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+            )}
 
-      {/* Messages Area */}
-      <div
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto scrollbar-none p-4 space-y-4 bg-background min-h-0 relative overscroll-contain"
-        onScroll={handleScroll}
-        data-testid="chat-messages-area"
-      >
-        {/* Load older messages */}
-        {hasNextPage && (
-          <div className="flex justify-center my-2">
+            <div className="relative flex-shrink-0">
+              <div
+                className={`w-10 h-10 ${selectedUser.isGuest ? "bg-gray-500" : "bg-gradient-to-br " + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}
+              >
+                {selectedUser.isGuest
+                  ? "G"
+                  : getUserInitials(selectedUser.username)}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <h3
+                className="font-semibold text-foreground truncate"
+                data-testid={`text-chat-username-${selectedUser.userId}`}
+              >
+                {selectedUser.username}
+              </h3>
+              <div className="flex items-center gap-1 text-xs">
+                <div
+                  className={`w-2 h-2 ${onlineUsers.some((u) => u.userId === selectedUser.userId) ? "bg-green-500" : "bg-gray-400"} rounded-full`}
+                ></div>
+                <span className="text-foreground font-medium">
+                  {onlineUsers.some((u) => u.userId === selectedUser.userId)
+                    ? "Online"
+                    : "Offline"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleLoadOlderMessages}
-              disabled={isFetchingNextPage}
-              className="bg-primary text-primary-foreground hover:bg-primary hover:text-white text-white"
+              title="Voice Call"
+              data-testid="button-voice-call"
             >
-              {isFetchingNextPage ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading older messages...
-                </>
-              ) : (
-                "Load More..."
-              )}
+              <Phone className="w-5 h-5 text-muted-foreground" />
             </Button>
-          </div>
-        )}
-
-        {/* System Message */}
-        <div className="flex justify-center my-4">
-          <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
-            <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
-              🔒
-            </div>
-            Messages are end-to-end encrypted
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Video Call"
+              data-testid="button-video-call"
+            >
+              <Video className="w-5 h-5 text-muted-foreground" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title="More Options"
+                  data-testid="button-more-options"
+                >
+                  <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleAddFriend}
+                  disabled={
+                    addFriendMutation.isPending ||
+                    friendshipStatusQuery.isLoading ||
+                    !!friendshipStatusQuery.data?.isFriend ||
+                    friendshipStatusQuery.data?.pendingDirection ===
+                      "incoming" ||
+                    friendshipStatusQuery.data?.pendingDirection === "outgoing"
+                  }
+                >
+                  <Heart className="mr-2 h-4 w-4" />
+                  {addFriendMenuLabel}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleClearAttachments}
+                  disabled={clearAttachmentsMutation.isPending}
+                >
+                  {clearAttachmentsMutation.isPending
+                    ? "Clearing attachments..."
+                    : "Clear attachments"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleClearChat}
+                  disabled={clearChatMutation.isPending}
+                >
+                  {clearChatMutation.isPending
+                    ? "Clearing chat..."
+                    : "Clear chat"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        {timelineItems.map((item) => {
-          if (item.type === "friendRequest") {
+        {/* Messages Area */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto scrollbar-none p-4 space-y-1.5 bg-background min-h-0 relative overscroll-contain"
+          onScroll={handleScroll}
+          data-testid="chat-messages-area"
+        >
+          {/* Load older messages */}
+          {hasNextPage && (
+            <div className="flex justify-center my-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLoadOlderMessages}
+                disabled={isFetchingNextPage}
+                className="bg-primary text-primary-foreground hover:bg-primary hover:text-white text-white"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading older messages...
+                  </>
+                ) : (
+                  "Load More..."
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* System Message */}
+          <div className="flex justify-center my-4">
+            <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
+              <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+                🔒
+              </div>
+              Messages are end-to-end encrypted
+            </div>
+          </div>
+
+          {timelineItems.map((item) => {
+            if (item.type === "friendRequest") {
+              return (
+                <FriendRequestCard
+                  key={`friend-request-${item.request.id}`}
+                  request={item.request}
+                  direction={item.direction}
+                  otherUsername={selectedUser.username}
+                  isPendingAction={respondToFriendRequestMutation.isPending}
+                  onAccept={handleAcceptFriendRequest}
+                  onReject={handleRejectFriendRequest}
+                />
+              );
+            }
+
+            const message = item.message;
+            const isOwnMessage = message.senderId === user?.userId;
+            const sender = isOwnMessage ? user : selectedUser;
+            const isOptimistic = (message as OptimisticMessage).isOptimistic;
+            const pendingAttachment = (message as OptimisticMessage)
+              .clientMessageId
+              ? pendingAttachments.find(
+                  (p) =>
+                    p.id === (message as OptimisticMessage).clientMessageId,
+                )
+              : null;
+
             return (
-              <FriendRequestCard
-                key={`friend-request-${item.request.id}`}
-                request={item.request}
-                direction={item.direction}
-                otherUsername={selectedUser.username}
-                isPendingAction={respondToFriendRequestMutation.isPending}
-                onAccept={handleAcceptFriendRequest}
-                onReject={handleRejectFriendRequest}
+              <MessageBubble
+                key={
+                  (message as OptimisticMessage).clientMessageId ||
+                  message.msgId
+                }
+                message={message}
+                isOwnMessage={isOwnMessage}
+                sender={sender}
+                isOptimistic={isOptimistic}
+                pendingAttachment={pendingAttachment}
+                onImagePreview={setImagePreview}
               />
             );
-          }
+          })}
 
-          const message = item.message;
-          const isOwnMessage = message.senderId === user?.userId;
-          const sender = isOwnMessage ? user : selectedUser;
-          const isOptimistic = (message as OptimisticMessage).isOptimistic;
-          const pendingAttachment = (message as OptimisticMessage)
-            .clientMessageId
-            ? pendingAttachments.find(
-                (p) => p.id === (message as OptimisticMessage).clientMessageId,
-              )
-            : null;
-
-          return (
-            <MessageBubble
-              key={
-                (message as OptimisticMessage).clientMessageId || message.msgId
-              }
-              message={message}
-              isOwnMessage={isOwnMessage}
-              sender={sender}
-              isOptimistic={isOptimistic}
-              pendingAttachment={pendingAttachment}
-              onImagePreview={setImagePreview}
-            />
-          );
-        })}
-
-        {/* Typing Indicator */}
-        {typingUsers.has(selectedUser.userId) && (
-          <div className="flex items-start gap-3 message-bubble">
-            <div
-              className={`w-8 h-8 ${selectedUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(selectedUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
-            >
-              {selectedUser.isGuest
-                ? "G"
-                : getUserInitials(selectedUser.username)}
-            </div>
-            <div className="flex flex-col gap-1 max-w-xs lg:max-w-md">
-              <div className="bg-card border border-border rounded-lg rounded-tl-none p-3 shadow-sm">
-                <div className="flex items-center gap-1">
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-75"></div>
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-150"></div>
+          {/* Typing Indicator */}
+          {typingUsers.has(selectedUser.userId) && (
+            <div className="flex items-start gap-3 message-bubble">
+              <div
+                className={`w-8 h-8 ${selectedUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(selectedUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
+              >
+                {selectedUser.isGuest
+                  ? "G"
+                  : getUserInitials(selectedUser.username)}
+              </div>
+              <div className="flex flex-col gap-1 max-w-xs lg:max-w-md">
+                <div className="bg-card border border-border rounded-lg rounded-tl-none p-3 shadow-sm">
+                  <div className="flex items-center gap-1">
+                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
+                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-75"></div>
+                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-150"></div>
+                  </div>
                 </div>
               </div>
-              <span className="text-xs text-muted-foreground ml-1">
-                {selectedUser.username} is typing...
-              </span>
             </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* New Message Indicator - Instagram style */}
-      {showNewMessageIndicator && (
-        <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
-      )}
-
-      {/* Message Input Area */}
-      <div
-        className="bg-card border-t border-border p-3 flex-shrink-0"
-        style={{
-          paddingBottom: "12px",
-        }}
-      >
-        <div className="flex items-end gap-2">
-          {/* Attachment Button */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleFileSelect}
-            accept={ATTACHMENT_INPUT_ACCEPT}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 flex-shrink-0"
-            title="Attach File"
-            data-testid="button-attach-file"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="w-4 h-4 text-muted-foreground" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 flex-shrink-0"
-            title="Capture photo"
-            data-testid="button-open-camera"
-            onClick={() => {
-              setShowEmojiPicker(false);
-              setShowGifPicker(false);
-              setCameraError(null);
-              setIsCameraOpen(true);
-            }}
-          >
-            <Camera className="w-4 h-4 text-muted-foreground" />
-          </Button>
-
-          {/* Message Input */}
-          <div className="flex-1 relative">
-            <Textarea
-              placeholder="Type a message..."
-              className="min-h-[44px] max-h-32 px-4 py-3 pr-12 bg-input text-foreground placeholder:text-muted-foreground border border-border resize-none rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none focus:border-border"
-              rows={1}
-              value={messageText}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onFocus={handleInputFocus}
-              data-testid="textarea-message-input"
-            />
-
-            {/* Emoji Button */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-12 bottom-1 h-10 w-10 flex items-center justify-center hover:bg-muted"
-                title={
-                  "Add GIF"
-                }
-                data-testid="button-gif"
-                onClick={() => {
-                  setShowGifPicker(!showGifPicker);
-                  if (!showGifPicker) setShowEmojiPicker(false);
-                }}
-              >
-                <span className="font-bold text-[10px] text-muted-foreground rounded px-1 min-w-[30px] h-5 flex items-center justify-center">GIF</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 bottom-1 h-10 w-10 flex items-center justify-center"
-                title="Add Emoji"
-                data-testid="button-emoji"
-                onClick={() => {
-                  setShowEmojiPicker(!showEmojiPicker);
-                  if (!showEmojiPicker) setShowGifPicker(false);
-                }}
-              >
-                <Smile className="w-4 h-4 text-muted-foreground" />
-              </Button>
-              {showEmojiPicker && (
-                <div className="absolute bottom-12 right-0 z-50 shadow-xl rounded-xl border border-border">
-                  <EmojiPicker
-                    onEmojiClick={onEmojiClick}
-                    width={300}
-                    height={400}
-                    theme={
-                      isDark
-                        ? (EmojiPickerTheme.DARK as any)
-                        : (EmojiPickerTheme.LIGHT as any)
-                    }
-                    lazyLoadEmojis={true}
-                  />
-                </div>
-              )}
-              {showGifPicker && (
-                <div className="absolute bottom-12 right-0 z-50">
-                  <GifPicker onGifClick={sendGifMessage} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Send Button */}
-          <Button
-            onMouseDown={(e) => e.preventDefault()} // Prevent blur on textarea to keep keyboard open
-            onClick={handleSendMessage}
-            disabled={!messageText.trim()}
-            className="h-10 w-10 flex-shrink-0"
-            size="icon"
-            title="Send Message"
-            data-testid="button-send-message"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          )}
+          <div ref={messagesEndRef} />
         </div>
+
+        {/* New Message Indicator - Instagram style */}
+        {showNewMessageIndicator && (
+          <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
+        )}
+
+        {/* Message Input Area */}
+        <div
+          className="relative overflow-visible bg-card-muted flex-shrink-0"
+          style={{
+            paddingBottom: "6px",
+          }}
+        >
+          <AnimatePresence initial={false}>
+            {isComposerPickerOpen && (
+              <motion.div
+                ref={composerPickerRef}
+                key="composer-picker"
+                initial={
+                  isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
+                }
+                animate={
+                  isMobile
+                    ? { height: "auto", opacity: 1 }
+                    : { opacity: 1, y: 0 }
+                }
+                exit={
+                  isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
+                }
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className={cn(
+                  "absolute bottom-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl",
+                  isMobile
+                    ? "left-3 right-3"
+                    : "right-3 w-[24rem] max-w-[calc(100%-1.5rem)]",
+                )}
+              >
+                <div className="border-b border-border/70 px-3 py-2">
+                  <div className="mx-auto grid w-full grid-cols-2 overflow-hidden rounded-full  border-border ">
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex h-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                        activeComposerPicker === "emoji"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      onClick={() => handlePickerTabChange("emoji")}
+                      aria-label="Emoji picker"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex h-8 items-center justify-center rounded-full text-xs font-semibold tracking-[0.18em] transition-colors",
+                        activeComposerPicker === "gif"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      onClick={() => handlePickerTabChange("gif")}
+                      aria-label="GIF picker"
+                    >
+                      GIF
+                    </button>
+                  </div>
+                </div>
+                {activeComposerPicker === "emoji" ? (
+                  <div className="overflow-hidden font-sans">
+                    <EmojiPicker
+                      onEmojiClick={onEmojiClick}
+                      width="100%"
+                      height={composerPickerHeight}
+                      theme={
+                        isDark
+                          ? (EmojiPickerTheme.DARK as any)
+                          : (EmojiPickerTheme.LIGHT as any)
+                      }
+                      autoFocusSearch={false}
+                      searchPlaceholder="Search emoji"
+                      lazyLoadEmojis={true}
+                      previewConfig={{ showPreview: false }}
+                      className={cn(
+                        "font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:24px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px] [&_.epr-header-overlay]:pb-0",
+                        isMobile &&
+                          "[--epr-emoji-size:22px] [--epr-search-input-height:30px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px]",
+                      )}
+                    />
+                  </div>
+                ) : (
+                  <GifPicker
+                    onGifClick={sendGifMessage}
+                    autoFocusSearch={false}
+                    showCategories={false}
+                    showStatus={false}
+                    showFooter={false}
+                    className={cn(
+                      " rounded-none border-0 bg-transparent shadow-none",
+                      isMobile ? "h-[320px]" : "h-[320px]",
+                    )}
+                  />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="p-2">
+            <div className="relative">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileSelect}
+                accept={ATTACHMENT_INPUT_ACCEPT}
+              />
+              <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
+                <Textarea
+                  ref={messageInputRef}
+                  placeholder="Message..."
+                  className={cn(
+                    "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                    hasDraftText ? "pr-12" : "pr-28 sm:pr-32",
+                  )}
+                  rows={1}
+                  value={messageText}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleInputFocus}
+                  data-testid="textarea-message-input"
+                />
+                <div className="absolute inset-y-0 right-1.5 flex items-center">
+                  {hasDraftText ? (
+                    <Button
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={handleSendMessage}
+                      disabled={!canSendDraft}
+                      className="h-8 w-8 rounded-2xl"
+                      size="icon"
+                      title="Send Message"
+                      data-testid="button-send-message"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                        title="Capture photo"
+                        data-testid="button-open-camera"
+                        onClick={() => {
+                          closeComposerPicker();
+                          setCameraError(null);
+                          setIsCameraOpen(true);
+                        }}
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                        title="Attach File"
+                        data-testid="button-attach-file"
+                        onClick={() => {
+                          closeComposerPicker();
+                          fileInputRef.current?.click();
+                        }}
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                          isComposerPickerOpen && "bg-muted text-foreground",
+                        )}
+                        title={
+                          isComposerPickerOpen
+                            ? "Show keyboard"
+                            : "Open GIF and emoji picker"
+                        }
+                        data-testid="button-picker-switch"
+                        onClick={handlePickerSwitch}
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>
@@ -1990,7 +2172,7 @@ const MessageContent = ({
 
   return (
     <div
-      className="whitespace-pre-wrap break-words overflow-hidden"
+      className="min-w-0 whitespace-pre-wrap break-words overflow-hidden"
       style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
     >
       {parts.map((part, index) => {
@@ -2012,9 +2194,7 @@ const MessageContent = ({
         }
 
         if (isVideo) {
-          return (
-            <InlineVideoPreview key={index} url={part} />
-          );
+          return <InlineVideoPreview key={index} url={part} />;
         }
 
         return (
@@ -2312,22 +2492,29 @@ const MessageBubble = memo(function MessageBubble({
   const isMediaOnlyMessage = Boolean(
     normalizedMessage && getStandaloneMediaMessageUrl(normalizedMessage),
   );
+  const hasTextBubble = Boolean(normalizedMessage && !isMediaOnlyMessage);
 
   const formatBubbleTime = (timestamp: Date | string | null) => {
     if (!timestamp) return "";
     return format(new Date(timestamp), "h:mm a");
   };
 
+  const renderInlineTimestamp = () => (
+    <div className="flex shrink-0 items-center text-[11px] font-medium opacity-55">
+      <span>{formatBubbleTime(message.timestamp)}</span>
+    </div>
+  );
+
   return (
     <div
-      className={`message-bubble flex items-start gap-3 ${
+      className={`message-bubble flex items-start gap-2 ${
         isOwnMessage ? "justify-end" : ""
       } ${isOptimistic ? "opacity-70" : ""}`}
       data-testid={`message-${message.msgId}`}
     >
       {!isOwnMessage && (
         <div
-          className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-black shadow-sm"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-black shadow-sm"
           style={{
             background: sender?.isGuest
               ? "var(--brand-muted)"
@@ -2444,16 +2631,21 @@ const MessageBubble = memo(function MessageBubble({
               ))}
               {message.message && message.message !== "Sent an attachment" && (
                 <div
-                  className={`rounded-2xl px-3 py-2 text-sm leading-snug shadow-sm ${
+                  className={`rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
                     isOwnMessage
-                      ? "rounded-tr-none bg-brand-msg-sent text-brand-msg-sent-text"
-                      : "rounded-tl-none border border-brand-border bg-brand-msg-received text-brand-msg-received-text"
+                      ? "bg-brand-msg-sent text-brand-msg-sent-text"
+                      : "bg-brand-msg-received text-brand-msg-received-text"
                   }`}
                 >
-                  <MessageContent
-                    content={message.message}
-                    onImagePreview={onImagePreview}
-                  />
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <MessageContent
+                        content={message.message}
+                        onImagePreview={onImagePreview}
+                      />
+                    </div>
+                    {renderInlineTimestamp()}
+                  </div>
                 </div>
               )}
             </div>
@@ -2463,29 +2655,38 @@ const MessageBubble = memo(function MessageBubble({
                 className={
                   isMediaOnlyMessage
                     ? ""
-                    : `rounded-2xl px-3 py-2 text-sm leading-snug shadow-sm ${
+                    : `rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
                         isOwnMessage
-                          ? "rounded-tr-none bg-brand-msg-sent text-brand-msg-sent-text"
-                          : "rounded-tl-none border border-brand-border bg-brand-msg-received text-brand-msg-received-text"
+                          ? "bg-brand-msg-sent text-brand-msg-sent-text"
+                          : "bg-brand-msg-received text-brand-msg-received-text"
                       }`
                 }
               >
-                <MessageContent
-                  content={message.message}
-                  onImagePreview={onImagePreview}
-                />
+                {isMediaOnlyMessage ? (
+                  <MessageContent
+                    content={message.message}
+                    onImagePreview={onImagePreview}
+                  />
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <MessageContent
+                        content={message.message}
+                        onImagePreview={onImagePreview}
+                      />
+                    </div>
+                    {renderInlineTimestamp()}
+                  </div>
+                )}
               </div>
             )
           )}
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>{formatBubbleTime(message.timestamp)}</span>
-          {isOwnMessage && (
-            <span className="flex items-center text-muted-foreground">
-              {isOptimistic ? <Clock className="h-3 w-3" /> : "✓"}
-            </span>
-          )}
-        </div>
+        {!hasTextBubble && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>{formatBubbleTime(message.timestamp)}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2510,8 +2711,20 @@ type TenorCategory = {
 
 function GifPicker({
   onGifClick,
+  autoFocusSearch = true,
+  showSearch = true,
+  showCategories = true,
+  showStatus = true,
+  showFooter = true,
+  className,
 }: {
   onGifClick: (url: string) => void;
+  autoFocusSearch?: boolean;
+  showSearch?: boolean;
+  showCategories?: boolean;
+  showStatus?: boolean;
+  showFooter?: boolean;
+  className?: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [gifs, setGifs] = useState<TenorGif[]>([]);
@@ -2523,24 +2736,19 @@ function GifPicker({
   const nextPosRef = useRef("");
 
   useEffect(() => {
+    if (!autoFocusSearch || !showSearch) {
+      return;
+    }
+
     const timeout = setTimeout(() => inputRef.current?.focus(), 100);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [autoFocusSearch, showSearch]);
 
   useEffect(() => {
-    void fetchTrending();
     void fetchCategories();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const fetchTrending = async () => {
+  const fetchTrending = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -2548,7 +2756,10 @@ function GifPicker({
         `${TENOR_BASE_URL}/featured?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=30&media_filter=tinygif,gif`,
       );
       if (!res.ok) throw new Error("Failed to fetch");
-      const data = (await res.json()) as { results?: TenorGif[]; next?: string };
+      const data = (await res.json()) as {
+        results?: TenorGif[];
+        next?: string;
+      };
       setGifs(data.results || []);
       nextPosRef.current = data.next || "";
     } catch {
@@ -2556,7 +2767,7 @@ function GifPicker({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchCategories = async () => {
     try {
@@ -2571,38 +2782,52 @@ function GifPicker({
     }
   };
 
-  const searchGifs = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      await fetchTrending();
-      return;
-    }
+  const searchGifs = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        await fetchTrending();
+        return;
+      }
 
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${TENOR_BASE_URL}/search?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&q=${encodeURIComponent(query)}&limit=30&media_filter=tinygif,gif`,
-      );
-      if (!res.ok) throw new Error("Failed to search");
-      const data = (await res.json()) as { results?: TenorGif[]; next?: string };
-      setGifs(data.results || []);
-      nextPosRef.current = data.next || "";
-    } catch {
-      setError("Search failed. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `${TENOR_BASE_URL}/search?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&q=${encodeURIComponent(query)}&limit=30&media_filter=tinygif,gif`,
+        );
+        if (!res.ok) throw new Error("Failed to search");
+        const data = (await res.json()) as {
+          results?: TenorGif[];
+          next?: string;
+        };
+        setGifs(data.results || []);
+        nextPosRef.current = data.next || "";
+      } catch {
+        setError("Search failed. Try again.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchTrending],
+  );
 
-  const handleSearchInput = (value: string) => {
-    setSearchTerm(value);
+  useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
+
+    const delay = searchTerm.trim() ? 400 : 0;
     searchTimeoutRef.current = setTimeout(() => {
-      void searchGifs(value);
-    }, 400);
-  };
+      void searchGifs(searchTerm);
+    }, delay);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+    };
+  }, [searchTerm, searchGifs]);
 
   const getGifUrl = (gif: TenorGif) =>
     gif.media_formats.gif?.url ||
@@ -2619,44 +2844,45 @@ function GifPicker({
 
   return (
     <div
-      className="flex h-[420px] w-[320px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl"
+      className={cn(
+        "flex h-[20rem] w-full max-w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl font-sans",
+        className,
+      )}
     >
-      <div className="flex-shrink-0 border-b border-border px-3 pb-2 pt-3">
-        <div
-          className="flex items-center gap-2 rounded-lg border border-border bg-input px-3 py-2"
-        >
-          <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={searchTerm}
-            onChange={(e) => handleSearchInput(e.target.value)}
-            placeholder="Search GIFs..."
-            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => {
-                setSearchTerm("");
-                void fetchTrending();
-                inputRef.current?.focus();
-              }}
-              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+      {showSearch && (
+        <div className="flex-shrink-0 px-3 pb-2 pt-3">
+          <div className="flex items-center gap-2 rounded-full border border-border bg-input px-3 py-2">
+            <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search GIFs..."
+              className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  inputRef.current?.focus();
+                }}
+                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {!searchTerm && categories.length > 0 && (
+      {showCategories && !searchTerm && categories.length > 0 && (
         <div className="flex flex-shrink-0 gap-1.5 overflow-x-auto border-b border-border px-3 py-2 no-scrollbar">
           {categories.map((category) => (
             <button
               key={category.searchterm}
               onClick={() => {
                 setSearchTerm(category.searchterm);
-                void searchGifs(category.searchterm);
               }}
               className="whitespace-nowrap rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -2666,22 +2892,30 @@ function GifPicker({
         </div>
       )}
 
-      <div className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-muted-foreground">
-        <TrendingUp className="h-3 w-3" />
-        <span className="text-[10px] font-medium uppercase tracking-wider">
-          {searchTerm ? `Results for "${searchTerm}"` : "Trending"}
-        </span>
-      </div>
+      {showStatus && (
+        <div className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-muted-foreground">
+          <TrendingUp className="h-3 w-3" />
+          <span className="text-[10px] font-medium uppercase tracking-wider">
+            {searchTerm ? `Results for "${searchTerm}"` : "Trending"}
+          </span>
+        </div>
+      )}
 
       <div
-        className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2"
+        className={cn(
+          "flex-1 overflow-y-auto overflow-x-hidden px-2",
+          showFooter ? "pb-2" : "pb-3",
+          showSearch || showCategories || showStatus ? "pt-0" : "pt-2",
+        )}
         style={{ scrollbarWidth: "none" }}
       >
         {loading && gifs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Loading GIFs...</span>
+              <span className="text-xs text-muted-foreground">
+                Loading GIFs...
+              </span>
             </div>
           </div>
         ) : error ? (
@@ -2717,7 +2951,7 @@ function GifPicker({
                     onGifClick(url);
                   }
                 }}
-                className="group relative mb-1.5 block w-full cursor-pointer overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
+                className="group relative mb-1.5 block w-full cursor-pointer overflow-hidden rounded transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
                 title={gif.content_description || gif.title}
               >
                 <img
@@ -2736,9 +2970,13 @@ function GifPicker({
         )}
       </div>
 
-      <div className="flex flex-shrink-0 items-center justify-center border-t border-border px-3 py-1.5">
-        <span className="text-[9px] text-muted-foreground">Powered by Tenor</span>
-      </div>
+      {showFooter && (
+        <div className="flex flex-shrink-0 items-center justify-center border-t border-border px-3 py-1.5">
+          <span className="text-[9px] text-muted-foreground">
+            Powered by Tenor
+          </span>
+        </div>
+      )}
     </div>
   );
 }
