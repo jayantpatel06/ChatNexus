@@ -74,6 +74,39 @@ export const messageRepository = {
     }
   },
 
+  async deleteGlobalMessagesOlderThan(olderThan: Date): Promise<number[]> {
+    if (!prisma) return [];
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const expiredMessages = await tx.globalMessage.findMany({
+          where: {
+            timestamp: { lt: olderThan },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (expiredMessages.length === 0) {
+          return [];
+        }
+
+        const expiredMessageIds = expiredMessages.map((message) => message.id);
+
+        await tx.globalMessage.deleteMany({
+          where: {
+            id: { in: expiredMessageIds },
+          },
+        });
+
+        return expiredMessageIds;
+      });
+    } catch (error) {
+      console.error("Error deleting expired global messages:", error);
+      throw error;
+    }
+  },
+
   async getBetweenUsersCursor(
     user1Id: number,
     user2Id: number,

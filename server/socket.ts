@@ -42,6 +42,7 @@ const SOCKET_CONFIG = {
   OFFLINE_GRACE_PERIOD_MS: 2000,
   GUEST_DELETION_GRACE_PERIOD_MS: 24 * 60 * 60 * 1000,
   CLEANUP_INTERVAL_MS: 30 * 1000,
+  GLOBAL_CHAT_MAX_AGE_MS: 30 * 60 * 1000,
   EPHEMERAL_CHAT_MAX_AGE_MS: 24 * 60 * 60 * 1000,
   ATTACHMENT_MAX_AGE_MS: 24 * 60 * 60 * 1000,
 };
@@ -53,6 +54,8 @@ const privateMessageAttachmentSchema = insertAttachmentSchema.omit({
 const guestDisconnectionTimes = new Map<number, number>();
 const pendingOfflineUpdates = new Map<number, NodeJS.Timeout>();
 const connectedSocketIdsByUser = new Map<number, Set<string>>();
+let lastGlobalChatCleanupAt = 0;
+let pendingGlobalChatCleanup: Promise<void> | null = null;
 
 function getSocketCorsOrigin() {
   if (process.env.NODE_ENV !== "production") {
@@ -178,6 +181,48 @@ function createPresenceBroadcaster(io: SocketIOServer) {
 async function cleanupExpiredEphemeralMessages(now: number): Promise<number> {
   const maxAge = new Date(now - SOCKET_CONFIG.EPHEMERAL_CHAT_MAX_AGE_MS);
   return storage.cleanupExpiredEphemeralMessages(maxAge);
+}
+
+export async function cleanupExpiredGlobalMessagesIfNeeded(
+  io: SocketIOServer,
+): Promise<void> {
+  const now = Date.now();
+
+  if (
+    lastGlobalChatCleanupAt > 0 &&
+    now - lastGlobalChatCleanupAt < SOCKET_CONFIG.GLOBAL_CHAT_MAX_AGE_MS
+  ) {
+    return;
+  }
+
+  if (pendingGlobalChatCleanup) {
+    await pendingGlobalChatCleanup;
+    return;
+  }
+
+  pendingGlobalChatCleanup = (async () => {
+    try {
+      const expiredBefore = new Date(
+        Date.now() - SOCKET_CONFIG.GLOBAL_CHAT_MAX_AGE_MS,
+      );
+      const deletedMessageIds =
+        await storage.cleanupExpiredGlobalMessages(expiredBefore);
+
+      lastGlobalChatCleanupAt = Date.now();
+
+      if (deletedMessageIds.length > 0) {
+        io.emit("global_messages_deleted", {
+          messageIds: deletedMessageIds,
+        });
+      }
+    } catch (error) {
+      console.error("Error cleaning up expired global messages:", error);
+    } finally {
+      pendingGlobalChatCleanup = null;
+    }
+  })();
+
+  await pendingGlobalChatCleanup;
 }
 
 async function cleanupGuestUsers(
@@ -306,6 +351,8 @@ async function handleGlobalMessage(
     if (!socket.userId || !data.message) {
       return;
     }
+
+    await cleanupExpiredGlobalMessagesIfNeeded(io);
 
     const validatedMessage = insertGlobalMessageSchema.parse({
       senderId: socket.userId,

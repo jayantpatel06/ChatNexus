@@ -1,7 +1,10 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import { jwtAuth } from "../middleware/jwt-auth";
-import { emitSidebarUsers } from "../socket";
+import {
+  cleanupExpiredGlobalMessagesIfNeeded,
+  emitSidebarUsers,
+} from "../socket";
 import { storage } from "../storage";
 
 function parseHistoryParams(params: { userId?: string }, query: any) {
@@ -127,8 +130,10 @@ async function getGlobalMessagesController(
   req: Request,
   res: Response,
   next: NextFunction,
+  io: SocketIOServer,
 ) {
   try {
+    await cleanupExpiredGlobalMessagesIfNeeded(io);
     const limit = parseGlobalMessagesLimit(req.query);
     const messages = await storage.getGlobalMessages(limit);
     console.log(`[API] Fetched ${messages.length} global messages (limit: ${limit})`);
@@ -195,5 +200,7 @@ export function registerChatRoutes(app: Express, io: SocketIOServer) {
     jwtAuth,
     createClearConversationAttachmentsController(io),
   );
-  app.get("/api/global-messages", jwtAuth, getGlobalMessagesController);
+  app.get("/api/global-messages", jwtAuth, (req, res, next) =>
+    getGlobalMessagesController(req, res, next, io),
+  );
 }
