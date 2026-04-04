@@ -354,6 +354,11 @@ function normalizeUserPair(userA: number, userB: number) {
     : { userId1: userB, userId2: userA };
 }
 
+function getUserPairAdvisoryLockKey(userA: number, userB: number): string {
+  const { userId1, userId2 } = normalizeUserPair(userA, userB);
+  return ((BigInt(userId1) << 32n) | BigInt(userId2)).toString();
+}
+
 function mapFriendRequestRow(row: FriendRequest): FriendRequest {
   return {
     ...row,
@@ -501,12 +506,12 @@ const friendRequestRepository = {
   async create(senderId: number, receiverId: number): Promise<FriendRequest | undefined> {
     if (!prisma) return undefined;
 
-    const { userId1, userId2 } = normalizeUserPair(senderId, receiverId);
+    const advisoryLockKey = getUserPairAdvisoryLockKey(senderId, receiverId);
 
     return prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
-        SELECT pg_advisory_xact_lock(${userId1}, ${userId2})
-      `;
+      await tx.$executeRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(CAST(${advisoryLockKey} AS bigint))
+      `);
 
       const existingRows = await tx.$queryRaw<FriendRequest[]>(
         selectPendingFriendRequestBetweenUsersSql(senderId, receiverId),
@@ -624,6 +629,22 @@ const blockRepository = {
     return rows[0];
   },
 
+  async delete(
+    blockerId: number,
+    blockedId: number,
+  ): Promise<boolean> {
+    if (!prisma) return false;
+
+    const result = await prisma.userBlock.deleteMany({
+      where: {
+        blockerId,
+        blockedId,
+      },
+    });
+
+    return result.count > 0;
+  },
+
   async getRestrictedUserIds(userId: number): Promise<number[]> {
     if (!prisma) return [];
 
@@ -638,6 +659,27 @@ const blockRepository = {
     `);
 
     return rows.map((row) => Number(row.restrictedUserId));
+  },
+
+  async getBlockedUsers(blockerId: number): Promise<User[]> {
+    if (!prisma) return [];
+
+    try {
+      const blocks = await prisma.userBlock.findMany({
+        where: { blockerId },
+        orderBy: [{ createdAt: "desc" }, { blockedId: "asc" }],
+        select: {
+          blocked: {
+            select: publicUserSelect,
+          },
+        },
+      });
+
+      return blocks.map((block) => block.blocked);
+    } catch (error) {
+      console.error("Error getting blocked users:", error);
+      return [];
+    }
   },
 };
 
@@ -741,6 +783,8 @@ export interface IStorage {
   clearPendingFriendRequestsBetweenUsers(user1Id: number, user2Id: number): Promise<number>;
   getBlockBetweenUsers(user1Id: number, user2Id: number): Promise<UserBlock | undefined>;
   blockUser(blockerId: number, blockedId: number): Promise<UserBlock | undefined>;
+  unblockUser(blockerId: number, blockedId: number): Promise<boolean>;
+  getBlockedUsers(blockerId: number): Promise<User[]>;
   getRestrictedUserIds(userId: number): Promise<number[]>;
   clearConversation(user1Id: number, user2Id: number): Promise<number>;
   clearConversationAttachments(user1Id: number, user2Id: number): Promise<number>;
@@ -1567,6 +1611,16 @@ class DatabaseStorage implements IStorage {
     const block = await blockRepository.create(blockerId, blockedId);
     writeBlockLookupCache(blockerId, blockedId, block ?? null);
     return block;
+  }
+
+  async unblockUser(blockerId: number, blockedId: number): Promise<boolean> {
+    const removed = await blockRepository.delete(blockerId, blockedId);
+    writeBlockLookupCache(blockerId, blockedId, null);
+    return removed;
+  }
+
+  async getBlockedUsers(blockerId: number): Promise<User[]> {
+    return blockRepository.getBlockedUsers(blockerId);
   }
 
   async getRestrictedUserIds(userId: number): Promise<number[]> {

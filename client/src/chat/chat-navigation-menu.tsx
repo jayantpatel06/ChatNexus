@@ -1,13 +1,18 @@
 import { cn } from "@/lib/utils";
 import {
   Globe,
+  History,
   MessageCircle,
   Settings,
   Shuffle,
-  Users,
 } from "lucide-react";
 
-export type ChatNavigationItem = "chat" | "friends" | "global" | "random" | "settings";
+export type ChatNavigationItem =
+  | "chat"
+  | "history"
+  | "global"
+  | "random"
+  | "settings";
 export const CHAT_DASHBOARD_NAVIGATION_EVENT =
   "chatnexus-dashboard-navigation";
 
@@ -34,10 +39,10 @@ const navigationItems: Array<{
     testId: "button-tab-private",
   },
   {
-    id: "friends",
-    label: "Friends",
-    icon: Users,
-    testId: "button-menu-friends",
+    id: "history",
+    label: "History",
+    icon: History,
+    testId: "button-menu-history",
   },
   {
     id: "global",

@@ -125,7 +125,7 @@ async function emitRelationshipStatusUpdate(
   io: SocketIOServer,
   userAId: number,
   userBId: number,
-  reason: "friend_request" | "remove_friend" | "block_user",
+  reason: "friend_request" | "remove_friend" | "block_user" | "unblock_user",
   extra?: Record<string, unknown>,
 ) {
   const [userAStatus, userBStatus] = await Promise.all([
@@ -171,6 +171,10 @@ async function getSelfProfile(userId: number) {
   }
 
   return { profile: toSelfUserProfile(user) };
+}
+
+async function getBlockedUsers(userId: number) {
+  return { users: await storage.getBlockedUsers(userId) };
 }
 
 async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
@@ -408,6 +412,41 @@ async function blockUser(userId: number, otherUserId: number) {
   };
 }
 
+async function unblockUser(userId: number, otherUserId: number) {
+  if (userId === otherUserId) {
+    return {
+      error: "You cannot unblock yourself" as const,
+      status: 400 as const,
+    };
+  }
+
+  const [currentUser, otherUser, block] = await Promise.all([
+    storage.getUser(userId),
+    storage.getUser(otherUserId),
+    storage.getBlockBetweenUsers(userId, otherUserId),
+  ]);
+  if (!currentUser || !otherUser) {
+    return { error: "User not found" as const, status: 404 as const };
+  }
+
+  if (!block || block.blockerId !== userId) {
+    return {
+      error: "User is not blocked by you" as const,
+      status: 400 as const,
+    };
+  }
+
+  const unblocked = await storage.unblockUser(userId, otherUserId);
+  if (!unblocked) {
+    return { error: "Failed to unblock user" as const, status: 500 as const };
+  }
+
+  return {
+    unblocked: true,
+    friendshipStatus: await getRelationshipStatus(userId, otherUserId),
+  };
+}
+
 async function getOnlineUsersController(
   _req: Request,
   res: Response,
@@ -444,6 +483,18 @@ async function getSelfProfileController(
     }
 
     res.json(payload.profile);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getBlockedUsersController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(await getBlockedUsers(req.jwtUser!.userId));
   } catch (error) {
     next(error);
   }
@@ -697,10 +748,38 @@ function createBlockUserController(io: SocketIOServer) {
   };
 }
 
+function createUnblockUserController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = parseTargetUserId(req.params.userId);
+      if ("error" in parsed) {
+        return res.status(400).json({ message: parsed.error });
+      }
+
+      const result = await unblockUser(req.jwtUser!.userId, parsed.userId);
+      if ("error" in result) {
+        return res.status(result.status ?? 500).json({ message: result.error });
+      }
+
+      await emitSidebarUsers(io, [req.jwtUser!.userId, parsed.userId]);
+      await emitRelationshipStatusUpdate(
+        io,
+        req.jwtUser!.userId,
+        parsed.userId,
+        "unblock_user",
+      );
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
 export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/online", jwtAuth, getOnlineUsersController);
   app.get("/api/users/sidebar", jwtAuth, getSidebarUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
+  app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);
   app.get("/api/users/:userId/friendship", jwtAuth, getFriendshipStatusController);
   app.post(
     "/api/users/:userId/friendship",
@@ -718,6 +797,11 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
     createRespondFriendRequestController(io),
   );
   app.post("/api/users/:userId/block", jwtAuth, createBlockUserController(io));
+  app.delete(
+    "/api/users/:userId/block",
+    jwtAuth,
+    createUnblockUserController(io),
+  );
   app.put("/api/user/profile", jwtAuth, createUpdateProfileController(io));
   app.put("/api/user/username", jwtAuth, createUpdateUsernameController(io));
 }

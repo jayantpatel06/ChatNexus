@@ -3,6 +3,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -27,12 +28,19 @@ import { ThemeToggleButton2 } from "@/components/site-nav";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import {
+  Ban,
+  Bell,
   Search,
   Filter,
   LogOut,
   Loader2,
   Lock,
   Settings2,
+  ShieldOff,
+  SlidersHorizontal,
+  User as UserIcon,
+  UserPlus,
+  Volume2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useSocket } from "@/providers/socket-provider";
@@ -66,9 +74,21 @@ type FriendshipStatusResponse = {
   isFriend: boolean;
 };
 
+type BlockedUsersResponse = {
+  users: User[];
+};
+
+type SettingsSection = "profile" | "preferences" | "blocked";
+
 const DEFAULT_FILTERS: SidebarFilters = {
   friendsOnly: false,
   gender: "all",
+};
+
+const DEFAULT_SETTINGS_PREFERENCES = {
+  pushNotifications: true,
+  notificationSound: true,
+  allowFriendRequests: true,
 };
 
 function readStoredSidebarFilters(): SidebarFilters {
@@ -429,9 +449,7 @@ export function UsersSidebar({
   const activeNavigationItem: ChatNavigationItem =
     location === "/global-chat"
       ? "global"
-      : appliedFilters.friendsOnly
-        ? "friends"
-        : "chat";
+      : "chat";
 
   useEffect(() => {
     if (!selectedUser) {
@@ -469,6 +487,21 @@ export function UsersSidebar({
     }));
   };
 
+  const handleFriendsFilterToggle = () => {
+    if (!user || user.isGuest) {
+      toast({
+        title: "Friends filter unavailable",
+        description: "Register or log in to filter your friends here.",
+      });
+      return;
+    }
+
+    setAppliedFilters((prev) => ({
+      ...prev,
+      friendsOnly: !prev.friendsOnly,
+    }));
+  };
+
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random") {
       toast({
@@ -490,18 +523,14 @@ export function UsersSidebar({
       return;
     }
 
-    if (item === "friends" && (!user || user.isGuest)) {
+    if (item === "history") {
       toast({
-        title: "Friends menu unavailable",
-        description: "Register or log in to open your friends view.",
+        title: "History is coming soon",
+        description:
+          "That tab will later show your previous chats with All, Unread, and Friends filters.",
       });
       return;
     }
-
-    setAppliedFilters((prev) => ({
-      ...prev,
-      friendsOnly: item === "friends",
-    }));
 
     if (location !== "/dashboard") {
       setLocation("/dashboard");
@@ -615,6 +644,28 @@ export function UsersSidebar({
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={handleFriendsFilterToggle}
+                disabled={!user || user.isGuest}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  appliedFilters.friendsOnly
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+                  (!user || user.isGuest) &&
+                    "cursor-not-allowed opacity-55 hover:bg-muted hover:text-muted-foreground",
+                )}
+                data-testid="button-pill-friends"
+                aria-pressed={appliedFilters.friendsOnly}
+                title={
+                  !user || user.isGuest
+                    ? "Register or log in to use the friends filter"
+                    : "Show only friends"
+                }
+              >
+                Friends
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -746,6 +797,10 @@ function UserSettingsModal({
 }) {
   const { user, updateUser, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
+  const [preferenceDraft, setPreferenceDraft] = useState(
+    DEFAULT_SETTINGS_PREFERENCES,
+  );
   const [newUsername, setNewUsername] = useState(user?.username || "");
   const [newAge, setNewAge] = useState(user?.age != null ? String(user.age) : "");
   const [usernameError, setUsernameError] = useState("");
@@ -758,6 +813,15 @@ function UserSettingsModal({
       readJsonResponse<SelfUserProfile>(await apiRequest("GET", "/api/user/profile")),
     staleTime: 0,
   });
+  const blockedUsersQuery = useQuery({
+    queryKey: ["/api/users/blocked"],
+    enabled: open && !!user,
+    queryFn: async () =>
+      readJsonResponse<BlockedUsersResponse>(
+        await apiRequest("GET", "/api/users/blocked"),
+      ),
+    staleTime: 0,
+  });
 
   const profile = profileQuery.data ?? (user ? { ...user, gmail: null } : null);
 
@@ -765,6 +829,15 @@ function UserSettingsModal({
     setNewUsername(user?.username || "");
     setNewAge(user?.age != null ? String(user.age) : "");
   }, [user?.age, user?.username]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setActiveSection("profile");
+    setPreferenceDraft(DEFAULT_SETTINGS_PREFERENCES);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !profileQuery.data) {
@@ -814,6 +887,36 @@ function UserSettingsModal({
 
       toast({
         title: "Failed to update profile",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  const unblockUserMutation = useMutation({
+    mutationFn: async (blockedUserId: number) => {
+      const res = await apiRequest("DELETE", `/api/users/${blockedUserId}/block`);
+      return readJsonResponse<{ unblocked: boolean }>(res);
+    },
+    onSuccess: (_data, blockedUserId) => {
+      queryClient.setQueryData<BlockedUsersResponse>(
+        ["/api/users/blocked"],
+        (current) => ({
+          users: (current?.users ?? []).filter(
+            (blockedUser) => blockedUser.userId !== blockedUserId,
+          ),
+        }),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status", blockedUserId],
+      });
+      toast({
+        title: "User unblocked",
+        description: "They can appear in your sidebar again.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to unblock user",
         description: error.message,
         variant: "destructive",
       });
@@ -900,33 +1003,139 @@ function UserSettingsModal({
     onOpenChange(false);
     logoutMutation.mutate();
   };
+  const handleUnblockUser = (blockedUserId: number) => {
+    unblockUserMutation.mutate(blockedUserId);
+  };
+  const handlePreferenceToggle = (
+    key: keyof typeof DEFAULT_SETTINGS_PREFERENCES,
+    checked: boolean,
+  ) => {
+    setPreferenceDraft((prev) => ({
+      ...prev,
+      [key]: checked,
+    }));
+  };
 
   const isGuestUser = user?.isGuest ?? false;
   const isSaving = updateProfileMutation.isPending;
+  const blockedUsers = blockedUsersQuery.data?.users ?? [];
+  const unblockingUserId = unblockUserMutation.isPending
+    ? unblockUserMutation.variables
+    : null;
   const emailValue = isGuestUser
     ? "-"
     : profileQuery.isPending
       ? "Loading..."
       : profile?.gmail || "-";
   const profileDisplayName = newUsername.trim() || profile?.username || "User";
-  const profileAge = newAge || (profile?.age != null ? String(profile.age) : "-");
   const profileGender = profile?.gender || "-";
+  const settingsSections = [
+    { id: "profile" as const, label: "Profile", icon: UserIcon },
+    {
+      id: "preferences" as const,
+      label: "Preferences",
+      icon: SlidersHorizontal,
+    },
+    { id: "blocked" as const, label: "Blocked", icon: Ban },
+  ];
+  const preferenceItems = [
+    {
+      key: "pushNotifications" as const,
+      label: "Push notifications",
+      description: "Visual toggle for message and activity alerts.",
+      icon: Bell,
+    },
+    {
+      key: "notificationSound" as const,
+      label: "Notification sound",
+      description: "Preview how in-app sounds will be grouped here later.",
+      icon: Volume2,
+    },
+    {
+      key: "allowFriendRequests" as const,
+      label: "Allow friend requests",
+      description:
+        "Layout placeholder for controlling whether others can send requests.",
+      icon: UserPlus,
+    },
+  ];
+  const isProfileSection = activeSection === "profile";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="text-left">
-          <DialogTitle className="flex items-center gap-2">
-            <Settings2 className="h-5 w-5" />
-            User Settings
-          </DialogTitle>
-          
+      <DialogContent className="max-h-[calc(100dvh-0.75rem)] w-[calc(100%-1rem)] overflow-y-auto overscroll-y-contain p-0 touch-pan-y sm:max-w-3xl md:grid md:h-[min(88vh,680px)] md:grid-rows-[auto_minmax(0,1fr)] md:overflow-hidden">
+        <DialogHeader className="gap-2 border-b px-3 py-3 text-left sm:px-5">
+          <div className="pr-8">
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              User Settings
+            </DialogTitle>
+            <DialogDescription className="mt-1">
+              Manage your profile, preview preferences, and blocked users.
+            </DialogDescription>
+          </div>
+
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 md:hidden">
+            {settingsSections.map((section) => {
+              const Icon = section.icon;
+              const isActive = activeSection === section.id;
+
+              return (
+                <Button
+                  key={section.id}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveSection(section.id)}
+                  className={cn(
+                    "h-9 shrink-0 rounded-full border px-3 text-sm font-medium",
+                    isActive
+                      ? "border-primary/20 bg-muted text-foreground"
+                      : "border-border/70 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                  data-testid={`button-settings-tab-${section.id}`}
+                >
+                  <Icon className="mr-2 h-4 w-4" />
+                  {section.label}
+                </Button>
+              );
+            })}
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/35 p-4">
+        <div className="min-h-0 md:grid md:grid-cols-[190px_minmax(0,1fr)]">
+          <aside className="hidden border-r bg-muted/20 md:flex md:flex-col md:gap-1.5 md:px-3 md:py-4">
+            {settingsSections.map((section) => {
+              const Icon = section.icon;
+              const isActive = activeSection === section.id;
+
+              return (
+                <Button
+                  key={section.id}
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setActiveSection(section.id)}
+                  className={cn(
+                    "h-10 justify-start rounded-xl px-3 text-sm font-medium",
+                    isActive
+                      ? "bg-muted text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                  data-testid={`button-settings-side-tab-${section.id}`}
+                >
+                  <Icon className="mr-3 h-4 w-4" />
+                  {section.label}
+                </Button>
+              );
+            })}
+          </aside>
+
+          <div className="min-h-0 px-3 py-3 sm:px-5 md:overflow-y-auto md:px-5 md:py-4">
+            {isProfileSection ? (
+              <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/35 p-3 sm:flex-row sm:items-center">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-semibold text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-xs font-semibold text-white"
               style={{
                 backgroundColor: isGuestUser
                   ? "#6b7280"
@@ -944,7 +1153,7 @@ function UserSettingsModal({
                 {isGuestUser ? "Guest account" : "Registered account"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <ThemeToggleButton2 className="shadow-none" />
               <Button
                 type="button"
@@ -952,7 +1161,7 @@ function UserSettingsModal({
                 size="icon"
                 onClick={handleLogout}
                 disabled={logoutMutation.isPending || isSaving}
-                className="h-10 w-10 rounded-full border-destructive/25 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                className="h-9 w-9 rounded-full border-destructive/25 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                 data-testid="button-settings-logout"
                 title="Logout"
                 aria-label="Logout"
@@ -966,7 +1175,7 @@ function UserSettingsModal({
             </div>
           </div>
 
-          <div className="space-y-3 rounded-lg border border-border bg-muted/25 p-4">
+          <div className="space-y-2.5 rounded-xl border border-border bg-muted/25 p-3">
             <div className="space-y-1">
               <Label className="text-sm font-medium">Profile</Label>
               <p className="text-xs text-muted-foreground">
@@ -976,8 +1185,8 @@ function UserSettingsModal({
               </p>
             </div>
 
-            <div className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2.5">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="username" className="text-sm font-medium">
                     Name
@@ -1016,7 +1225,7 @@ function UserSettingsModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
                   <Label htmlFor="settings-age" className="text-sm font-medium">
                     Age
@@ -1061,7 +1270,102 @@ function UserSettingsModal({
             )}
           </div>
 
-          <div className="grid gap-3 pt-2 sm:grid-cols-2">
+          <div className="hidden space-y-2.5 rounded-lg border border-border bg-muted/25 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Blocked users</Label>
+                <p className="text-xs text-muted-foreground">
+                  Unblock people here if you want them to appear in your sidebar
+                  again.
+                </p>
+              </div>
+              <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                {blockedUsers.length}
+              </span>
+            </div>
+
+            {blockedUsersQuery.isPending ? (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading blocked users...
+              </div>
+            ) : blockedUsers.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                You have not blocked anyone.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {blockedUsers.map((blockedUser) => {
+                  const blockedSubtitleParts = [
+                    blockedUser.gender || null,
+                    blockedUser.age != null ? `${blockedUser.age}` : null,
+                    blockedUser.isGuest ? "Guest" : "Registered",
+                  ].filter(Boolean);
+
+                  return (
+                    <div
+                      key={blockedUser.userId}
+                      className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/70 px-3 py-2"
+                    >
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold text-white"
+                        style={{
+                          backgroundColor: blockedUser.isGuest
+                            ? "#6b7280"
+                            : getAvatarColor(blockedUser.username),
+                        }}
+                      >
+                        {getUserInitials(blockedUser.username)}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {blockedUser.username}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {blockedSubtitleParts.join(" • ")}
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleUnblockUser(blockedUser.userId)}
+                        disabled={
+                          unblockUserMutation.isPending &&
+                          unblockingUserId === blockedUser.userId
+                        }
+                        className="shrink-0"
+                        data-testid={`button-unblock-user-${blockedUser.userId}`}
+                      >
+                        {unblockUserMutation.isPending &&
+                        unblockingUserId === blockedUser.userId ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Unblocking...
+                          </>
+                        ) : (
+                          <>
+                            <ShieldOff className="mr-2 h-4 w-4" />
+                            Unblock
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {blockedUsersQuery.isError && (
+              <p className="text-sm text-destructive">
+                Failed to load blocked users.
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2 pt-1 sm:grid-cols-2">
             <Button
               type="button"
               variant="outline"
@@ -1098,6 +1402,174 @@ function UserSettingsModal({
             </Button>
           </div>
         </form>
+            ) : activeSection === "preferences" ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border bg-muted/25 p-3">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Preferences</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Layout only for now. The actual preference behavior will be
+                      wired later.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {preferenceItems.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <div
+                        key={item.key}
+                        className="flex items-start gap-3 rounded-xl border border-border bg-muted/25 p-3"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-background text-muted-foreground">
+                          <Icon className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {item.label}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        <Switch
+                          checked={preferenceDraft[item.key]}
+                          onCheckedChange={(checked) =>
+                            handlePreferenceToggle(item.key, checked)
+                          }
+                          aria-label={item.label}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancel}
+                    data-testid="button-close-settings-preferences"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border bg-muted/25 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Blocked users</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Unblock people here if you want them to appear in your
+                        sidebar again.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                      {blockedUsers.length}
+                    </span>
+                  </div>
+                </div>
+
+                {blockedUsersQuery.isPending ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading blocked users...
+                  </div>
+                ) : blockedUsers.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                    You have not blocked anyone.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedUsers.map((blockedUser) => {
+                      const blockedSubtitleParts = [
+                        blockedUser.gender || null,
+                        blockedUser.age != null ? `${blockedUser.age}` : null,
+                        blockedUser.isGuest ? "Guest" : "Registered",
+                      ].filter(Boolean);
+
+                      return (
+                        <div
+                          key={blockedUser.userId}
+                        className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-background/70 px-3 py-2"
+                        >
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold text-white"
+                            style={{
+                              backgroundColor: blockedUser.isGuest
+                                ? "#6b7280"
+                                : getAvatarColor(blockedUser.username),
+                            }}
+                          >
+                            {getUserInitials(blockedUser.username)}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {blockedUser.username}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {blockedSubtitleParts.join(" / ")}
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUnblockUser(blockedUser.userId)}
+                            disabled={
+                              unblockUserMutation.isPending &&
+                              unblockingUserId === blockedUser.userId
+                            }
+                            className="shrink-0"
+                            data-testid={`button-unblock-user-${blockedUser.userId}`}
+                          >
+                            {unblockUserMutation.isPending &&
+                            unblockingUserId === blockedUser.userId ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Unblocking...
+                              </>
+                            ) : (
+                              <>
+                                <ShieldOff className="mr-2 h-4 w-4" />
+                                Unblock
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {blockedUsersQuery.isError && (
+                  <p className="text-sm text-destructive">
+                    Failed to load blocked users.
+                  </p>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancel}
+                    data-testid="button-close-settings-blocked"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
