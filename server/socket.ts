@@ -2,6 +2,8 @@ import {
   insertAttachmentSchema,
   insertGlobalMessageSchema,
   insertMessageSchema,
+  type MessageReplyPreview,
+  type MessageReactionWithUser,
   type User,
 } from "@shared/schema";
 import type { Server } from "http";
@@ -22,6 +24,7 @@ interface PrivateMessagePayload {
   receiverId: number;
   message?: string;
   clientMessageId?: string;
+  replyToId?: number;
   attachment?: {
     url: string;
     filename: string;
@@ -35,6 +38,22 @@ interface GlobalMessagePayload {
 
 interface TypingPayload {
   receiverId: number;
+}
+
+interface ReactionPayload {
+  messageId: number;
+  emoji: string;
+}
+
+interface DeleteMessagePayload {
+  messageId: number;
+}
+
+interface ReactionSyncPayload {
+  messageId: number;
+  senderId: number;
+  receiverId: number;
+  reactions: MessageReactionWithUser[];
 }
 
 const SOCKET_CONFIG = {
@@ -111,15 +130,19 @@ function getConnectedUserIds(): Set<number> {
 
 export async function getSidebarUsersForUser(userId: number): Promise<User[]> {
   const connectedUserIds = getConnectedUserIds();
-  const [friendUsers, connectedUsers] = await Promise.all([
+  const [friendUsers, connectedUsers, restrictedUserIds] = await Promise.all([
     storage.getFriendUsers(userId),
     storage.getUsersByIds(Array.from(connectedUserIds)),
+    storage.getRestrictedUserIds(userId),
   ]);
 
   const sidebarUsers = new Map<number, User>();
 
   for (const connectedUser of connectedUsers) {
-    if (connectedUser.userId !== userId) {
+    if (
+      connectedUser.userId !== userId &&
+      !restrictedUserIds.includes(connectedUser.userId)
+    ) {
       sidebarUsers.set(connectedUser.userId, {
         ...connectedUser,
         isOnline: true,
@@ -128,7 +151,10 @@ export async function getSidebarUsersForUser(userId: number): Promise<User[]> {
   }
 
   for (const friendUser of friendUsers) {
-    if (friendUser.userId !== userId) {
+    if (
+      friendUser.userId !== userId &&
+      !restrictedUserIds.includes(friendUser.userId)
+    ) {
       sidebarUsers.set(friendUser.userId, {
         ...friendUser,
         isOnline: connectedUserIds.has(friendUser.userId),
@@ -301,12 +327,65 @@ async function handlePrivateMessage(
       throw new Error("Private messages need text or an attachment");
     }
 
+    // Acknowledge receipt to sender immediately (they already have optimistic message)
+    socket.emit("message_sent", { clientMessageId });
+
+    // Persist and deliver in background (fire-and-forget)
+    persistAndDeliverMessage(socket, io, data, clientMessageId);
+  } catch (error) {
+    console.error("Socket.IO private_message error:", error);
+    if (clientMessageId) {
+      socket.emit("message_save_error", {
+        clientMessageId,
+        error: "Failed to send message",
+      });
+    }
+  }
+}
+
+// Background persistence and delivery - fast path without temp messages
+async function persistAndDeliverMessage(
+  socket: Socket,
+  io: SocketIOServer,
+  data: PrivateMessagePayload,
+  clientMessageId: string | undefined,
+): Promise<void> {
+  try {
+    // Check block status
+    const relationshipBlock = await storage.getBlockBetweenUsers(
+      socket.userId,
+      data.receiverId,
+    );
+    if (relationshipBlock) {
+      const errorMsg = relationshipBlock.blockerId === socket.userId
+        ? "You blocked this user"
+        : "This user has blocked you";
+      socket.emit("message_save_error", {
+        clientMessageId,
+        error: errorMsg,
+      });
+      return;
+    }
+
+    // Build reply preview if needed
+    let replyPreview: MessageReplyPreview | null = null;
+    if (data.replyToId) {
+      const replyTarget = await storage.getConversationReplyPreview(
+        data.replyToId,
+        socket.userId,
+      );
+      if (replyTarget) {
+        replyPreview = replyTarget;
+      }
+    }
+
     const conversationId = getConversationId(socket.userId, data.receiverId);
 
     const validatedMessage = insertMessageSchema.parse({
       senderId: socket.userId,
       receiverId: data.receiverId,
       conversationId,
+      replyToId: data.replyToId,
       message: data.message || "Sent an attachment",
     });
 
@@ -321,24 +400,25 @@ async function handlePrivateMessage(
     const persistedMessage = await storage.createMessageWithAttachments(
       validatedMessage,
       validatedAttachment,
+      replyPreview,
     );
 
+    // Deliver to receiver (they see the real message directly)
     io.to(`user:${data.receiverId}`).emit("new_message", {
       message: persistedMessage,
     });
 
-    socket.emit("message_sent", {
+    // Confirm to sender (replaces their optimistic message with real one)
+    socket.emit("message_confirmed", {
       message: persistedMessage,
       clientMessageId,
     });
   } catch (error) {
-    console.error("Socket.IO private_message error:", error);
-    if (clientMessageId) {
-      socket.emit("message_save_error", {
-        clientMessageId,
-        error: "Failed to send message",
-      });
-    }
+    console.error("Message persistence/delivery error:", error);
+    socket.emit("message_save_error", {
+      clientMessageId,
+      error: "Failed to save message",
+    });
   }
 }
 
@@ -392,6 +472,144 @@ function handleTypingStop(
     io.to(`user:${data.receiverId}`).emit("user_typing", {
       userId: socket.userId,
       isTyping: false,
+    });
+  }
+}
+
+// Fast reaction toggle via socket
+async function handleToggleReaction(
+  socket: Socket,
+  io: SocketIOServer,
+  data: ReactionPayload,
+): Promise<void> {
+  if (!socket.userId || !data.messageId || !data.emoji) {
+    socket.emit("reaction_error", {
+      messageId: data.messageId,
+      error: "Invalid reaction data",
+    });
+    return;
+  }
+
+  void persistAndDeliverReaction(socket, io, data);
+}
+
+// Fast message deletion via socket - completely removes from UI
+async function handleDeleteMessage(
+  socket: Socket,
+  io: SocketIOServer,
+  data: DeleteMessagePayload,
+): Promise<void> {
+  if (!socket.userId || !data.messageId) {
+    socket.emit("delete_error", {
+      messageId: data.messageId,
+      error: "Invalid delete data",
+    });
+    return;
+  }
+
+  void persistAndDeliverDelete(socket, io, data);
+}
+
+async function persistAndDeliverReaction(
+  socket: Socket,
+  io: SocketIOServer,
+  data: ReactionPayload,
+): Promise<void> {
+  try {
+    const existingMessage = await storage.getConversationMessageMeta(
+      data.messageId,
+      socket.userId,
+    );
+
+    if (!existingMessage) {
+      socket.emit("reaction_error", {
+        messageId: data.messageId,
+        error: "Message not found",
+      });
+      return;
+    }
+
+    if (existingMessage.deletedAt) {
+      socket.emit("reaction_error", {
+        messageId: data.messageId,
+        error: "Cannot react to deleted message",
+      });
+      return;
+    }
+
+    const reactionUpdate = await storage.toggleConversationReactionSync(
+      data.messageId,
+      socket.userId,
+      data.emoji,
+    );
+
+    if (!reactionUpdate) {
+      socket.emit("reaction_error", {
+        messageId: data.messageId,
+        error: "Failed to update reaction",
+      });
+      return;
+    }
+
+    io.to(`user:${reactionUpdate.senderId}`)
+      .to(`user:${reactionUpdate.receiverId}`)
+      .emit("message_reactions_updated", reactionUpdate as ReactionSyncPayload);
+  } catch (error) {
+    console.error("Socket.IO toggle_reaction error:", error);
+    socket.emit("reaction_error", {
+      messageId: data.messageId,
+      error: "Failed to toggle reaction",
+    });
+  }
+}
+
+async function persistAndDeliverDelete(
+  socket: Socket,
+  io: SocketIOServer,
+  data: DeleteMessagePayload,
+): Promise<void> {
+  try {
+    const existingMessage = await storage.getConversationMessageMeta(
+      data.messageId,
+      socket.userId,
+    );
+
+    if (!existingMessage) {
+      socket.emit("delete_error", {
+        messageId: data.messageId,
+        error: "Message not found",
+      });
+      return;
+    }
+
+    if (existingMessage.senderId !== socket.userId) {
+      socket.emit("delete_error", {
+        messageId: data.messageId,
+        error: "You can only delete your own messages",
+      });
+      return;
+    }
+
+    const deletedMessage = await storage.deleteConversationMessageSync(
+      data.messageId,
+    );
+
+    if (!deletedMessage) {
+      socket.emit("delete_error", {
+        messageId: data.messageId,
+        error: "Failed to delete message",
+      });
+      return;
+    }
+
+    io.to(`user:${deletedMessage.senderId}`)
+      .to(`user:${deletedMessage.receiverId}`)
+      .emit("message_deleted", deletedMessage);
+  } catch (error) {
+    console.error("Socket.IO delete_message error:", error);
+    socket.emit("delete_error", {
+      messageId: data.messageId,
+      error: "Failed to delete message",
     });
   }
 }
@@ -528,6 +746,14 @@ export function setupSocketHandlers(io: SocketIOServer): void {
 
     socket.on("typing_stop", (data: TypingPayload) => {
       handleTypingStop(socket, io, data);
+    });
+
+    socket.on("toggle_reaction", async (data: ReactionPayload) => {
+      await handleToggleReaction(socket, io, data);
+    });
+
+    socket.on("delete_message", async (data: DeleteMessagePayload) => {
+      await handleDeleteMessage(socket, io, data);
     });
 
     socket.on("disconnect", async () => {

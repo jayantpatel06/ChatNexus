@@ -4,8 +4,14 @@ import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { getStoredToken } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { User, Message, FriendRequest } from "@shared/schema";
 import {
+  User,
+  Message,
+  FriendRequest,
+  type MessageReactionWithUser,
+} from "@shared/schema";
+import {
+  Ban,
   Camera,
   Heart,
   Phone,
@@ -20,9 +26,13 @@ import {
   Loader2,
   Handshake,
   RefreshCw,
+  Reply,
   Search,
+  Pencil,
   TrendingUp,
+  Trash2,
   UserPlus,
+  UserMinus,
   X,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -145,6 +155,15 @@ type FriendshipStatusResponse = {
   friendship: unknown | null;
   pendingRequest: FriendRequestRecord | null;
   pendingDirection: "incoming" | "outgoing" | null;
+  isBlocked: boolean;
+  block: {
+    id: number;
+    blockerId: number;
+    blockedId: number;
+    createdAt: Date | string;
+  } | null;
+  blockedByMe: boolean;
+  blockedByUser: boolean;
 };
 
 type ChatAttachment = NonNullable<
@@ -154,6 +173,8 @@ type ChatAttachment = NonNullable<
 type ImagePreviewState = {
   url: string;
 };
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "🙏"] as const;
 
 function stripConversationAttachments(messages: Message[]): Message[] {
   return messages.flatMap((message) => {
@@ -175,6 +196,69 @@ function stripConversationAttachments(messages: Message[]): Message[] {
       } as Message,
     ];
   });
+}
+
+function getReplyPreviewText(message: Message | null | undefined): string {
+  if (!message) {
+    return "";
+  }
+
+  if (message.deletedAt) {
+    return "Message deleted";
+  }
+
+  const replyMessage = message.message?.trim() ?? "";
+  if (!replyMessage || replyMessage === "Sent an attachment") {
+    const attachments = (message as MessageWithAttachments).attachments ?? [];
+    return attachments.length > 0 ? "Attachment" : "Message";
+  }
+
+  return replyMessage;
+}
+
+function toggleReactionForMessage(
+  message: Message,
+  currentUser: User,
+  emoji: string,
+): Message {
+  const reactions = message.reactions ?? [];
+  const existingReaction = reactions.find(
+    (reaction) => reaction.userId === currentUser.userId,
+  );
+
+  let nextReactions: MessageReactionWithUser[];
+
+  if (!existingReaction) {
+    nextReactions = [
+      ...reactions,
+      {
+        id: -Date.now(),
+        messageId: message.msgId,
+        userId: currentUser.userId,
+        emoji,
+        createdAt: new Date(),
+        user: currentUser,
+      },
+    ];
+  } else if (existingReaction.emoji === emoji) {
+    nextReactions = reactions.filter(
+      (reaction) => reaction.userId !== currentUser.userId,
+    );
+  } else {
+    nextReactions = reactions.map((reaction) =>
+      reaction.userId === currentUser.userId
+        ? {
+            ...reaction,
+            emoji,
+          }
+        : reaction,
+    );
+  }
+
+  return {
+    ...message,
+    reactions: nextReactions,
+  };
 }
 
 interface ChatAreaProps {
@@ -207,6 +291,8 @@ export function ChatArea({
     sendMessage,
     startTyping,
     stopTyping,
+    toggleReaction,
+    deleteMessage: socketDeleteMessage,
     typingUsers,
     onlineUsers,
     forceReconnect,
@@ -216,6 +302,8 @@ export function ChatArea({
     liveMessages,
     addOptimisticMessage,
     removeOptimisticMessage,
+    removeMessageById,
+    replaceMessageLocally,
     clearConversationMessages,
     clearConversationAttachments,
   } = useActiveChat();
@@ -242,6 +330,8 @@ export function ChatArea({
   // Track scroll position for loading older messages
   const isLoadingOlderRef = useRef(false);
   const previousScrollHeightRef = useRef(0);
+  const pendingReactionRollbackRef = useRef(new Map<number, Message>());
+  const pendingDeleteRollbackRef = useRef(new Map<number, Message>());
 
   // Instagram-style scroll tracking
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -253,8 +343,10 @@ export function ChatArea({
     PendingAttachment[]
   >([]);
   const [confirmDialogAction, setConfirmDialogAction] = useState<
-    "chat" | "attachments" | null
+    "chat" | "attachments" | "removeFriend" | "blockUser" | null
   >(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  const [editTarget, setEditTarget] = useState<Message | null>(null);
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(
     null,
   );
@@ -338,6 +430,18 @@ export function ChatArea({
     },
     staleTime: 15_000,
   });
+
+  useEffect(() => {
+    setReplyTarget(null);
+    setEditTarget(null);
+    setMessageText("");
+    messageTextRef.current = "";
+  }, [selectedUser?.userId]);
+
+  useEffect(() => {
+    pendingReactionRollbackRef.current.clear();
+    pendingDeleteRollbackRef.current.clear();
+  }, [selectedUser?.userId]);
 
   const addFriendMutation = useMutation({
     mutationFn: async () => {
@@ -505,6 +609,233 @@ export function ChatArea({
     },
   });
 
+  const removeFriendMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedUser) {
+        throw new Error("No user selected");
+      }
+
+      const res = await apiRequest(
+        "DELETE",
+        `/api/users/${selectedUser.userId}/friendship`,
+      );
+      return readJsonResponse<{
+        removed: boolean;
+        friendshipStatus: FriendshipStatusResponse;
+      }>(res);
+    },
+    onSuccess: (data) => {
+      if (!selectedUser) return;
+
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        data.friendshipStatus,
+      );
+      void refreshOnlineUsers();
+      toast({
+        title: data.removed ? "Friend removed" : "No friendship found",
+        description: data.removed
+          ? `${selectedUser.username} has been removed from your friends list.`
+          : `${selectedUser.username} is not currently in your friends list.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to remove friend",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const blockUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedUser) {
+        throw new Error("No user selected");
+      }
+
+      const res = await apiRequest(
+        "POST",
+        `/api/users/${selectedUser.userId}/block`,
+      );
+      return readJsonResponse<{ friendshipStatus: FriendshipStatusResponse }>(
+        res,
+      );
+    },
+    onSuccess: (data) => {
+      if (!selectedUser) return;
+
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        data.friendshipStatus,
+      );
+      void refreshOnlineUsers();
+      setReplyTarget(null);
+      setEditTarget(null);
+      toast({
+        title: "User blocked",
+        description: `You blocked ${selectedUser.username}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to block user",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editMessageMutation = useMutation({
+    mutationFn: async ({
+      messageId,
+      message,
+    }: {
+      messageId: number;
+      message: string;
+    }) => {
+      const res = await apiRequest("PUT", `/api/messages/${messageId}`, {
+        message,
+      });
+      return readJsonResponse<{ message: Message }>(res);
+    },
+    onSuccess: () => {
+      setEditTarget(null);
+      setMessageText("");
+      messageTextRef.current = "";
+      toast({
+        title: "Message updated",
+        description: "Your message has been edited.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to edit message",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fast delete via socket with optimistic removal
+  const handleDeleteMessage = useCallback((message: Message) => {
+    const messageId = message.msgId;
+
+    // Clear edit/reply targets if they reference this message
+    if (editTarget?.msgId === messageId) {
+      setEditTarget(null);
+      setMessageText("");
+      messageTextRef.current = "";
+    }
+    if (replyTarget?.msgId === messageId) {
+      setReplyTarget(null);
+    }
+
+    pendingDeleteRollbackRef.current.set(messageId, message);
+
+    // Optimistically remove from UI immediately
+    removeMessageById(messageId);
+
+    // Send delete via socket
+    const sent = socketDeleteMessage(messageId);
+    if (!sent) {
+      pendingDeleteRollbackRef.current.delete(messageId);
+      replaceMessageLocally(message);
+      toast({
+        title: "Failed to delete message",
+        description: "Not connected. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [editTarget, replyTarget, socketDeleteMessage, removeMessageById, replaceMessageLocally, toast]);
+
+  // Fast reaction toggle via socket with optimistic update
+  const handleToggleReaction = useCallback((message: Message, emoji: string) => {
+    if (!user) return;
+
+    // Optimistically update the reaction
+    const optimisticMessage = toggleReactionForMessage(message, user, emoji);
+    pendingReactionRollbackRef.current.set(message.msgId, message);
+    replaceMessageLocally(optimisticMessage);
+
+    // Send via socket
+    const sent = toggleReaction(message.msgId, emoji);
+    if (!sent) {
+      // Revert on failure
+      pendingReactionRollbackRef.current.delete(message.msgId);
+      replaceMessageLocally(message);
+      toast({
+        title: "Failed to update reaction",
+        description: "Not connected. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [user, toggleReaction, replaceMessageLocally, toast]);
+
+  // Keep the HTTP mutation as fallback (for edit which doesn't have socket yet)
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: number) => {
+      const res = await apiRequest("DELETE", `/api/messages/item/${messageId}`);
+      return readJsonResponse<{ message: Message }>(res);
+    },
+    onSuccess: (data) => {
+      if (editTarget?.msgId === data.message.msgId) {
+        setEditTarget(null);
+        setMessageText("");
+        messageTextRef.current = "";
+      }
+
+      if (replyTarget?.msgId === data.message.msgId) {
+        setReplyTarget(null);
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete message",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Keep for compatibility but prefer handleToggleReaction
+  const toggleReactionMutation = useMutation({
+    mutationFn: async ({
+      messageId,
+      emoji,
+    }: {
+      messageId: number;
+      emoji: string;
+      optimisticMessage: Message;
+      previousMessage: Message;
+    }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/messages/${messageId}/reactions`,
+        { emoji },
+      );
+      return readJsonResponse<{ message: Message }>(res);
+    },
+    onMutate: ({ optimisticMessage, previousMessage }) => {
+      replaceMessageLocally(optimisticMessage);
+      return { previousMessage };
+    },
+    onSuccess: (data) => {
+      replaceMessageLocally(data.message);
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousMessage) {
+        replaceMessageLocally(context.previousMessage);
+      }
+
+      toast({
+        title: "Failed to update reaction",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   useEffect(() => {
     if (!socket || !user || !selectedUser) return;
 
@@ -550,12 +881,112 @@ export function ChatArea({
       }
     };
 
+    const handleRelationshipStatusUpdated = (data: {
+      userAId: number;
+      userBId: number;
+      reason: "friend_request" | "remove_friend" | "block_user";
+      userAStatus: FriendshipStatusResponse;
+      userBStatus: FriendshipStatusResponse;
+    }) => {
+      const isRelevantConversation =
+        (data.userAId === user.userId &&
+          data.userBId === selectedUser.userId) ||
+        (data.userAId === selectedUser.userId && data.userBId === user.userId);
+
+      if (!isRelevantConversation) {
+        return;
+      }
+
+      const nextStatus =
+        data.userAId === user.userId ? data.userAStatus : data.userBStatus;
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        nextStatus,
+      );
+      void refreshOnlineUsers();
+
+      if (data.reason === "block_user" && nextStatus.blockedByUser) {
+        toast({
+          title: "You were blocked",
+          description: `You can no longer message ${selectedUser.username}.`,
+          variant: "destructive",
+        });
+      }
+    };
+
     socket.on("friend_request_updated", handleFriendRequestUpdated);
+    socket.on("relationship_status_updated", handleRelationshipStatusUpdated);
 
     return () => {
       socket.off("friend_request_updated", handleFriendRequestUpdated);
+      socket.off(
+        "relationship_status_updated",
+        handleRelationshipStatusUpdated,
+      );
     };
   }, [socket, user, selectedUser, toast, refreshOnlineUsers]);
+
+  useEffect(() => {
+    if (!socket) {
+      return;
+    }
+
+    const handleReactionsUpdated = (data: { messageId: number }) => {
+      pendingReactionRollbackRef.current.delete(data.messageId);
+    };
+
+    const handleReactionError = (data: { messageId?: number; error?: string }) => {
+      if (data.messageId) {
+        const previousMessage = pendingReactionRollbackRef.current.get(
+          data.messageId,
+        );
+        if (previousMessage) {
+          replaceMessageLocally(previousMessage);
+          pendingReactionRollbackRef.current.delete(data.messageId);
+        }
+      }
+
+      toast({
+        title: "Failed to update reaction",
+        description: data.error ?? "Unable to update the reaction right now.",
+        variant: "destructive",
+      });
+    };
+
+    const handleMessageDeleted = (data: { messageId: number }) => {
+      pendingDeleteRollbackRef.current.delete(data.messageId);
+    };
+
+    const handleDeleteError = (data: { messageId?: number; error?: string }) => {
+      if (data.messageId) {
+        const previousMessage = pendingDeleteRollbackRef.current.get(
+          data.messageId,
+        );
+        if (previousMessage) {
+          replaceMessageLocally(previousMessage);
+          pendingDeleteRollbackRef.current.delete(data.messageId);
+        }
+      }
+
+      toast({
+        title: "Failed to delete message",
+        description: data.error ?? "Unable to delete the message right now.",
+        variant: "destructive",
+      });
+    };
+
+    socket.on("message_reactions_updated", handleReactionsUpdated);
+    socket.on("reaction_error", handleReactionError);
+    socket.on("message_deleted", handleMessageDeleted);
+    socket.on("delete_error", handleDeleteError);
+
+    return () => {
+      socket.off("message_reactions_updated", handleReactionsUpdated);
+      socket.off("reaction_error", handleReactionError);
+      socket.off("message_deleted", handleMessageDeleted);
+      socket.off("delete_error", handleDeleteError);
+    };
+  }, [socket, replaceMessageLocally, toast]);
 
   // Sort history once (ascending) when pages change
   const historyAsc: Message[] = useMemo(() => {
@@ -621,11 +1052,13 @@ export function ChatArea({
           request: FriendRequestRecord;
           direction: "incoming" | "outgoing";
         }
-    > = displayedMessages.map((message) => ({
-      type: "message",
-      timestamp: new Date(message.timestamp || 0).getTime(),
-      message,
-    }));
+    > = displayedMessages
+      .filter((message) => !message.deletedAt) // Exclude deleted messages - they should vanish completely
+      .map((message) => ({
+        type: "message",
+        timestamp: new Date(message.timestamp || 0).getTime(),
+        message,
+      }));
 
     if (pendingFriendRequest && pendingFriendRequestDirection) {
       items.push({
@@ -811,7 +1244,14 @@ export function ChatArea({
 
   const focusMessageInput = useCallback(() => {
     requestAnimationFrame(() => {
-      messageInputRef.current?.focus();
+      const input = messageInputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      const cursorPosition = input.value.length;
+      input.setSelectionRange(cursorPosition, cursorPosition);
     });
   }, []);
 
@@ -1074,7 +1514,20 @@ export function ChatArea({
         senderId: user.userId,
         receiverId: selectedUser.userId,
         conversationId: null,
+        editedAt: null,
+        deletedAt: null,
         message: "",
+        replyTo: replyTarget
+          ? {
+              msgId: replyTarget.msgId,
+              senderId: replyTarget.senderId,
+              message: replyTarget.message,
+              deletedAt: replyTarget.deletedAt,
+              sender:
+                replyTarget.senderId === user.userId ? user : selectedUser,
+            }
+          : null,
+        replyToId: replyTarget?.msgId ?? null,
         timestamp: new Date(),
         isOptimistic: true,
         isSending: true,
@@ -1138,6 +1591,7 @@ export function ChatArea({
             fileType: uploaded.fileType,
           },
           attachmentId,
+          { replyToId: replyTarget?.msgId ?? null },
         );
 
         if (!didSend) {
@@ -1170,6 +1624,8 @@ export function ChatArea({
           );
           URL.revokeObjectURL(previewUrl);
         }, 500);
+
+        setReplyTarget(null);
 
         return true;
       } catch (error) {
@@ -1213,6 +1669,7 @@ export function ChatArea({
       sendMessage,
       removeOptimisticMessage,
       handleSendUnavailable,
+      replyTarget,
     ],
   );
 
@@ -1301,7 +1758,20 @@ export function ChatArea({
         senderId: user.userId,
         receiverId: selectedUser.userId,
         conversationId: null,
+        editedAt: null,
+        deletedAt: null,
         message: normalizedGifUrl,
+        replyTo: replyTarget
+          ? {
+              msgId: replyTarget.msgId,
+              senderId: replyTarget.senderId,
+              message: replyTarget.message,
+              deletedAt: replyTarget.deletedAt,
+              sender:
+                replyTarget.senderId === user.userId ? user : selectedUser,
+            }
+          : null,
+        replyToId: replyTarget?.msgId ?? null,
         timestamp: new Date(),
         isOptimistic: true,
         isSending: true,
@@ -1315,6 +1785,7 @@ export function ChatArea({
         normalizedGifUrl,
         undefined,
         clientMessageId,
+        { replyToId: replyTarget?.msgId ?? null },
       );
       if (!didSend) {
         removeOptimisticMessage(clientMessageId);
@@ -1324,6 +1795,7 @@ export function ChatArea({
       }
 
       closeComposerPicker();
+      setReplyTarget(null);
       return true;
     },
     [
@@ -1336,18 +1808,29 @@ export function ChatArea({
       removeOptimisticMessage,
       closeComposerPicker,
       handleSendUnavailable,
+      replyTarget,
     ],
   );
 
   const handleSendMessage = useCallback(() => {
     if (!selectedUser || !messageText.trim() || !user) return;
 
+    const trimmedMessage = messageText.trim();
+
+    if (editTarget) {
+      editMessageMutation.mutate({
+        messageId: editTarget.msgId,
+        message: trimmedMessage,
+      });
+      stopLocalTyping(selectedUser.userId);
+      return;
+    }
+
     if (!canSendPrivateMessage()) {
       return;
     }
 
     const clientMessageId = generateClientMessageId();
-    const trimmedMessage = messageText.trim();
 
     // Create optimistic message for instant UI feedback (Instagram-style)
     const optimisticMessage: OptimisticMessage = {
@@ -1355,7 +1838,19 @@ export function ChatArea({
       senderId: user.userId,
       receiverId: selectedUser.userId,
       conversationId: null,
+      editedAt: null,
+      deletedAt: null,
       message: trimmedMessage,
+      replyTo: replyTarget
+        ? {
+            msgId: replyTarget.msgId,
+            senderId: replyTarget.senderId,
+            message: replyTarget.message,
+            deletedAt: replyTarget.deletedAt,
+            sender: replyTarget.senderId === user.userId ? user : selectedUser,
+          }
+        : null,
+      replyToId: replyTarget?.msgId ?? null,
       timestamp: new Date(),
       isOptimistic: true,
       isSending: true,
@@ -1373,6 +1868,7 @@ export function ChatArea({
       trimmedMessage,
       undefined,
       clientMessageId,
+      { replyToId: replyTarget?.msgId ?? null },
     );
     if (!didSend) {
       removeOptimisticMessage(clientMessageId);
@@ -1384,12 +1880,15 @@ export function ChatArea({
     setMessageText("");
     messageTextRef.current = "";
     closeComposerPicker();
+    setReplyTarget(null);
 
     stopLocalTyping(selectedUser.userId);
   }, [
     selectedUser,
     messageText,
     user,
+    editTarget,
+    editMessageMutation,
     canSendPrivateMessage,
     sendMessage,
     generateClientMessageId,
@@ -1398,6 +1897,7 @@ export function ChatArea({
     closeComposerPicker,
     handleSendUnavailable,
     stopLocalTyping,
+    replyTarget,
   ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1429,44 +1929,6 @@ export function ChatArea({
     if (!timestamp) return "";
     return format(new Date(timestamp), "h:mm a");
   };
-
-  if (!selectedUser) {
-    if (isMobile) {
-      return (
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <Send className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="mb-2 text-lg font-semibold text-foreground">
-              Select a User to start chatting
-            </h3>
-            <p className="text-muted-foreground">
-              Choose someone from the online users list to begin a conversation
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="relative flex-1 overflow-hidden bg-background">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
-        <div className="relative flex h-full flex-col">
-          <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
-            <div className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card/95 p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
-                <Send className="h-8 w-8" />
-              </div>
-              <p className="text-xl font-semibold tracking-tight text-foreground">
-                Select a chat to start messaging
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1501,6 +1963,17 @@ export function ChatArea({
       toast({
         title: "Guest account",
         description: "Guest accounts cannot be added as friends.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (friendshipStatusQuery.data?.isBlocked) {
+      toast({
+        title: "Action unavailable",
+        description: isBlockedByMe
+          ? "Unblock this user first."
+          : "This user has blocked you.",
         variant: "destructive",
       });
       return;
@@ -1545,6 +2018,58 @@ export function ChatArea({
     });
   };
 
+  const handleReplyToMessage = useCallback(
+    (message: Message) => {
+      setEditTarget(null);
+      setReplyTarget(message);
+      closeComposerPicker();
+      focusMessageInput();
+    },
+    [closeComposerPicker, focusMessageInput],
+  );
+
+  const handleEditMessageStart = useCallback(
+    (message: Message) => {
+      if (message.deletedAt) {
+        return;
+      }
+
+      setReplyTarget(null);
+      setEditTarget(message);
+      setMessageText(
+        message.message === "Sent an attachment" ? "" : message.message,
+      );
+      messageTextRef.current =
+        message.message === "Sent an attachment" ? "" : message.message;
+      closeComposerPicker();
+      focusMessageInput();
+    },
+    [closeComposerPicker, focusMessageInput],
+  );
+
+  const handleDeleteSingleMessage = useCallback(
+    (message: Message) => {
+      handleDeleteMessage(message);
+    },
+    [handleDeleteMessage],
+  );
+
+  // Wrapper to check for optimistic/deleted before calling socket-based reaction
+  const handleToggleReactionSafe = useCallback(
+    (message: Message, emoji: string) => {
+      if (
+        (message as OptimisticMessage).isOptimistic ||
+        message.deletedAt ||
+        !user
+      ) {
+        return;
+      }
+
+      handleToggleReaction(message, emoji);
+    },
+    [handleToggleReaction, user],
+  );
+
   const addFriendMenuLabel = friendshipStatusQuery.data?.isFriend
     ? "Already friends"
     : friendshipStatusQuery.data?.pendingDirection === "outgoing"
@@ -1554,6 +2079,16 @@ export function ChatArea({
         : addFriendMutation.isPending
           ? "Sending request..."
           : "Add friend";
+
+  const isChatBlocked = friendshipStatusQuery.data?.isBlocked ?? false;
+  const isBlockedByMe = friendshipStatusQuery.data?.blockedByMe ?? false;
+  const isBlockedByUser = friendshipStatusQuery.data?.blockedByUser ?? false;
+  const selectedUsername = selectedUser?.username ?? "this user";
+  const blockedNotice = isBlockedByMe
+    ? `You blocked ${selectedUsername}.`
+    : isBlockedByUser
+      ? `${selectedUsername} has blocked you.`
+      : "";
 
   const handleClearAttachments = () => {
     if (!selectedUser) return;
@@ -1565,6 +2100,16 @@ export function ChatArea({
     setConfirmDialogAction("chat");
   };
 
+  const handleRemoveFriend = () => {
+    if (!selectedUser) return;
+    setConfirmDialogAction("removeFriend");
+  };
+
+  const handleBlockUser = () => {
+    if (!selectedUser) return;
+    setConfirmDialogAction("blockUser");
+  };
+
   const handleConfirmDialogAction = () => {
     if (confirmDialogAction === "attachments") {
       clearAttachmentsMutation.mutate();
@@ -1574,18 +2119,40 @@ export function ChatArea({
       clearChatMutation.mutate();
     }
 
+    if (confirmDialogAction === "removeFriend") {
+      removeFriendMutation.mutate();
+    }
+
+    if (confirmDialogAction === "blockUser") {
+      blockUserMutation.mutate();
+    }
+
     setConfirmDialogAction(null);
   };
 
   const isConfirmDialogPending =
-    clearChatMutation.isPending || clearAttachmentsMutation.isPending;
+    clearChatMutation.isPending ||
+    clearAttachmentsMutation.isPending ||
+    removeFriendMutation.isPending ||
+    blockUserMutation.isPending;
   const isLightboxOpen = imagePreview !== null;
   const lightboxSrc = imagePreview?.url ?? "";
   const isComposerPickerOpen = activeComposerPicker !== null;
   const composerPickerHeight = isMobile ? 320 : 320;
   const hasDraftText = messageText.length > 0;
-  const canSendDraft = messageText.trim().length > 0;
+  const canSendDraft =
+    messageText.trim().length > 0 &&
+    !editMessageMutation.isPending &&
+    !isChatBlocked;
   const canFlipCamera = isMobile && availableCameraCount > 1;
+
+  useEffect(() => {
+    if (!isMobile || (!replyTarget && !editTarget)) {
+      return;
+    }
+
+    focusMessageInput();
+  }, [editTarget, focusMessageInput, isMobile, replyTarget]);
 
   const cameraViewport = (
     <div className="relative flex-1 overflow-hidden bg-black">
@@ -1661,6 +2228,44 @@ export function ChatArea({
       </div>
     </div>
   );
+
+  if (!selectedUser) {
+    if (isMobile) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-background">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Send className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">
+              Select a User to start chatting
+            </h3>
+            <p className="text-muted-foreground">
+              Choose someone from the online users list to begin a conversation
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative flex-1 overflow-hidden bg-background">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
+        <div className="relative flex h-full flex-col">
+          <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
+            <div className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card/95 p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
+                <Send className="h-8 w-8" />
+              </div>
+              <p className="text-xl font-semibold tracking-tight text-foreground">
+                Select a chat to start messaging
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1739,12 +2344,20 @@ export function ChatArea({
             <AlertDialogTitle>
               {confirmDialogAction === "chat"
                 ? "Clear chat"
-                : "Clear attachments"}
+                : confirmDialogAction === "attachments"
+                  ? "Clear attachments"
+                  : confirmDialogAction === "removeFriend"
+                    ? "Remove friend"
+                    : "Block user"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDialogAction === "chat"
                 ? `This will permanently delete the entire chat with ${selectedUser.username} for both users.`
-                : `This will permanently delete all attachments exchanged with ${selectedUser.username} for both users.`}
+                : confirmDialogAction === "attachments"
+                  ? `This will permanently delete all attachments exchanged with ${selectedUser.username} for both users.`
+                  : confirmDialogAction === "removeFriend"
+                    ? `This will remove ${selectedUser.username} from your friends list.`
+                    : `This will block ${selectedUser.username}, remove any friendship, and stop future direct messages.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1799,12 +2412,24 @@ export function ChatArea({
               </h3>
               <div className="flex items-center gap-1 text-xs">
                 <div
-                  className={`w-2 h-2 ${onlineUsers.some((u) => u.userId === selectedUser.userId) ? "bg-green-500" : "bg-gray-400"} rounded-full`}
+                  className={`w-2 h-2 ${
+                    isChatBlocked
+                      ? "bg-amber-500"
+                      : onlineUsers.some(
+                            (u) => u.userId === selectedUser.userId,
+                          )
+                        ? "bg-green-500"
+                        : "bg-gray-400"
+                  } rounded-full`}
                 ></div>
                 <span className="text-foreground font-medium">
-                  {onlineUsers.some((u) => u.userId === selectedUser.userId)
-                    ? "Online"
-                    : "Offline"}
+                  {isChatBlocked
+                    ? isBlockedByMe
+                      ? "Blocked"
+                      : "Restricted"
+                    : onlineUsers.some((u) => u.userId === selectedUser.userId)
+                      ? "Online"
+                      : "Offline"}
                 </span>
               </div>
             </div>
@@ -1844,6 +2469,7 @@ export function ChatArea({
                   disabled={
                     addFriendMutation.isPending ||
                     friendshipStatusQuery.isLoading ||
+                    isChatBlocked ||
                     !!friendshipStatusQuery.data?.isFriend ||
                     friendshipStatusQuery.data?.pendingDirection ===
                       "incoming" ||
@@ -1852,6 +2478,30 @@ export function ChatArea({
                 >
                   <Heart className="mr-2 h-4 w-4" />
                   {addFriendMenuLabel}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleRemoveFriend}
+                  disabled={
+                    removeFriendMutation.isPending ||
+                    !friendshipStatusQuery.data?.isFriend ||
+                    isChatBlocked
+                  }
+                >
+                  <UserMinus className="mr-2 h-4 w-4" />
+                  {removeFriendMutation.isPending
+                    ? "Removing friend..."
+                    : "Remove friend"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleBlockUser}
+                  disabled={blockUserMutation.isPending || isBlockedByMe}
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  {isBlockedByMe
+                    ? "User blocked"
+                    : blockUserMutation.isPending
+                      ? "Blocking user..."
+                      : "Block user"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={handleClearAttachments}
@@ -1949,9 +2599,15 @@ export function ChatArea({
                 message={message}
                 isOwnMessage={isOwnMessage}
                 sender={sender}
+                currentUserId={user?.userId ?? null}
                 isOptimistic={isOptimistic}
                 pendingAttachment={pendingAttachment}
                 onImagePreview={setImagePreview}
+                onReply={handleReplyToMessage}
+                onEdit={handleEditMessageStart}
+                onDelete={handleDeleteSingleMessage}
+                onReact={handleToggleReactionSafe}
+                onKeepComposerFocus={focusMessageInput}
               />
             );
           })}
@@ -2085,93 +2741,128 @@ export function ChatArea({
             )}
           </AnimatePresence>
           <div className="p-2">
-            <div className="relative">
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={handleFileSelect}
-                accept={ATTACHMENT_INPUT_ACCEPT}
-              />
-              <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
-                <Textarea
-                  ref={messageInputRef}
-                  placeholder="Message..."
-                  className={cn(
-                    "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                    hasDraftText ? "pr-12" : "pr-28 sm:pr-32",
-                  )}
-                  rows={1}
-                  value={messageText}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  onFocus={handleInputFocus}
-                  data-testid="textarea-message-input"
+            {isChatBlocked ? (
+              <div className="rounded-[1rem] border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+                {blockedNotice}
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept={ATTACHMENT_INPUT_ACCEPT}
                 />
-                <div className="absolute inset-y-0 right-1.5 flex items-center">
-                  {hasDraftText ? (
-                    <Button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={handleSendMessage}
-                      disabled={!canSendDraft}
-                      className="h-8 w-8 rounded-2xl"
-                      size="icon"
-                      title="Send Message"
-                      data-testid="button-send-message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <>
+                <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
+                  {(replyTarget || editTarget) && (
+                    <div className="flex items-start justify-between gap-3 border-b border-border/70 py-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          {editTarget ? "Editing message" : "Replying to"}
+                        </p>
+                        <p className="truncate text-sm text-foreground">
+                          {getReplyPreviewText(editTarget ?? replyTarget)}
+                        </p>
+                      </div>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                        title="Capture photo"
-                        data-testid="button-open-camera"
+                        className="h-7 w-7 rounded-full text-muted-foreground"
                         onClick={() => {
-                          closeComposerPicker();
-                          setCameraError(null);
-                          setIsCameraOpen(true);
+                          setReplyTarget(null);
+                          setEditTarget(null);
+                          if (editTarget) {
+                            setMessageText("");
+                            messageTextRef.current = "";
+                          }
                         }}
+                        title="Cancel"
                       >
-                        <Camera className="h-4 w-4" />
+                        <X className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                        title="Attach File"
-                        data-testid="button-attach-file"
-                        onClick={() => {
-                          closeComposerPicker();
-                          fileInputRef.current?.click();
-                        }}
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
-                          isComposerPickerOpen && "bg-muted text-foreground",
-                        )}
-                        title={
-                          isComposerPickerOpen
-                            ? "Show keyboard"
-                            : "Open GIF and emoji picker"
-                        }
-                        data-testid="button-picker-switch"
-                        onClick={handlePickerSwitch}
-                      >
-                        <Smile className="h-4 w-4" />
-                      </Button>
-                    </>
+                    </div>
                   )}
+                  <Textarea
+                    ref={messageInputRef}
+                    placeholder={editTarget ? "Edit message..." : "Message..."}
+                    className={cn(
+                      "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                      hasDraftText || editTarget ? "pr-12" : "pr-28 sm:pr-32",
+                    )}
+                    rows={1}
+                    value={messageText}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleInputFocus}
+                    data-testid="textarea-message-input"
+                  />
+                  <div className="absolute bottom-2 right-1.5 flex items-center">
+                    {hasDraftText || editTarget ? (
+                      <Button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={handleSendMessage}
+                        disabled={!canSendDraft}
+                        className="h-8 w-8 rounded-2xl"
+                        size="icon"
+                        title={editTarget ? "Save changes" : "Send Message"}
+                        data-testid="button-send-message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                          title="Capture photo"
+                          data-testid="button-open-camera"
+                          onClick={() => {
+                            closeComposerPicker();
+                            setCameraError(null);
+                            setIsCameraOpen(true);
+                          }}
+                        >
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                          title="Attach File"
+                          data-testid="button-attach-file"
+                          onClick={() => {
+                            closeComposerPicker();
+                            fileInputRef.current?.click();
+                          }}
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                            isComposerPickerOpen && "bg-muted text-foreground",
+                          )}
+                          title={
+                            isComposerPickerOpen
+                              ? "Show keyboard"
+                              : "Open GIF and emoji picker"
+                          }
+                          data-testid="button-picker-switch"
+                          onClick={handlePickerSwitch}
+                        >
+                          <Smile className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -2492,26 +3183,76 @@ const MessageBubble = memo(function MessageBubble({
   message,
   isOwnMessage,
   sender,
+  currentUserId,
   isOptimistic,
   pendingAttachment,
   onImagePreview,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+  onKeepComposerFocus,
 }: {
   message: Message;
   isOwnMessage: boolean;
   sender: User | null;
+  currentUserId: number | null;
   isOptimistic?: boolean;
   pendingAttachment?: PendingAttachment | null;
   onImagePreview: (preview: ImagePreviewState) => void;
+  onReply: (message: Message) => void;
+  onEdit: (message: Message) => void;
+  onDelete: (message: Message) => void;
+  onReact: (message: Message, emoji: string) => void;
+  onKeepComposerFocus?: () => void;
 }) {
+  const shouldRestoreComposerFocusRef = useRef(false);
   const attachments = (message as MessageWithAttachments).attachments || [];
-  const normalizedMessage =
-    message.message && message.message !== "Sent an attachment"
+  const reactions = message.reactions ?? [];
+  const isDeleted = Boolean(message.deletedAt);
+  const normalizedMessage = isDeleted
+    ? "Message deleted"
+    : message.message && message.message !== "Sent an attachment"
       ? message.message
       : "";
   const isMediaOnlyMessage = Boolean(
-    normalizedMessage && getStandaloneMediaMessageUrl(normalizedMessage),
+    !isDeleted &&
+    normalizedMessage &&
+    getStandaloneMediaMessageUrl(normalizedMessage),
   );
   const hasTextBubble = Boolean(normalizedMessage && !isMediaOnlyMessage);
+  const canReply = !isOptimistic;
+  const canReact = !isOptimistic && !isDeleted;
+  const canEdit =
+    isOwnMessage && !isOptimistic && !isDeleted && Boolean(normalizedMessage);
+  const canDelete = isOwnMessage && !isOptimistic && !isDeleted;
+
+  const groupedReactions = Array.from(
+    reactions
+      .reduce<
+        Map<
+          string,
+          { emoji: string; count: number; reactedByCurrentUser: boolean }
+        >
+      >((map, reaction) => {
+        const existing = map.get(reaction.emoji) ?? {
+          emoji: reaction.emoji,
+          count: 0,
+          reactedByCurrentUser: false,
+        };
+        existing.count += 1;
+        if (reaction.userId === currentUserId) {
+          existing.reactedByCurrentUser = true;
+        }
+        map.set(reaction.emoji, existing);
+        return map;
+      }, new Map())
+      .values(),
+  ).sort(
+    (left, right) =>
+      QUICK_REACTIONS.indexOf(left.emoji as (typeof QUICK_REACTIONS)[number]) -
+      QUICK_REACTIONS.indexOf(right.emoji as (typeof QUICK_REACTIONS)[number]),
+  );
 
   const formatBubbleTime = (timestamp: Date | string | null) => {
     if (!timestamp) return "";
@@ -2519,10 +3260,41 @@ const MessageBubble = memo(function MessageBubble({
   };
 
   const renderInlineTimestamp = () => (
-    <div className="flex shrink-0 items-center text-[11px] font-medium opacity-55">
+    <div className="flex shrink-0 items-center gap-1 text-[11px] font-medium opacity-55">
+      {message.editedAt && !message.deletedAt && <span>edited</span>}
       <span>{formatBubbleTime(message.timestamp)}</span>
     </div>
   );
+
+  const renderReplyPreview = () => {
+    if (!message.replyTo) {
+      return null;
+    }
+
+    const replyAuthor =
+      message.replyTo.senderId === currentUserId
+        ? "You"
+        : message.replyTo.sender.username;
+    const replyPreviewText = message.replyTo.deletedAt
+      ? "Message deleted"
+      : message.replyTo.message || "Message";
+
+    return (
+      <div
+        className={cn(
+          "mb-2 rounded-xl border px-3 py-2 text-left",
+          isOwnMessage
+            ? "border-black/10 bg-black/10 text-brand-msg-sent-text/80"
+            : "border-black/10 bg-black/5 text-brand-msg-received-text/80",
+        )}
+      >
+        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] opacity-75">
+          {replyAuthor}
+        </p>
+        <p className="truncate text-sm">{replyPreviewText}</p>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -2549,160 +3321,272 @@ const MessageBubble = memo(function MessageBubble({
           isOwnMessage ? "items-end" : ""
         }`}
       >
-        <div className="overflow-hidden transition-all duration-300">
-          {pendingAttachment && (
-            <div className="flex flex-wrap gap-2">
-              <div
-                className={cn(
-                  "relative overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm",
-                  isVideoAttachmentType(pendingAttachment.file.type)
-                    ? "w-full max-w-xs sm:max-w-sm"
-                    : "h-28 w-28 sm:h-32 sm:w-32",
-                )}
-              >
-                {pendingAttachment.file.type.startsWith("image/") ? (
-                  <div className="relative">
-                    <img
-                      src={pendingAttachment.previewUrl}
-                      alt={pendingAttachment.file.name}
-                      className="h-28 w-28 object-cover opacity-60 sm:h-32 sm:w-32"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <div className="flex flex-col items-center gap-2 text-white">
-                        {pendingAttachment.status === "error" ? (
-                          <span className="text-sm text-red-400">
-                            Upload failed
-                          </span>
-                        ) : (
-                          <>
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                            <span className="text-xs">
-                              {pendingAttachment.status === "uploading"
-                                ? "Uploading..."
-                                : "Sending..."}
+        <div
+          className={cn(
+            "flex items-start gap-1",
+            isOwnMessage && "flex-row-reverse",
+          )}
+        >
+          <div className="overflow-hidden transition-all duration-300">
+            {pendingAttachment && (
+              <div className="flex flex-wrap gap-2">
+                <div
+                  className={cn(
+                    "relative overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm",
+                    isVideoAttachmentType(pendingAttachment.file.type)
+                      ? "w-full max-w-xs sm:max-w-sm"
+                      : "h-28 w-28 sm:h-32 sm:w-32",
+                  )}
+                >
+                  {pendingAttachment.file.type.startsWith("image/") ? (
+                    <div className="relative">
+                      <img
+                        src={pendingAttachment.previewUrl}
+                        alt={pendingAttachment.file.name}
+                        className="h-28 w-28 object-cover opacity-60 sm:h-32 sm:w-32"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <div className="flex flex-col items-center gap-2 text-white">
+                          {pendingAttachment.status === "error" ? (
+                            <span className="text-sm text-red-400">
+                              Upload failed
                             </span>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                              <span className="text-xs">
+                                {pendingAttachment.status === "uploading"
+                                  ? "Uploading..."
+                                  : "Sending..."}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : isVideoAttachmentType(pendingAttachment.file.type) ? (
-                  <VideoAttachmentCard
-                    src={pendingAttachment.previewUrl}
-                    title={pendingAttachment.file.name}
-                    mimeType={pendingAttachment.file.type}
-                    showOverlay
-                    overlayLabel={
-                      pendingAttachment.status === "uploading"
-                        ? "Uploading..."
-                        : "Sending..."
-                    }
-                  />
-                ) : (
-                  <div className="flex h-full items-center gap-2 px-3 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="flex-1 truncate text-sm">
-                      {pendingAttachment.file.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {pendingAttachment.status === "uploading"
-                        ? "Uploading..."
-                        : "Sending..."}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!pendingAttachment && attachments.length > 0 ? (
-            <div className="space-y-2">
-              {attachments.map((attachment) => (
-                <div key={attachment.id}>
-                  {attachment.fileType.startsWith("image/") ? (
-                    <AttachmentThumbnail
-                      attachment={attachment}
-                      onPreview={onImagePreview}
-                    />
-                  ) : isVideoAttachmentType(attachment.fileType) ? (
+                  ) : isVideoAttachmentType(pendingAttachment.file.type) ? (
                     <VideoAttachmentCard
-                      src={attachment.url}
-                      title={attachment.filename}
-                      mimeType={attachment.fileType}
+                      src={pendingAttachment.previewUrl}
+                      title={pendingAttachment.file.name}
+                      mimeType={pendingAttachment.file.type}
+                      showOverlay
+                      overlayLabel={
+                        pendingAttachment.status === "uploading"
+                          ? "Uploading..."
+                          : "Sending..."
+                      }
                     />
                   ) : (
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <Paperclip className="h-4 w-4" />
+                    <div className="flex h-full items-center gap-2 px-3 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="flex-1 truncate text-sm">
-                        {attachment.filename}
+                        {pendingAttachment.file.name}
                       </span>
-                      <a
-                        href={attachment.url}
-                        download={attachment.filename}
-                        className="rounded p-1 hover:bg-black/10"
-                        title="Download"
-                      >
-                        <ArrowLeft className="h-4 w-4 rotate-[-90deg]" />
-                      </a>
+                      <span className="text-xs text-muted-foreground">
+                        {pendingAttachment.status === "uploading"
+                          ? "Uploading..."
+                          : "Sending..."}
+                      </span>
                     </div>
                   )}
                 </div>
-              ))}
-              {message.message && message.message !== "Sent an attachment" && (
-                <div
-                  className={`rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                    isOwnMessage
-                      ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                      : "bg-brand-msg-received text-brand-msg-received-text"
-                  }`}
-                >
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <MessageContent
-                        content={message.message}
-                        onImagePreview={onImagePreview}
-                      />
-                    </div>
-                    {renderInlineTimestamp()}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            !pendingAttachment && (
-              <div
-                className={
-                  isMediaOnlyMessage
-                    ? ""
-                    : `rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                        isOwnMessage
-                          ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                          : "bg-brand-msg-received text-brand-msg-received-text"
-                      }`
-                }
-              >
-                {isMediaOnlyMessage ? (
-                  <MessageContent
-                    content={message.message}
-                    onImagePreview={onImagePreview}
-                  />
-                ) : (
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <MessageContent
-                        content={message.message}
-                        onImagePreview={onImagePreview}
-                      />
-                    </div>
-                    {renderInlineTimestamp()}
-                  </div>
-                )}
               </div>
-            )
+            )}
+
+            {!pendingAttachment && attachments.length > 0 ? (
+              <div className="space-y-2">
+                {attachments.map((attachment) => (
+                  <div key={attachment.id}>
+                    {attachment.fileType.startsWith("image/") ? (
+                      <AttachmentThumbnail
+                        attachment={attachment}
+                        onPreview={onImagePreview}
+                      />
+                    ) : isVideoAttachmentType(attachment.fileType) ? (
+                      <VideoAttachmentCard
+                        src={attachment.url}
+                        title={attachment.filename}
+                        mimeType={attachment.fileType}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <Paperclip className="h-4 w-4" />
+                        <span className="flex-1 truncate text-sm">
+                          {attachment.filename}
+                        </span>
+                        <a
+                          href={attachment.url}
+                          download={attachment.filename}
+                          className="rounded p-1 hover:bg-black/10"
+                          title="Download"
+                        >
+                          <ArrowLeft className="h-4 w-4 rotate-[-90deg]" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {(message.message &&
+                  message.message !== "Sent an attachment") ||
+                message.replyTo ? (
+                  <div
+                    className={`rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
+                      isOwnMessage
+                        ? "bg-brand-msg-sent text-brand-msg-sent-text"
+                        : "bg-brand-msg-received text-brand-msg-received-text"
+                    }`}
+                  >
+                    {renderReplyPreview()}
+                    {message.message &&
+                      message.message !== "Sent an attachment" && (
+                        <div className="flex items-end gap-2">
+                          <div className="min-w-0 flex-1">
+                            <MessageContent
+                              content={message.message}
+                              onImagePreview={onImagePreview}
+                            />
+                          </div>
+                          {renderInlineTimestamp()}
+                        </div>
+                      )}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              !pendingAttachment && (
+                <div
+                  className={
+                    isMediaOnlyMessage
+                      ? ""
+                      : `rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
+                          isOwnMessage
+                            ? "bg-brand-msg-sent text-brand-msg-sent-text"
+                            : "bg-brand-msg-received text-brand-msg-received-text"
+                        }`
+                  }
+                >
+                  {!isMediaOnlyMessage && renderReplyPreview()}
+                  {isMediaOnlyMessage ? (
+                    <MessageContent
+                      content={message.message}
+                      onImagePreview={onImagePreview}
+                    />
+                  ) : (
+                    <div className="flex items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <MessageContent
+                          content={normalizedMessage}
+                          onImagePreview={onImagePreview}
+                        />
+                      </div>
+                      {renderInlineTimestamp()}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+
+          {!isOptimistic && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                  title="Message actions"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align={isOwnMessage ? "start" : "end"}
+                onCloseAutoFocus={(event) => {
+                  if (!shouldRestoreComposerFocusRef.current) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  shouldRestoreComposerFocusRef.current = false;
+                  requestAnimationFrame(() => {
+                    onKeepComposerFocus?.();
+                  });
+                }}
+              >
+                {canReply && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      shouldRestoreComposerFocusRef.current = true;
+                      onReply(message);
+                    }}
+                  >
+                    <Reply className="mr-2 h-4 w-4" />
+                    Reply
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      shouldRestoreComposerFocusRef.current = true;
+                      onEdit(message);
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem onClick={() => onDelete(message)}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete for both
+                  </DropdownMenuItem>
+                )}
+                {canReact &&
+                  QUICK_REACTIONS.map((emoji) => (
+                    <DropdownMenuItem
+                      key={emoji}
+                      onClick={() => onReact(message, emoji)}
+                    >
+                      <span className="mr-2 text-base leading-none">
+                        {emoji}
+                      </span>
+                      React
+                    </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
+
+        {groupedReactions.length > 0 && (
+          <div
+            className={cn(
+              "flex flex-wrap gap-1",
+              isOwnMessage && "justify-end",
+            )}
+          >
+            {groupedReactions.map((reaction) => (
+              <button
+                key={reaction.emoji}
+                type="button"
+                onClick={() => onReact(message, reaction.emoji)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+                  reaction.reactedByCurrentUser
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span>{reaction.emoji}</span>
+                <span>{reaction.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {!hasTextBubble && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            {message.editedAt && !message.deletedAt && <span>edited</span>}
             <span>{formatBubbleTime(message.timestamp)}</span>
           </div>
         )}

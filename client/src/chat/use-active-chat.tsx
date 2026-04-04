@@ -7,7 +7,7 @@ import {
   useRef,
   useCallback,
 } from "react";
-import { Message } from "@shared/schema";
+import { Message, type MessageReactionWithUser } from "@shared/schema";
 import { useAuth } from "@/providers/auth-provider";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,8 @@ interface ActiveChatContextType {
   ) => void;
   confirmMessage: (clientMessageId: string, confirmedMessage: Message) => void;
   removeOptimisticMessage: (clientMessageId: string) => void;
+  removeMessageById: (messageId: number) => void;
+  replaceMessageLocally: (message: Message) => void;
   clearConversationMessages: () => void;
   clearConversationAttachments: () => void;
 }
@@ -72,16 +74,27 @@ function updateMessageCache(
   >(queryKey, (oldData) => {
     if (!oldData?.pages) return oldData;
 
-    // Check if message already exists in any page
-    const messageExists = oldData.pages.some((page) =>
-      page.messages.some((m) => m.msgId === message.msgId),
-    );
-
-    if (messageExists) return oldData;
-
-    // Add to first page (most recent messages)
     const newPages = [...oldData.pages];
-    if (newPages.length > 0) {
+    let messageUpdated = false;
+
+    for (let pageIndex = 0; pageIndex < newPages.length; pageIndex += 1) {
+      const page = newPages[pageIndex];
+      const messageIndex = page.messages.findIndex(
+        (m) => m.msgId === message.msgId,
+      );
+
+      if (messageIndex >= 0) {
+        const nextMessages = [...page.messages];
+        nextMessages[messageIndex] = message;
+        newPages[pageIndex] = {
+          ...page,
+          messages: nextMessages,
+        };
+        messageUpdated = true;
+      }
+    }
+
+    if (!messageUpdated && newPages.length > 0) {
       newPages[0] = {
         ...newPages[0],
         messages: [...newPages[0].messages, message].sort(
@@ -93,6 +106,112 @@ function updateMessageCache(
     }
 
     return { ...oldData, pages: newPages };
+  });
+}
+
+function scheduleMessageCacheUpdate(
+  userId: number,
+  otherUserId: number,
+  message: Message,
+) {
+  if (typeof window === "undefined") {
+    updateMessageCache(userId, otherUserId, message);
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    updateMessageCache(userId, otherUserId, message);
+  });
+}
+
+function replaceMessageInActiveCache(otherUserId: number, message: Message) {
+  const queryKey = ["/api/messages/history", otherUserId];
+
+  queryClient.setQueryData<
+    { pages: { messages: Message[]; nextCursor: string | null }[] } | undefined
+  >(queryKey, (oldData) => {
+    if (!oldData?.pages) return oldData;
+
+    let messageUpdated = false;
+    const nextPages = oldData.pages.map((page) => {
+      let pageUpdated = false;
+      const nextMessages = page.messages.map((existingMessage) => {
+        if (existingMessage.msgId !== message.msgId) {
+          return existingMessage;
+        }
+
+        messageUpdated = true;
+        pageUpdated = true;
+        return message;
+      });
+
+      return pageUpdated
+        ? {
+            ...page,
+            messages: nextMessages,
+          }
+        : page;
+    });
+
+    return messageUpdated ? { ...oldData, pages: nextPages } : oldData;
+  });
+}
+
+function updateMessageReactionsInActiveCache(
+  otherUserId: number,
+  messageId: number,
+  reactions: MessageReactionWithUser[],
+) {
+  const queryKey = ["/api/messages/history", otherUserId];
+
+  queryClient.setQueryData<
+    { pages: { messages: Message[]; nextCursor: string | null }[] } | undefined
+  >(queryKey, (oldData) => {
+    if (!oldData?.pages) return oldData;
+
+    let messageUpdated = false;
+    const nextPages = oldData.pages.map((page) => {
+      let pageUpdated = false;
+      const nextMessages = page.messages.map((message) => {
+        if (message.msgId !== messageId) {
+          return message;
+        }
+
+        messageUpdated = true;
+        pageUpdated = true;
+        return {
+          ...message,
+          reactions,
+        };
+      });
+
+      return pageUpdated
+        ? {
+            ...page,
+            messages: nextMessages,
+          }
+        : page;
+    });
+
+    return messageUpdated ? { ...oldData, pages: nextPages } : oldData;
+  });
+}
+
+function removeMessageFromActiveCache(otherUserId: number, messageId: number) {
+  const queryKey = ["/api/messages/history", otherUserId];
+
+  queryClient.setQueryData<
+    { pages: { messages: Message[]; nextCursor: string | null }[] } | undefined
+  >(queryKey, (oldData) => {
+    if (!oldData?.pages) return oldData;
+
+    return {
+      ...oldData,
+      pages: oldData.pages.map((page) => ({
+        ...page,
+        messages: page.messages.filter((message) => message.msgId !== messageId),
+      })),
+    };
   });
 }
 
@@ -153,6 +272,40 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     setLiveMessages((prev) => stripConversationAttachments(prev));
   }, []);
 
+  const replaceMessageLocally = useCallback((message: Message) => {
+    setLiveMessages((prev) => {
+      const existingMessageIndex = prev.findIndex(
+        (existingMessage) => existingMessage.msgId === message.msgId,
+      );
+      if (existingMessageIndex >= 0) {
+        const nextMessages = [...prev];
+        nextMessages[existingMessageIndex] = message;
+        return nextMessages;
+      }
+
+      return [...prev, message].sort(
+        (left, right) =>
+          new Date(left.timestamp || 0).getTime() -
+          new Date(right.timestamp || 0).getTime(),
+      );
+    });
+
+    const currentActiveUserId = activeUserIdRef.current;
+    if (currentActiveUserId) {
+      replaceMessageInActiveCache(currentActiveUserId, message);
+    }
+  }, []);
+
+  // Remove a message by ID (for optimistic delete)
+  const removeMessageById = useCallback((messageId: number) => {
+    setLiveMessages((prev) => prev.filter((m) => m.msgId !== messageId));
+
+    const currentActiveUserId = activeUserIdRef.current;
+    if (currentActiveUserId) {
+      removeMessageFromActiveCache(currentActiveUserId, messageId);
+    }
+  }, []);
+
   // Confirm optimistic message with real server data
   const confirmMessage = useCallback(
     (clientMessageId: string, confirmedMessage: Message) => {
@@ -174,7 +327,11 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
             confirmedMessage.senderId === user.userId
               ? confirmedMessage.receiverId
               : confirmedMessage.senderId;
-          updateMessageCache(user.userId, otherUserId, confirmedMessage);
+          scheduleMessageCacheUpdate(
+            user.userId,
+            otherUserId,
+            confirmedMessage,
+          );
         }
       }
     },
@@ -184,14 +341,10 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!socket || !isConnected || !user) return;
 
+    // Handle new messages (receiver gets persisted message directly)
     const handleNewMessage = (data: { message: Message }) => {
       const msg = data.message;
       const currentActiveId = activeUserIdRef.current;
-
-      // Update React Query cache for persistence
-      const otherUserId =
-        msg.senderId === user.userId ? msg.receiverId : msg.senderId;
-      updateMessageCache(user.userId, otherUserId, msg);
 
       // Only add to live state if it belongs to the active conversation
       const isRelevant =
@@ -200,48 +353,82 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
       if (isRelevant) {
         setLiveMessages((prev) => {
+          // Skip if same msgId already exists
           if (prev.some((m) => m.msgId === msg.msgId)) return prev;
           return [...prev, msg];
         });
       }
+
+      const otherUserId =
+        msg.senderId === user.userId ? msg.receiverId : msg.senderId;
+      scheduleMessageCacheUpdate(user.userId, otherUserId, msg);
     };
 
-    const handleMessageSent = (data: {
-      message: Message;
-      clientMessageId?: string;
-    }) => {
+    // Acknowledge server received the message (sender's optimistic stays until confirmed)
+    const handleMessageSent = (_data: { clientMessageId?: string }) => {
+      // Just an acknowledgment - optimistic message stays until message_confirmed
+    };
+
+    const handleMessageUpdated = (data: { message: Message }) => {
       const msg = data.message;
       const currentActiveId = activeUserIdRef.current;
 
-      // Update React Query cache for persistence
-      updateMessageCache(user.userId, msg.receiverId, msg);
-
-      // Resolve optimistic update if clientMessageId provided
-      if (data.clientMessageId) {
-        const optimistic = optimisticMessagesRef.current.get(
-          data.clientMessageId,
-        );
-        if (optimistic) {
-          optimisticMessagesRef.current.delete(data.clientMessageId);
-          setLiveMessages((prev) => {
-            // Remove optimistic, add confirmed
-            const filtered = prev.filter((m) => m.msgId !== optimistic.msgId);
-            if (filtered.some((m) => m.msgId === msg.msgId)) return filtered;
-            return [...filtered, msg];
-          });
-          return; // Already handled
-        }
-      }
-
-      // Fallback: just add if relevant to active chat
       const isRelevant =
-        msg.senderId === user.userId && msg.receiverId === currentActiveId;
+        (msg.senderId === currentActiveId && msg.receiverId === user.userId) ||
+        (msg.senderId === user.userId && msg.receiverId === currentActiveId);
+
       if (isRelevant) {
         setLiveMessages((prev) => {
-          if (prev.some((m) => m.msgId === msg.msgId)) return prev;
+          const existingMessageIndex = prev.findIndex(
+            (m) => m.msgId === msg.msgId,
+          );
+          if (existingMessageIndex >= 0) {
+            const nextMessages = [...prev];
+            nextMessages[existingMessageIndex] = msg;
+            return nextMessages;
+          }
+
           return [...prev, msg];
         });
       }
+
+      const otherUserId =
+        msg.senderId === user.userId ? msg.receiverId : msg.senderId;
+      scheduleMessageCacheUpdate(user.userId, otherUserId, msg);
+    };
+
+    const handleMessageReactionsUpdated = (data: {
+      messageId: number;
+      senderId: number;
+      receiverId: number;
+      reactions: MessageReactionWithUser[];
+    }) => {
+      const currentActiveId = activeUserIdRef.current;
+
+      const isRelevant =
+        (data.senderId === currentActiveId && data.receiverId === user.userId) ||
+        (data.senderId === user.userId && data.receiverId === currentActiveId);
+
+      if (isRelevant) {
+        setLiveMessages((prev) =>
+          prev.map((message) =>
+            message.msgId === data.messageId
+              ? {
+                  ...message,
+                  reactions: data.reactions,
+                }
+              : message,
+          ),
+        );
+      }
+
+      const otherUserId =
+        data.senderId === user.userId ? data.receiverId : data.senderId;
+      updateMessageReactionsInActiveCache(
+        otherUserId,
+        data.messageId,
+        data.reactions,
+      );
     };
 
     const handleMessageSaveError = (data: {
@@ -259,16 +446,74 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    // Handle message_confirmed: replace sender's optimistic message with persisted one
+    const handleMessageConfirmed = (data: {
+      message: Message;
+      clientMessageId?: string;
+    }) => {
+      const msg = data.message;
+      const currentActiveId = activeUserIdRef.current;
+
+      // Only relevant for sender (their optimistic needs replacing)
+      const isRelevant =
+        msg.senderId === user.userId && msg.receiverId === currentActiveId;
+
+      if (!isRelevant) return;
+
+      setLiveMessages((prev) => {
+        // Remove sender's optimistic message
+        let filtered = prev;
+        if (data.clientMessageId) {
+          const optimistic = optimisticMessagesRef.current.get(data.clientMessageId);
+          if (optimistic) {
+            optimisticMessagesRef.current.delete(data.clientMessageId);
+            filtered = prev.filter((m) => m.msgId !== optimistic.msgId);
+          }
+        }
+
+        // Add confirmed message if not already present
+        if (filtered.some((m) => m.msgId === msg.msgId)) return filtered;
+        return [...filtered, msg];
+      });
+
+      scheduleMessageCacheUpdate(user.userId, msg.receiverId, msg);
+    };
+
+    // Handle message_deleted: completely remove message from UI
+    const handleMessageDeleted = (data: {
+      messageId: number;
+      senderId: number;
+      receiverId: number;
+    }) => {
+      const currentActiveId = activeUserIdRef.current;
+
+      const isRelevant =
+        (data.senderId === currentActiveId && data.receiverId === user.userId) ||
+        (data.senderId === user.userId && data.receiverId === currentActiveId);
+
+      if (isRelevant) {
+        removeMessageById(data.messageId);
+      }
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_sent", handleMessageSent);
+    socket.on("message_updated", handleMessageUpdated);
+    socket.on("message_reactions_updated", handleMessageReactionsUpdated);
     socket.on("message_save_error", handleMessageSaveError);
+    socket.on("message_confirmed", handleMessageConfirmed);
+    socket.on("message_deleted", handleMessageDeleted);
 
     return () => {
       socket.off("new_message", handleNewMessage);
       socket.off("message_sent", handleMessageSent);
+      socket.off("message_updated", handleMessageUpdated);
+      socket.off("message_reactions_updated", handleMessageReactionsUpdated);
       socket.off("message_save_error", handleMessageSaveError);
+      socket.off("message_confirmed", handleMessageConfirmed);
+      socket.off("message_deleted", handleMessageDeleted);
     };
-  }, [socket, isConnected, user, removeOptimisticMessage, toast]);
+  }, [socket, isConnected, user, removeMessageById, removeOptimisticMessage, toast]);
 
   return (
     <ActiveChatContext.Provider
@@ -279,6 +524,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
         addOptimisticMessage,
         confirmMessage,
         removeOptimisticMessage,
+        removeMessageById,
+        replaceMessageLocally,
         clearConversationMessages,
         clearConversationAttachments,
       }}

@@ -211,6 +211,11 @@ export function UsersSidebar({
 
       // Mark users not in the sidebar feed as offline and keep their last seen
       newCache.forEach((cachedUser, odUserId) => {
+        if (!sidebarUserIds.has(odUserId) && cachedUser.isPinned) {
+          newCache.delete(odUserId);
+          return;
+        }
+
         if (!sidebarUserIds.has(odUserId) && cachedUser.isOnline) {
           newCache.set(odUserId, {
             ...cachedUser,

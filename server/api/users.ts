@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import {
   updateUserProfileSchema,
+  type UserBlock,
   type DbUser,
   type SelfUserProfile,
   type UpdateUserProfile,
@@ -78,17 +79,23 @@ function parseProfileUpdatePayload(body: unknown): UpdateUserProfile {
 function buildFriendshipStatus(
   userId: number,
   friendship: Awaited<ReturnType<typeof storage.getFriendship>>,
+  block?: Awaited<ReturnType<typeof storage.getBlockBetweenUsers>>,
   pendingRequest?: Awaited<ReturnType<typeof storage.getPendingFriendRequestBetweenUsers>>,
 ) {
   return {
     isFriend: !!friendship,
     friendship,
-    pendingRequest: pendingRequest ?? null,
-    pendingDirection: pendingRequest
-      ? pendingRequest.senderId === userId
-        ? ("outgoing" as const)
-        : ("incoming" as const)
-      : null,
+    isBlocked: !!block,
+    block: block ?? null,
+    blockedByMe: block?.blockerId === userId,
+    blockedByUser: block?.blockedId === userId,
+    pendingRequest: block ? null : (pendingRequest ?? null),
+    pendingDirection:
+      block || !pendingRequest
+        ? null
+        : pendingRequest.senderId === userId
+          ? ("outgoing" as const)
+          : ("incoming" as const),
   };
 }
 
@@ -98,6 +105,45 @@ async function getOnlineUsers() {
 
 async function getSidebarUsers(userId: number) {
   return getSidebarUsersForUser(userId);
+}
+
+async function getRelationshipStatus(userId: number, otherUserId: number) {
+  const [friendship, block] = await Promise.all([
+    storage.getFriendship(userId, otherUserId),
+    storage.getBlockBetweenUsers(userId, otherUserId),
+  ]);
+
+  const pendingRequest =
+    friendship || block
+      ? undefined
+      : await storage.getPendingFriendRequestBetweenUsers(userId, otherUserId);
+
+  return buildFriendshipStatus(userId, friendship, block, pendingRequest);
+}
+
+async function emitRelationshipStatusUpdate(
+  io: SocketIOServer,
+  userAId: number,
+  userBId: number,
+  reason: "friend_request" | "remove_friend" | "block_user",
+  extra?: Record<string, unknown>,
+) {
+  const [userAStatus, userBStatus] = await Promise.all([
+    getRelationshipStatus(userAId, userBId),
+    getRelationshipStatus(userBId, userAId),
+  ]);
+
+  const payload = {
+    userAId,
+    userBId,
+    reason,
+    userAStatus,
+    userBStatus,
+    ...extra,
+  };
+
+  io.to(`user:${userAId}`).emit("relationship_status_updated", payload);
+  io.to(`user:${userBId}`).emit("relationship_status_updated", payload);
 }
 
 async function updateUsername(userId: number, username: string) {
@@ -162,12 +208,7 @@ async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
 }
 
 async function getFriendshipStatus(userId: number, otherUserId: number) {
-  const friendship = await storage.getFriendship(userId, otherUserId);
-  const pendingRequest = friendship
-    ? undefined
-    : await storage.getPendingFriendRequestBetweenUsers(userId, otherUserId);
-
-  return buildFriendshipStatus(userId, friendship, pendingRequest);
+  return getRelationshipStatus(userId, otherUserId);
 }
 
 async function sendFriendRequest(userId: number, otherUserId: number) {
@@ -199,9 +240,20 @@ async function sendFriendRequest(userId: number, otherUserId: number) {
     };
   }
 
+  const relationshipBlock = await storage.getBlockBetweenUsers(userId, otherUserId);
+  if (relationshipBlock) {
+    return {
+      error:
+        relationshipBlock.blockerId === userId
+          ? ("Unblock this user before sending a friend request" as const)
+          : ("This user has blocked you" as const),
+      status: 400 as const,
+    };
+  }
+
   const existingFriendship = await storage.getFriendship(userId, otherUserId);
   if (existingFriendship) {
-    return buildFriendshipStatus(userId, existingFriendship);
+    return buildFriendshipStatus(userId, existingFriendship, undefined);
   }
 
   const existingPendingRequest = await storage.getPendingFriendRequestBetweenUsers(
@@ -209,7 +261,12 @@ async function sendFriendRequest(userId: number, otherUserId: number) {
     otherUserId,
   );
   if (existingPendingRequest) {
-    return buildFriendshipStatus(userId, undefined, existingPendingRequest);
+    return buildFriendshipStatus(
+      userId,
+      undefined,
+      undefined,
+      existingPendingRequest,
+    );
   }
 
   const pendingRequest = await storage.createFriendRequest(userId, otherUserId);
@@ -220,7 +277,7 @@ async function sendFriendRequest(userId: number, otherUserId: number) {
     };
   }
 
-  return buildFriendshipStatus(userId, undefined, pendingRequest);
+  return buildFriendshipStatus(userId, undefined, undefined, pendingRequest);
 }
 
 async function respondToFriendRequest(
@@ -246,6 +303,17 @@ async function respondToFriendRequest(
   if (request.status !== "pending") {
     return {
       error: "This friend request has already been handled" as const,
+      status: 400 as const,
+    };
+  }
+
+  const relationshipBlock = await storage.getBlockBetweenUsers(
+    request.senderId,
+    request.receiverId,
+  );
+  if (relationshipBlock) {
+    return {
+      error: "Blocked users cannot complete friend requests" as const,
       status: 400 as const,
     };
   }
@@ -276,7 +344,67 @@ async function respondToFriendRequest(
   return {
     action,
     request: updatedRequest,
-    friendshipStatus: buildFriendshipStatus(userId, friendship),
+    friendshipStatus: buildFriendshipStatus(userId, friendship, undefined),
+  };
+}
+
+async function removeFriend(userId: number, otherUserId: number) {
+  if (userId === otherUserId) {
+    return {
+      error: "You cannot remove yourself" as const,
+      status: 400 as const,
+    };
+  }
+
+  const currentUser = await storage.getUser(userId);
+  const otherUser = await storage.getUser(otherUserId);
+  if (!currentUser || !otherUser) {
+    return { error: "User not found" as const, status: 404 as const };
+  }
+
+  if (currentUser.isGuest) {
+    return {
+      error: "Guest accounts cannot manage friends" as const,
+      status: 400 as const,
+    };
+  }
+
+  const removed = await storage.removeFriend(userId, otherUserId);
+  await storage.clearPendingFriendRequestsBetweenUsers(userId, otherUserId);
+
+  return {
+    removed,
+    friendshipStatus: await getRelationshipStatus(userId, otherUserId),
+  };
+}
+
+async function blockUser(userId: number, otherUserId: number) {
+  if (userId === otherUserId) {
+    return {
+      error: "You cannot block yourself" as const,
+      status: 400 as const,
+    };
+  }
+
+  const [currentUser, otherUser] = await Promise.all([
+    storage.getUser(userId),
+    storage.getUser(otherUserId),
+  ]);
+  if (!currentUser || !otherUser) {
+    return { error: "User not found" as const, status: 404 as const };
+  }
+
+  await storage.removeFriend(userId, otherUserId);
+  await storage.clearPendingFriendRequestsBetweenUsers(userId, otherUserId);
+
+  const block = await storage.blockUser(userId, otherUserId);
+  if (!block) {
+    return { error: "Failed to block user" as const, status: 500 as const };
+  }
+
+  return {
+    block,
+    friendshipStatus: await getRelationshipStatus(userId, otherUserId),
   };
 }
 
@@ -431,6 +559,18 @@ function createSendFriendRequestController(io: SocketIOServer) {
           ? [pendingRequest.senderId, pendingRequest.receiverId]
           : [req.jwtUser!.userId, parsed.userId],
       );
+      await emitRelationshipStatusUpdate(
+        io,
+        req.jwtUser!.userId,
+        parsed.userId,
+        "friend_request",
+        pendingRequest
+          ? {
+              requestId: pendingRequest.id,
+              requestStatus: pendingRequest.status,
+            }
+          : undefined,
+      );
       res.status(201).json(result);
     } catch (error) {
       next(error);
@@ -486,7 +626,71 @@ function createRespondFriendRequestController(io: SocketIOServer) {
         result.request.senderId,
         result.request.receiverId,
       ]);
+      await emitRelationshipStatusUpdate(
+        io,
+        result.request.senderId,
+        result.request.receiverId,
+        "friend_request",
+        {
+          requestId: result.request.id,
+          requestStatus: result.request.status,
+        },
+      );
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+function createRemoveFriendController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = parseTargetUserId(req.params.userId);
+      if ("error" in parsed) {
+        return res.status(400).json({ message: parsed.error });
+      }
+
+      const result = await removeFriend(req.jwtUser!.userId, parsed.userId);
+      if ("error" in result) {
+        return res.status(result.status ?? 500).json({ message: result.error });
+      }
+
+      await emitSidebarUsers(io, [req.jwtUser!.userId, parsed.userId]);
+      await emitRelationshipStatusUpdate(
+        io,
+        req.jwtUser!.userId,
+        parsed.userId,
+        "remove_friend",
+      );
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+function createBlockUserController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = parseTargetUserId(req.params.userId);
+      if ("error" in parsed) {
+        return res.status(400).json({ message: parsed.error });
+      }
+
+      const result = await blockUser(req.jwtUser!.userId, parsed.userId);
+      if ("error" in result) {
+        return res.status(result.status ?? 500).json({ message: result.error });
+      }
+
+      await emitSidebarUsers(io, [req.jwtUser!.userId, parsed.userId]);
+      await emitRelationshipStatusUpdate(
+        io,
+        req.jwtUser!.userId,
+        parsed.userId,
+        "block_user",
+      );
+      res.status(201).json(result);
     } catch (error) {
       next(error);
     }
@@ -503,11 +707,17 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
     jwtAuth,
     createSendFriendRequestController(io),
   );
+  app.delete(
+    "/api/users/:userId/friendship",
+    jwtAuth,
+    createRemoveFriendController(io),
+  );
   app.post(
     "/api/friend-requests/:requestId/respond",
     jwtAuth,
     createRespondFriendRequestController(io),
   );
+  app.post("/api/users/:userId/block", jwtAuth, createBlockUserController(io));
   app.put("/api/user/profile", jwtAuth, createUpdateProfileController(io));
   app.put("/api/user/username", jwtAuth, createUpdateUsernameController(io));
 }

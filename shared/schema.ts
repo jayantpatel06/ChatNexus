@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { User as PrismaUser, Message as PrismaMessage, GlobalMessage as PrismaGlobalMessage } from "@prisma/client";
+import type {
+  GlobalMessage as PrismaGlobalMessage,
+  Message as PrismaMessage,
+  User as PrismaUser,
+} from "@prisma/client";
 
 // Zod schemas for validation
 export const insertUserSchema = z.object({
@@ -40,7 +44,16 @@ export const insertMessageSchema = z.object({
   senderId: z.number(),
   receiverId: z.number(),
   conversationId: z.string().optional(),
+  replyToId: z.number().int().positive().optional(),
   message: z.string().min(1),
+});
+
+export const updateMessageSchema = z.object({
+  message: z.string().trim().min(1),
+});
+
+export const messageReactionSchema = z.object({
+  emoji: z.string().trim().min(1).max(16),
 });
 
 // Type exports using Prisma generated types
@@ -53,8 +66,36 @@ export type LoginUser = z.infer<typeof loginUserSchema>;
 export type GuestLogin = z.infer<typeof guestLoginSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
-export type Message = PrismaMessage;
+type MessageRecord = Omit<
+  PrismaMessage,
+  "replyToId" | "editedAt" | "deletedAt"
+> & {
+  replyToId: number | null;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+};
+export type MessageReaction = {
+  id: number;
+  messageId: number;
+  userId: number;
+  emoji: string;
+  createdAt: Date;
+};
+export type MessageReactionWithUser = MessageReaction & { user: User };
+export type MessageReplyPreview = Pick<
+  MessageRecord,
+  "msgId" | "senderId" | "message" | "deletedAt"
+> & {
+  sender: User;
+};
+export type Message = MessageRecord & {
+  attachments?: Attachment[];
+  reactions?: MessageReactionWithUser[];
+  replyTo?: MessageReplyPreview | null;
+};
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type UpdateMessage = z.infer<typeof updateMessageSchema>;
+export type MessageReactionInput = z.infer<typeof messageReactionSchema>;
 
 export const insertAttachmentSchema = z.object({
   messageId: z.number(),
@@ -99,4 +140,11 @@ export type FriendRequest = {
   status: FriendRequestStatus;
   createdAt: Date;
   respondedAt: Date | null;
+};
+
+export type UserBlock = {
+  id: number;
+  blockerId: number;
+  blockedId: number;
+  createdAt: Date;
 };

@@ -24,6 +24,9 @@ model User {
   friendshipsTwo   Friendship[] @relation("FriendshipsUserTwo")
   sentFriendRequests FriendRequest[] @relation("FriendRequestsSender")
   receivedFriendRequests FriendRequest[] @relation("FriendRequestsReceiver")
+  messageReactions MessageReaction[]
+  blockedUsers     UserBlock[] @relation("UserBlocksBlocker")
+  blockedByUsers   UserBlock[] @relation("UserBlocksBlocked")
 
   @@map("Users")
   @@index([isOnline])
@@ -64,18 +67,40 @@ model Message {
   senderId       Int       @map("sender_id")
   receiverId     Int       @map("receiver_id")
   conversationId String?   @db.VarChar(64) @map("conversation_id")
+  replyToId      Int?      @map("reply_to_id")
   message        String
+  editedAt       DateTime? @map("edited_at")
+  deletedAt      DateTime? @map("deleted_at")
   timestamp      DateTime  @default(now())
   receiver       User      @relation("Receiver", fields: [receiverId], references: [userId])
   sender         User      @relation("Sender", fields: [senderId], references: [userId])
+  replyTo        Message?  @relation("MessageReplies", fields: [replyToId], references: [msgId], onDelete: SetNull)
+  replies        Message[] @relation("MessageReplies")
 
   attachments Attachment[]
+  reactions   MessageReaction[]
   @@map("Messages")
   @@index([senderId, receiverId])
   @@index([receiverId, senderId])
   @@index([timestamp])
+  @@index([replyToId])
   @@index([conversationId, timestamp, msgId])
   @@unique([timestamp, msgId], name: "timestamp_msgId")
+}
+
+model MessageReaction {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @map("message_id")
+  userId    Int      @map("user_id")
+  emoji     String   @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at")
+  message   Message  @relation(fields: [messageId], references: [msgId], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@map("MessageReactions")
 }
 
 model Attachment {
@@ -99,4 +124,18 @@ model GlobalMessage {
 
   @@map("GlobalMessages")
   @@index([timestamp])
+}
+
+model UserBlock {
+  id        Int      @id @default(autoincrement())
+  blockerId Int      @map("blocker_id")
+  blockedId Int      @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  blocker   User     @relation("UserBlocksBlocker", fields: [blockerId], references: [userId], onDelete: Cascade)
+  blocked   User     @relation("UserBlocksBlocked", fields: [blockedId], references: [userId], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("UserBlocks")
 }

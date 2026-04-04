@@ -45,9 +45,12 @@ interface SocketContextType {
     message: string,
     attachment?: { url: string; filename: string; fileType: string },
     clientMessageId?: string,
+    options?: { replyToId?: number | null },
   ) => boolean;
   startTyping: (receiverId: number) => void;
   stopTyping: (receiverId: number) => void;
+  toggleReaction: (messageId: number, emoji: string) => boolean;
+  deleteMessage: (messageId: number) => boolean;
   typingUsers: Set<number>;
   forceReconnect: () => void;
   refreshOnlineUsers: () => Promise<void>;
@@ -203,6 +206,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     message: string,
     attachment?: { url: string; filename: string; fileType: string },
     clientMessageId?: string,
+    options?: { replyToId?: number | null },
   ) => {
     if (!socket || !socket.connected || !user) return false;
 
@@ -217,6 +221,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       message,
       attachment,
       clientMessageId: msgClientId,
+      replyToId: options?.replyToId ?? undefined,
     });
 
     return true;
@@ -242,16 +247,30 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleReaction = (messageId: number, emoji: string): boolean => {
+    if (!socket || !socket.connected) return false;
+    socket.emit("toggle_reaction", { messageId, emoji });
+    return true;
+  };
+
+  const deleteMessage = (messageId: number): boolean => {
+    if (!socket || !socket.connected) return false;
+    socket.emit("delete_message", { messageId });
+    return true;
+  };
+
   return (
     <SocketContext.Provider
-        value={{
-          socket,
-          isConnected,
-          sidebarUsers,
-          onlineUsers,
-          sendMessage,
+      value={{
+        socket,
+        isConnected,
+        sidebarUsers,
+        onlineUsers,
+        sendMessage,
         startTyping,
         stopTyping,
+        toggleReaction,
+        deleteMessage,
         typingUsers,
         forceReconnect,
         refreshOnlineUsers,

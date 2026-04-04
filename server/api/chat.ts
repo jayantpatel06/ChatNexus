@@ -1,5 +1,9 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
+import {
+  messageReactionSchema,
+  updateMessageSchema,
+} from "@shared/schema";
 import { jwtAuth } from "../middleware/jwt-auth";
 import {
   cleanupExpiredGlobalMessagesIfNeeded,
@@ -41,6 +45,15 @@ function parseConversationTargetUserId(params: { userId?: string }) {
   return { otherUserId };
 }
 
+function parseMessageId(params: { messageId?: string }) {
+  const messageId = parseInt(params.messageId ?? "", 10);
+  if (isNaN(messageId) || messageId <= 0) {
+    return { error: "Invalid message ID" as const };
+  }
+
+  return { messageId };
+}
+
 function parseConversationStatsUserIds(query: any) {
   const rawUserIds = typeof query.userIds === "string" ? query.userIds : "";
 
@@ -60,6 +73,12 @@ function parseConversationStatsUserIds(query: any) {
   }
 
   return { userIds };
+}
+
+function emitConversationMessageUpdate(io: SocketIOServer, message: { senderId: number; receiverId: number }) {
+  io.to(`user:${message.senderId}`)
+    .to(`user:${message.receiverId}`)
+    .emit("message_updated", { message });
 }
 
 async function getRecentMessagesController(
@@ -186,10 +205,153 @@ function createClearConversationAttachmentsController(io: SocketIOServer) {
   };
 }
 
+function createEditMessageController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsedMessageId = parseMessageId(req.params);
+      if ("error" in parsedMessageId) {
+        return res.status(400).json({ message: parsedMessageId.error });
+      }
+
+      const payload = updateMessageSchema.parse(req.body);
+      const existingMessage = await storage.getConversationMessage(
+        parsedMessageId.messageId,
+        req.jwtUser!.userId,
+      );
+
+      if (!existingMessage) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (existingMessage.senderId !== req.jwtUser!.userId) {
+        return res
+          .status(403)
+          .json({ message: "You can only edit your own messages" });
+      }
+
+      if (existingMessage.deletedAt) {
+        return res.status(400).json({ message: "Deleted messages cannot be edited" });
+      }
+
+      const updatedMessage = await storage.updateConversationMessage(
+        parsedMessageId.messageId,
+        payload.message,
+      );
+      if (!updatedMessage) {
+        return res.status(500).json({ message: "Failed to update message" });
+      }
+
+      emitConversationMessageUpdate(io, updatedMessage);
+      await emitSidebarUsers(io, [updatedMessage.senderId, updatedMessage.receiverId]);
+      res.json({ message: updatedMessage });
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid input data" });
+      }
+
+      next(error);
+    }
+  };
+}
+
+function createDeleteMessageController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsedMessageId = parseMessageId(req.params);
+      if ("error" in parsedMessageId) {
+        return res.status(400).json({ message: parsedMessageId.error });
+      }
+
+      const existingMessage = await storage.getConversationMessage(
+        parsedMessageId.messageId,
+        req.jwtUser!.userId,
+      );
+      if (!existingMessage) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (existingMessage.senderId !== req.jwtUser!.userId) {
+        return res
+          .status(403)
+          .json({ message: "You can only delete your own messages" });
+      }
+
+      const deletedMessage = await storage.deleteConversationMessage(
+        parsedMessageId.messageId,
+      );
+      if (!deletedMessage) {
+        return res.status(500).json({ message: "Failed to delete message" });
+      }
+
+      emitConversationMessageUpdate(io, deletedMessage);
+      await emitSidebarUsers(io, [deletedMessage.senderId, deletedMessage.receiverId]);
+      res.json({ message: deletedMessage });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+function createToggleMessageReactionController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsedMessageId = parseMessageId(req.params);
+      if ("error" in parsedMessageId) {
+        return res.status(400).json({ message: parsedMessageId.error });
+      }
+
+      const payload = messageReactionSchema.parse(req.body);
+      const existingMessage = await storage.getConversationMessage(
+        parsedMessageId.messageId,
+        req.jwtUser!.userId,
+      );
+
+      if (!existingMessage) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (existingMessage.deletedAt) {
+        return res
+          .status(400)
+          .json({ message: "Deleted messages cannot be reacted to" });
+      }
+
+      const updatedMessage = await storage.toggleConversationReaction(
+        parsedMessageId.messageId,
+        req.jwtUser!.userId,
+        payload.emoji,
+      );
+      if (!updatedMessage) {
+        return res.status(500).json({ message: "Failed to update reaction" });
+      }
+
+      emitConversationMessageUpdate(io, updatedMessage);
+      res.json({ message: updatedMessage });
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid input data" });
+      }
+
+      next(error);
+    }
+  };
+}
+
 export function registerChatRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/conversations/stats", jwtAuth, getConversationStatsController);
   app.get("/api/messages", jwtAuth, getRecentMessagesController);
   app.get("/api/messages/:userId/history", jwtAuth, getMessageHistoryController);
+  app.put("/api/messages/:messageId", jwtAuth, createEditMessageController(io));
+  app.delete(
+    "/api/messages/item/:messageId",
+    jwtAuth,
+    createDeleteMessageController(io),
+  );
+  app.post(
+    "/api/messages/:messageId/reactions",
+    jwtAuth,
+    createToggleMessageReactionController(io),
+  );
   app.delete(
     "/api/messages/:userId",
     jwtAuth,

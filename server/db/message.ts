@@ -16,6 +16,33 @@ const publicUserSelect = {
   isGuest: true,
 } as const;
 
+const messageReactionInclude = {
+  user: {
+    select: publicUserSelect,
+  },
+} as const;
+
+export const conversationMessageInclude = {
+  attachments: true,
+  reactions: {
+    orderBy: {
+      createdAt: "asc",
+    },
+    include: messageReactionInclude,
+  },
+  replyTo: {
+    select: {
+      msgId: true,
+      senderId: true,
+      message: true,
+      deletedAt: true,
+      sender: {
+        select: publicUserSelect,
+      },
+    },
+  },
+} as const;
+
 export function getConversationId(user1: number, user2: number): string {
   const [minId, maxId] = user1 < user2 ? [user1, user2] : [user2, user1];
   return `${minId}:${maxId}`;
@@ -27,6 +54,7 @@ export const messageRepository = {
     try {
       return await prisma.message.create({
         data: message,
+        include: conversationMessageInclude,
       });
     } catch (error) {
       console.error("Error creating message:", error);
@@ -131,7 +159,7 @@ export const messageRepository = {
             }
           : undefined,
         skip: cursor ? 1 : 0,
-        include: { attachments: true },
+        include: conversationMessageInclude,
       });
 
       const hasMore = raw.length > limit;
@@ -157,7 +185,7 @@ export const messageRepository = {
         },
         orderBy: { timestamp: "desc" },
         take: 50,
-        include: { attachments: true },
+        include: conversationMessageInclude,
       });
     } catch (error) {
       console.error("Error getting recent messages:", error);

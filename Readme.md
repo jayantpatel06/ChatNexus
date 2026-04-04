@@ -24,6 +24,7 @@ ChatNexus supports:
 - the users sidebar now uses an inbox-style redesign: desktop gets a shared navigation rail, mobile keeps a reusable bottom navigation menu, and the private/global routing, filters, unread states, and user selection logic stay intact
 - the mobile chat list now uses a cleaner chat-app layout with a `ChatNexus` header, a pulsating online-count pill, an expanded search bar, a gender filter dropdown, recent-message ordering, and restored light/dark theme-aware styling
 - the settings modal now includes a self-only profile view with name, age, email, and gender, lets registered users edit only name and age, keeps guest profiles read-only with email shown as `-`, places age and gender side by side in the profile form, and now uses the homepage-style theme toggle beside an icon-only logout action
+- private chat now supports replies, one-tap reactions, message editing, and delete-for-both on direct messages, and the header action menu now includes remove-friend and block-user controls with block-aware messaging restrictions
 - Lenis-powered smooth page scrolling is enabled across the app, including landing-page navbar and CTA section jumps, while preserving native nested scrolling inside chat panes and other internal scroll areas
 - compact attachment thumbnails with animated in-chat lightbox preview
 - SEO-friendly public pages
@@ -219,6 +220,8 @@ Check whether Tenor requests are blocked by browser extensions, privacy tools, o
 
 - Guest sign-in now collects age and gender along with the temporary username, and those values are stored on the guest profile so guest users can participate in the same profile-based filtering as members.
 - The settings modal now shows a fuller user profile with name, age, email, and gender, keeps age and gender aligned side by side in the profile form, allows only registered users to edit name and age while guests remain read-only with email displayed as `-`, and its quick actions now use the homepage theme toggle plus an icon-only logout button.
+- Private chat now supports replies, reactions, edit, and delete-for-both message actions, and users can now remove friends or block users directly from the chat header while blocked relationships are hidden from the sidebar and prevented from sending new direct messages.
+- Direct-message delivery now uses a lighter socket path for sender acknowledgment and receiver broadcast, and replies, reaction updates, and message deletes now follow the same low-overhead real-time flow with optimistic UI updates and rollback on server rejection.
 
 - The desktop sidebar section is now narrower, giving the main chat area more room without changing the shared sidebar content.
 - The users-list section now replaces the old “Recent chats / Live” status row with small `All`, `Male`, and `Female` filter pills tied to the existing gender filter state.
