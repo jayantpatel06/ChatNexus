@@ -17,6 +17,12 @@ export const loginUserSchema = z.object({
   password: z.string().min(1),
 });
 
+export const guestLoginSchema = z.object({
+  username: z.string().min(2).max(20),
+  age: z.number().min(13).max(120),
+  gender: z.enum(["Male", "Female", "Other"]),
+});
+
 export const registerUserSchema = z.object({
   gmail: z.string().email(),
   password: z.string().min(6),
@@ -38,6 +44,7 @@ export type PublicUser = Omit<PrismaUser, "gmail" | "passwordHash">;
 export type User = PublicUser;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
+export type GuestLogin = z.infer<typeof guestLoginSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type Message = PrismaMessage;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;

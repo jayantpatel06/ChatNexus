@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 import type {
+  GuestLogin,
   LoginUser,
   RegisterUser,
   User,
@@ -47,7 +48,7 @@ type AuthContextType = {
   guestLoginMutation: UseMutationResult<
     { user: SelectUser; token: string },
     Error,
-    string
+    GuestLogin
   >;
 };
 
@@ -129,11 +130,11 @@ async function register(credentials: RegisterUser) {
   return (await response.json()) as { user: User; token: string };
 }
 
-async function guestLogin(username: string) {
+async function guestLogin(payload: GuestLogin) {
   const response = await fetch(GUEST_LOGIN_PATH, {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ username }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {

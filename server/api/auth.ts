@@ -1,9 +1,11 @@
 import { randomBytes, scrypt, timingSafeEqual } from "crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import {
+  guestLoginSchema,
   loginUserSchema,
   registerUserSchema,
   type DbUser,
+  type GuestLogin,
   type InsertUser,
   type LoginUser,
   type RegisterUser,
@@ -68,20 +70,24 @@ function parseLoginPayload(body: unknown): LoginUser {
   return loginUserSchema.parse(body);
 }
 
+function parseGuestLoginPayload(body: unknown): GuestLogin {
+  return guestLoginSchema.parse(body);
+}
+
 async function ensureUsernameIsAvailable(username: string) {
   const existingUser = await storage.getUserByUsername(username);
   return !existingUser;
 }
 
-async function createGuestUser(username: string) {
+async function createGuestUser(input: GuestLogin) {
   const user = await storage.createUser({
-    username,
+    username: input.username,
     isGuest: true,
     isOnline: true,
     gmail: null,
     passwordHash: null,
-    age: null,
-    gender: null,
+    age: input.age,
+    gender: input.gender,
   });
 
   primeJwtUserCache(user);
@@ -147,19 +153,28 @@ async function guestLoginController(
   next: NextFunction,
 ) {
   try {
-    const validationMessage = validateGuestUsername(req.body?.username);
+    const validatedData = parseGuestLoginPayload(req.body);
+    const validationMessage = validateGuestUsername(validatedData.username);
     if (validationMessage) {
       return res.status(400).json({ message: validationMessage });
     }
 
-    const trimmedUsername = req.body.username.trim();
+    const trimmedUsername = validatedData.username.trim();
     const isAvailable = await ensureUsernameIsAvailable(trimmedUsername);
     if (!isAvailable) {
       return res.status(400).json({ message: "Username already exists" });
     }
 
-    return res.status(201).json(await createGuestUser(trimmedUsername));
-  } catch (error) {
+    return res.status(201).json(
+      await createGuestUser({
+        ...validatedData,
+        username: trimmedUsername,
+      }),
+    );
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ message: "Invalid input data" });
+    }
     next(error);
   }
 }
