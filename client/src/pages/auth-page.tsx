@@ -25,7 +25,11 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerUserSchema, loginUserSchema } from "@shared/schema";
+import {
+  guestLoginSchema,
+  registerUserSchema,
+  loginUserSchema,
+} from "@shared/schema";
 import { z } from "zod";
 
 const AUTH_SEO_DESCRIPTION =
@@ -36,7 +40,6 @@ export default function AuthPage() {
     useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  const [guestUsername, setGuestUsername] = useState("");
   const [isGuestMode, setIsGuestMode] = useState(false);
 
   const scrollY = useParallax();
@@ -80,6 +83,15 @@ export default function AuthPage() {
     },
   });
 
+  const guestForm = useForm<z.infer<typeof guestLoginSchema>>({
+    resolver: zodResolver(guestLoginSchema),
+    defaultValues: {
+      username: "",
+      age: 18,
+      gender: undefined,
+    },
+  });
+
   // Redirect if already logged in - use useEffect to avoid calling setLocation during render
   useEffect(() => {
     if (user) {
@@ -100,9 +112,8 @@ export default function AuthPage() {
     registerMutation.mutate(data);
   };
 
-  const handleGuestLogin = () => {
-    if (!guestUsername.trim()) return;
-    guestLoginMutation.mutate(guestUsername);
+  const handleGuestLogin = (data: z.infer<typeof guestLoginSchema>) => {
+    guestLoginMutation.mutate(data);
   };
 
   return (
@@ -186,7 +197,7 @@ export default function AuthPage() {
                   </h2>
                   <p className="text-sm text-muted-foreground dark:text-white/60">
                     {isGuestMode
-                      ? "Pick a guest username and start chatting immediately."
+                      ? "Pick a guest username, age, and gender to start chatting immediately."
                       : activeTab === "login"
                       ? "Continue your conversations."
                       : "Start chatting with people worldwide."}
@@ -278,32 +289,86 @@ export default function AuthPage() {
 
                 {activeTab === "login" && isGuestMode && (
                   <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleGuestLogin();
-                    }}
+                    onSubmit={guestForm.handleSubmit(handleGuestLogin)}
                     className="space-y-4"
                     data-testid="form-guest-login"
                   >
-                    <div className="space-y-2">
-                      <Label htmlFor="guest-username" className="text-muted-foreground dark:text-white/80">
-                        Guest username
-                      </Label>
-                      <Input
-                        id="guest-username"
-                        placeholder="Choose a guest username"
-                        value={guestUsername}
-                        onChange={(e) => setGuestUsername(e.target.value)}
-                        className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
-                        data-testid="input-guest-username"
-                        autoFocus
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 space-y-2">
+                        <Label htmlFor="guest-username" className="text-muted-foreground dark:text-white/80">
+                          Guest username
+                        </Label>
+                        <Input
+                          id="guest-username"
+                          placeholder="Choose a guest username"
+                          className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                          data-testid="input-guest-username"
+                          autoFocus
+                          {...guestForm.register("username")}
+                        />
+                        {guestForm.formState.errors.username && (
+                          <p className="text-sm text-destructive">
+                            {guestForm.formState.errors.username.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="guest-age" className="text-muted-foreground dark:text-white/80">
+                          Age
+                        </Label>
+                        <Input
+                          id="guest-age"
+                          type="number"
+                          min={13}
+                          max={120}
+                          placeholder="Age"
+                          className="h-12 rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-primary dark:border-white/15 dark:bg-transparent dark:text-white dark:placeholder:text-white/40"
+                          data-testid="input-guest-age"
+                          {...guestForm.register("age", { valueAsNumber: true })}
+                        />
+                        {guestForm.formState.errors.age && (
+                          <p className="text-sm text-destructive">
+                            {guestForm.formState.errors.age.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="guest-gender" className="text-muted-foreground dark:text-white/80">
+                          Gender
+                        </Label>
+                        <Select
+                          onValueChange={(value) =>
+                            guestForm.setValue("gender", value as any, {
+                              shouldValidate: true,
+                            })
+                          }
+                          value={guestForm.watch("gender")}
+                        >
+                          <SelectTrigger
+                            id="guest-gender"
+                            className="h-12 rounded-xl border-border bg-background text-foreground dark:border-white/15 dark:bg-transparent dark:text-white"
+                            data-testid="select-guest-gender"
+                          >
+                            <SelectValue placeholder="Select gender" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Male">Male</SelectItem>
+                            <SelectItem value="Female">Female</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {guestForm.formState.errors.gender && (
+                          <p className="text-sm text-destructive">
+                            {guestForm.formState.errors.gender.message}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <Button
                       type="submit"
                       className="h-12 w-full rounded-full bg-[#0f4b91] text-white hover:bg-[#0f4b91]/90"
                       disabled={
-                        guestLoginMutation.isPending || !guestUsername.trim()
+                        guestLoginMutation.isPending
                       }
                       data-testid="button-guest-login"
                     >

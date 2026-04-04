@@ -18,7 +18,6 @@ import {
   ArrowLeft,
   Expand,
   Loader2,
-  Clock,
   Handshake,
   RefreshCw,
   Search,
@@ -1432,18 +1431,38 @@ export function ChatArea({
   };
 
   if (!selectedUser) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-            <Send className="w-8 h-8 text-muted-foreground" />
+    if (isMobile) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-background">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Send className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">
+              Select a User to start chatting
+            </h3>
+            <p className="text-muted-foreground">
+              Choose someone from the online users list to begin a conversation
+            </p>
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            Select a User to start chatting
-          </h3>
-          <p className="text-muted-foreground">
-            Choose someone from the online users list to begin a conversation
-          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative flex-1 overflow-hidden bg-background">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
+        <div className="relative flex h-full flex-col">
+          <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
+            <div className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card/95 p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
+                <Send className="h-8 w-8" />
+              </div>
+              <p className="text-xl font-semibold tracking-tight text-foreground">
+                Select a chat to start messaging
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1746,7 +1765,7 @@ export function ChatArea({
         className={cn("flex-1 flex flex-col h-full relative overflow-hidden")}
       >
         {/* Chat Header */}
-        <div className="bg-card p-2.5 flex items-center justify-between flex-shrink-0 z-40">
+        <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             {/* Back button for mobile */}
             {(showBackButton || isMobile) && onBack && (
@@ -1858,7 +1877,7 @@ export function ChatArea({
         {/* Messages Area */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto scrollbar-none p-4 space-y-1.5 bg-background min-h-0 relative overscroll-contain"
+          className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background p-4 scrollbar-none overscroll-contain md:px-6 md:py-5"
           onScroll={handleScroll}
           data-testid="chat-messages-area"
         >

@@ -116,8 +116,14 @@ function ChatDashboardContent({
         path="/dashboard"
         robots="noindex, nofollow"
       />
-      <div className="h-screen bg-brand-bg flex" data-testid="chat-dashboard">
-        <UsersSidebar selectedUser={selectedUser} onUserSelect={onUserSelect} />
+      <div
+        className="flex h-screen bg-brand-bg text-brand-text"
+        data-testid="chat-dashboard"
+      >
+        <UsersSidebar
+          selectedUser={selectedUser}
+          onUserSelect={onUserSelect}
+        />
         <ChatArea
           selectedUser={selectedUser}
           onBack={onBack}

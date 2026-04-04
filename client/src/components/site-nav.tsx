@@ -129,6 +129,7 @@ export const ThemeToggleButton2 = ({
       applyTheme(nextTheme);
       persistTheme(nextTheme);
       setIsDark(nextTheme === "dark");
+      window.dispatchEvent(new Event("chatnexus-theme-change"));
     };
 
     if (!viewTransitionDocument.startViewTransition) {
