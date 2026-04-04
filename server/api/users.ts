@@ -1,6 +1,12 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
-import type { DbUser, User } from "@shared/schema";
+import {
+  updateUserProfileSchema,
+  type DbUser,
+  type SelfUserProfile,
+  type UpdateUserProfile,
+  type User,
+} from "@shared/schema";
 import { jwtAuth } from "../middleware/jwt-auth";
 import { primeJwtUserCache } from "../middleware/jwt-auth";
 import { signToken } from "../lib/jwt";
@@ -10,6 +16,11 @@ import { storage } from "../storage";
 function toPublicUser(user: DbUser): User {
   const { gmail: _gmail, passwordHash: _passwordHash, ...publicUser } = user;
   return publicUser;
+}
+
+function toSelfUserProfile(user: DbUser): SelfUserProfile {
+  const { passwordHash: _passwordHash, ...profile } = user;
+  return profile;
 }
 
 function validateUsername(username: unknown, currentUsername: string) {
@@ -60,6 +71,10 @@ function parseFriendRequestAction(action: unknown) {
   return { error: "Invalid friend request action" as const };
 }
 
+function parseProfileUpdatePayload(body: unknown): UpdateUserProfile {
+  return updateUserProfileSchema.parse(body);
+}
+
 function buildFriendshipStatus(
   userId: number,
   friendship: Awaited<ReturnType<typeof storage.getFriendship>>,
@@ -101,6 +116,49 @@ async function updateUsername(userId: number, username: string) {
 
   primeJwtUserCache(updatedUser);
   return { user: toPublicUser(updatedUser), token: signToken(updatedUser) };
+}
+
+async function getSelfProfile(userId: number) {
+  const user = await storage.getUser(userId);
+  if (!user) {
+    return { error: "User not found" as const, status: 404 as const };
+  }
+
+  return { profile: toSelfUserProfile(user) };
+}
+
+async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
+  if (user.isGuest) {
+    return {
+      error: "Guest accounts cannot edit profile details" as const,
+      status: 403 as const,
+    };
+  }
+
+  if (profile.username !== user.username) {
+    const existingUser = await storage.getUserByUsername(profile.username);
+    if (existingUser && existingUser.userId !== user.userId) {
+      return { error: "Username already exists" as const, status: 400 as const };
+    }
+  }
+
+  const updatedUser = await storage.updateUserProfile(user.userId, {
+    username: profile.username,
+    age: profile.age,
+  });
+  if (!updatedUser) {
+    return {
+      error: "Failed to update profile" as const,
+      status: 500 as const,
+    };
+  }
+
+  primeJwtUserCache(updatedUser);
+  return {
+    user: toPublicUser(updatedUser),
+    profile: toSelfUserProfile(updatedUser),
+    token: signToken(updatedUser),
+  };
 }
 
 async function getFriendshipStatus(userId: number, otherUserId: number) {
@@ -246,6 +304,23 @@ async function getSidebarUsersController(
   }
 }
 
+async function getSelfProfileController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const payload = await getSelfProfile(req.jwtUser!.userId);
+    if ("error" in payload) {
+      return res.status(payload.status ?? 500).json({ message: payload.error });
+    }
+
+    res.json(payload.profile);
+  } catch (error) {
+    next(error);
+  }
+}
+
 function createUpdateUsernameController(io: SocketIOServer) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -268,6 +343,28 @@ function createUpdateUsernameController(io: SocketIOServer) {
       res.json(payload);
     } catch (error) {
       console.error("Error updating username:", error);
+      next(error);
+    }
+  };
+}
+
+function createUpdateProfileController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const payload = parseProfileUpdatePayload(req.body);
+      const result = await updateMemberProfile(req.jwtUser!, payload);
+      if ("error" in result) {
+        return res.status(result.status ?? 500).json({ message: result.error });
+      }
+
+      await emitSidebarUsers(io);
+      res.json(result);
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid input data" });
+      }
+
+      console.error("Error updating profile:", error);
       next(error);
     }
   };
@@ -399,6 +496,7 @@ function createRespondFriendRequestController(io: SocketIOServer) {
 export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/online", jwtAuth, getOnlineUsersController);
   app.get("/api/users/sidebar", jwtAuth, getSidebarUsersController);
+  app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/:userId/friendship", jwtAuth, getFriendshipStatusController);
   app.post(
     "/api/users/:userId/friendship",
@@ -410,5 +508,6 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
     jwtAuth,
     createRespondFriendRequestController(io),
   );
+  app.put("/api/user/profile", jwtAuth, createUpdateProfileController(io));
   app.put("/api/user/username", jwtAuth, createUpdateUsernameController(io));
 }

@@ -172,6 +172,25 @@ const userRepository = {
     }
   },
 
+  async updateProfile(
+    id: number,
+    profile: { username: string; age: number },
+  ): Promise<DbUser | undefined> {
+    if (!prisma) return undefined;
+    try {
+      return await prisma.user.update({
+        where: { userId: id },
+        data: {
+          username: profile.username,
+          age: profile.age,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      return undefined;
+    }
+  },
+
   async getOnlineUsers(): Promise<User[]> {
     if (!prisma) return [];
     try {
@@ -485,6 +504,10 @@ export interface IStorage {
   deleteUser(id: number): Promise<void>;
   updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void>;
   updateUserUsername(id: number, username: string): Promise<DbUser | undefined>;
+  updateUserProfile(
+    id: number,
+    profile: { username: string; age: number },
+  ): Promise<DbUser | undefined>;
   getOnlineUsers(): Promise<User[]>;
   getUsersByIds(ids: number[]): Promise<User[]>;
   getFriendUsers(userId: number): Promise<User[]>;
@@ -594,6 +617,13 @@ class DatabaseStorage implements IStorage {
 
   async updateUserUsername(id: number, username: string): Promise<DbUser | undefined> {
     return userRepository.updateUsername(id, username);
+  }
+
+  async updateUserProfile(
+    id: number,
+    profile: { username: string; age: number },
+  ): Promise<DbUser | undefined> {
+    return userRepository.updateProfile(id, profile);
   }
 
   async getOnlineUsers(): Promise<User[]> {

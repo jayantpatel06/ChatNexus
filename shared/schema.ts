@@ -31,6 +31,11 @@ export const registerUserSchema = z.object({
   gender: z.enum(["Male", "Female", "Other"]),
 });
 
+export const updateUserProfileSchema = z.object({
+  username: z.string().trim().min(2).max(20),
+  age: z.coerce.number().int().min(13).max(120),
+});
+
 export const insertMessageSchema = z.object({
   senderId: z.number(),
   receiverId: z.number(),
@@ -42,10 +47,12 @@ export const insertMessageSchema = z.object({
 export type DbUser = PrismaUser;
 export type PublicUser = Omit<PrismaUser, "gmail" | "passwordHash">;
 export type User = PublicUser;
+export type SelfUserProfile = User & { gmail: string | null };
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
 export type GuestLogin = z.infer<typeof guestLoginSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 export type Message = PrismaMessage;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
