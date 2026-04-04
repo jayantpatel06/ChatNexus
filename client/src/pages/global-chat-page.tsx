@@ -33,6 +33,7 @@ export default function GlobalChat() {
   const isMobile = useIsMobile();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const composerPickerRef = useRef<HTMLDivElement>(null);
+  const composerPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const hasDraftText = messageInput.trim().length > 0;
   const isDarkTheme =
     typeof document !== "undefined" &&
@@ -91,9 +92,7 @@ export default function GlobalChat() {
       );
     };
 
-    const handleGlobalMessageError = (data: {
-      error?: string;
-    }) => {
+    const handleGlobalMessageError = (data: { error?: string }) => {
       toast({
         title: "Message not sent",
         description: data.error ?? "Unable to send the message right now.",
@@ -161,7 +160,8 @@ export default function GlobalChat() {
       const target = event.target;
       if (
         target instanceof Node &&
-        composerPickerRef.current?.contains(target)
+        (composerPickerRef.current?.contains(target) ||
+          composerPickerTriggerRef.current?.contains(target))
       ) {
         return;
       }
@@ -197,169 +197,172 @@ export default function GlobalChat() {
           robots="noindex, nofollow"
         />
         <div
-          className="h-screen bg-brand-bg flex text-brand-text"
+          className="flex h-screen overflow-hidden bg-brand-bg text-brand-text"
           data-testid="global-chat-desktop-layout"
         >
           <UsersSidebar
             selectedUser={null}
             onUserSelect={handlePrivateUserSelect}
           />
-          <div className="flex-1 flex flex-col bg-background">
-          {/* Chat Header */}
-          <div className="bg-card  p-2.5 flex items-center justify-between flex-shrink-0 z-40">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
-                  title="Back to Dashboard"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] text-black flex items-center justify-center font-semibold">
-                <Globe className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground">Global Chat</h3>
-                <p className="text-xs text-muted-foreground">Public room</p>
-              </div>
-            </div>
-          </div>
-          {/* Messages Area */}
-          <div
-            ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-1 bg-background min-h-0 relative"
-            onScroll={handleScroll}
-          >
-            {/* System Message */}
-            <div className="flex justify-center my-2">
-              <div className="rounded-full border border-border bg-card-muted/80 px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2">
-                <div className="w-3 h-3 flex items-center justify-center grayscale">
-                  🌍
+          <div className="flex min-w-0 flex-1 pr-2 pt-2 pb-2">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+            {/* Chat Header */}
+            <div className="z-40 flex flex-shrink-0 items-center justify-between border-b border-border/70 bg-card p-2.5">
+              <div className="flex items-center gap-3">
+                <Link href="/dashboard">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
+                    title="Back to Dashboard"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] text-black flex items-center justify-center font-semibold">
+                  <Globe className="w-5 h-5" />
                 </div>
-                Everyone can see these messages
+                <div>
+                  <h3 className="font-semibold text-foreground">Global Chat</h3>
+                  <p className="text-xs text-muted-foreground">Public room</p>
+                </div>
               </div>
             </div>
-            {isLoading && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Loading messages...
-                </p>
-              </div>
-            )}
-            {error && !isLoading && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <p className="text-sm text-destructive">
-                  Failed to load messages
-                </p>
-              </div>
-            )}
-            {!isLoading && !error && messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <Globe className="w-12 h-12 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">
-                  No messages yet. Start the conversation!
-                </p>
-              </div>
-            )}
-            {!isLoading && !error && messages.length > 0 && (
-              <div className="space-y-1">
-                {messages.map((msg) => (
-                  <MessageListItem
-                    key={msg.id}
-                    messageId={msg.id}
-                    message={msg.message}
-                    timestamp={msg.timestamp}
-                    senderUsername={msg.sender?.username || "Unknown"}
-                    isCurrentUser={msg.senderId === user?.userId}
-                  />
-                ))}
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-          {showNewMessageIndicator && (
-            <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
-          )}
-          <div
-            className="relative overflow-visible bg-card-muted flex-shrink-0"
-            style={{ paddingBottom: "6px" }}
-          >
-            <AnimatePresence initial={false}>
-              {showEmojiPicker && (
-                <motion.div
-                  ref={composerPickerRef}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  className="absolute bottom-[calc(100%+0.4rem)] right-3 z-40 w-[24rem] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl"
-                >
-                  <div className="overflow-hidden font-sans">
-                    <EmojiPicker
-                      onEmojiClick={onEmojiClick}
-                      width="100%"
-                      height={320}
-                      theme={
-                        isDarkTheme
-                          ? (EmojiPickerTheme.DARK as any)
-                          : (EmojiPickerTheme.LIGHT as any)
-                      }
-                      autoFocusSearch={false}
-                      searchPlaceholder="Search emoji"
-                      lazyLoadEmojis={true}
-                      previewConfig={{ showPreview: false }}
-                      className="font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:24px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px] [&_.epr-header-overlay]:pb-0"
-                    />
+            {/* Messages Area */}
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-1 bg-background min-h-0 relative"
+              onScroll={handleScroll}
+            >
+              {/* System Message */}
+              <div className="flex justify-center my-2">
+                <div className="rounded-full border border-border bg-card-muted/80 px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2">
+                  <div className="w-3 h-3 flex items-center justify-center grayscale">
+                    🌍
                   </div>
-                </motion.div>
+                  Everyone can see these messages
+                </div>
+              </div>
+              {isLoading && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Loading messages...
+                  </p>
+                </div>
               )}
-            </AnimatePresence>
-            <div className="p-2">
-              <div className="relative rounded-[1rem] border border-border bg-card px-6 shadow-sm">
-                <Textarea
-                  placeholder="Message..."
-                  className={cn(
-                    "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                    hasDraftText ? "pr-12" : "pr-14",
-                  )}
-                  rows={1}
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onFocus={handleInputFocus}
-                  data-testid="textarea-message-input"
-                />
-                <div className="absolute inset-y-0 right-1.5 flex items-center">
-                  {hasDraftText ? (
-                    <Button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={handleSendMessage}
-                      disabled={!hasDraftText}
-                      className="h-8 w-8 rounded-2xl"
-                      size="icon"
-                      title="Send Message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                      title="Open emoji picker"
-                      onClick={() => setShowEmojiPicker((prev) => !prev)}
-                    >
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                  )}
+              {error && !isLoading && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <p className="text-sm text-destructive">
+                    Failed to load messages
+                  </p>
+                </div>
+              )}
+              {!isLoading && !error && messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Globe className="w-12 h-12 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">
+                    No messages yet. Start the conversation!
+                  </p>
+                </div>
+              )}
+              {!isLoading && !error && messages.length > 0 && (
+                <div className="space-y-1">
+                  {messages.map((msg) => (
+                    <MessageListItem
+                      key={msg.id}
+                      messageId={msg.id}
+                      message={msg.message}
+                      timestamp={msg.timestamp}
+                      senderUsername={msg.sender?.username || "Unknown"}
+                      isCurrentUser={msg.senderId === user?.userId}
+                    />
+                  ))}
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            {showNewMessageIndicator && (
+              <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
+            )}
+            <div
+              className="relative overflow-visible bg-card-muted flex-shrink-0"
+              style={{ paddingBottom: "6px" }}
+            >
+              <AnimatePresence initial={false}>
+                {showEmojiPicker && (
+                  <motion.div
+                    ref={composerPickerRef}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute bottom-[calc(100%+0.4rem)] right-3 z-40 w-[24rem] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl"
+                  >
+                    <div className="overflow-hidden font-sans">
+                      <EmojiPicker
+                        onEmojiClick={onEmojiClick}
+                        width="100%"
+                        height={320}
+                        theme={
+                          isDarkTheme
+                            ? (EmojiPickerTheme.DARK as any)
+                            : (EmojiPickerTheme.LIGHT as any)
+                        }
+                        autoFocusSearch={false}
+                        searchPlaceholder="Search emoji"
+                        lazyLoadEmojis={true}
+                        previewConfig={{ showPreview: false }}
+                        className="font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:24px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px] [&_.epr-header-overlay]:pb-0"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <div className="p-2 pb-1">
+                <div className="relative rounded-[1rem] border border-border bg-card px-6 shadow-sm">
+                  <Textarea
+                    placeholder="Message..."
+                    className={cn(
+                      "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                      hasDraftText ? "pr-12" : "pr-14",
+                    )}
+                    rows={1}
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleInputFocus}
+                    data-testid="textarea-message-input"
+                  />
+                  <div className="absolute inset-y-0 right-1.5 flex items-center">
+                    {hasDraftText ? (
+                      <Button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={handleSendMessage}
+                        disabled={!hasDraftText}
+                        className="h-8 w-8 rounded-2xl"
+                        size="icon"
+                        title="Send Message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        ref={composerPickerTriggerRef}
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                        title="Open emoji picker"
+                        onClick={() => setShowEmojiPicker((prev) => !prev)}
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+            </div>
           </div>
         </div>
       </>
@@ -376,157 +379,162 @@ export default function GlobalChat() {
         robots="noindex, nofollow"
       />
       <div className="h-[100dvh] bg-brand-bg flex flex-col">
-      {/* Chat Header */}
-      <div className="bg-card border-b border-border p-2.5 flex items-center justify-between flex-shrink-0 z-40">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
-              title="Back to Dashboard"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] text-black flex items-center justify-center font-semibold">
-            <Globe className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground">Global Chat</h3>
-            <p className="text-xs text-muted-foreground">Public room</p>
-          </div>
-        </div>
-      </div>
-      {/* Messages Area */}
-      <div
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-1 bg-background min-h-0 relative"
-        onScroll={handleScroll}
-      >
-        {/* System Message */}
-        <div className="flex justify-center my-2">
-          <div className="rounded-full border border-border bg-card-muted/80 px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2">
-            <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
-              🌍
+        {/* Chat Header */}
+        <div className="bg-card border-b border-border p-2.5 flex items-center justify-between flex-shrink-0 z-40">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
+                title="Back to Dashboard"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] text-black flex items-center justify-center font-semibold">
+              <Globe className="w-5 h-5" />
             </div>
-            Everyone can see these messages
+            <div>
+              <h3 className="font-semibold text-foreground">Global Chat</h3>
+              <p className="text-xs text-muted-foreground">Public room</p>
+            </div>
           </div>
         </div>
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading messages...</p>
-          </div>
-        )}
-        {error && !isLoading && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-sm text-destructive">Failed to load messages</p>
-          </div>
-        )}
-        {!isLoading && !error && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <Globe className="w-12 h-12 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              No messages yet. Start the conversation!
-            </p>
-          </div>
-        )}
-        {!isLoading && !error && messages.length > 0 && (
-          <div className="space-y-1">
-            {messages.map((msg) => (
-              <MessageListItem
-                key={msg.id}
-                messageId={msg.id}
-                message={msg.message}
-                timestamp={msg.timestamp}
-                senderUsername={msg.sender?.username || "Unknown"}
-                isCurrentUser={msg.senderId === user?.userId}
-              />
-            ))}
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-      {showNewMessageIndicator && (
-        <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
-      )}
-      <div
-        className="relative overflow-visible bg-card-muted flex-shrink-0"
-        style={{ paddingBottom: "6px" }}
-      >
-        <AnimatePresence initial={false}>
-          {showEmojiPicker && (
-            <motion.div
-              ref={composerPickerRef}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="absolute bottom-[calc(100%+0.4rem)] left-3 right-3 z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl"
-            >
-              <div className="overflow-hidden font-sans">
-                <EmojiPicker
-                  onEmojiClick={onEmojiClick}
-                  width="100%"
-                  height={320}
-                  theme={
-                    isDarkTheme
-                      ? (EmojiPickerTheme.DARK as any)
-                      : (EmojiPickerTheme.LIGHT as any)
-                  }
-                  autoFocusSearch={false}
-                  searchPlaceholder="Search emoji"
-                  lazyLoadEmojis={true}
-                  previewConfig={{ showPreview: false }}
-                  className="font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:22px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:30px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px] [&_.epr-header-overlay]:pb-0"
-                />
+        {/* Messages Area */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto scrollbar-none overscroll-contain p-4 space-y-1 bg-background min-h-0 relative"
+          onScroll={handleScroll}
+        >
+          {/* System Message */}
+          <div className="flex justify-center my-2">
+            <div className="rounded-full border border-border bg-card-muted/80 px-4 py-1.5 text-[11px] text-muted-foreground flex items-center gap-2">
+              <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+                🌍
               </div>
-            </motion.div>
+              Everyone can see these messages
+            </div>
+          </div>
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Loading messages...
+              </p>
+            </div>
           )}
-        </AnimatePresence>
-        <div className="p-2">
-          <div className="relative rounded-[1rem] border border-border bg-card px-6 shadow-sm">
-            <Textarea
-              placeholder="Message..."
-              className={cn(
-                "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                hasDraftText ? "pr-12" : "pr-14",
-              )}
-              rows={1}
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={handleInputFocus}
-              data-testid="textarea-message-input"
-            />
-            <div className="absolute inset-y-0 right-1.5 flex items-center">
-              {hasDraftText ? (
-                <Button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={handleSendMessage}
-                  disabled={!hasDraftText}
-                  className="h-8 w-8 rounded-2xl"
-                  size="icon"
-                  title="Send Message"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                  title="Open emoji picker"
-                  onClick={() => setShowEmojiPicker((prev) => !prev)}
-                >
-                  <Smile className="h-4 w-4" />
-                </Button>
-              )}
+          {error && !isLoading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <p className="text-sm text-destructive">
+                Failed to load messages
+              </p>
+            </div>
+          )}
+          {!isLoading && !error && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Globe className="w-12 h-12 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">
+                No messages yet. Start the conversation!
+              </p>
+            </div>
+          )}
+          {!isLoading && !error && messages.length > 0 && (
+            <div className="space-y-1">
+              {messages.map((msg) => (
+                <MessageListItem
+                  key={msg.id}
+                  messageId={msg.id}
+                  message={msg.message}
+                  timestamp={msg.timestamp}
+                  senderUsername={msg.sender?.username || "Unknown"}
+                  isCurrentUser={msg.senderId === user?.userId}
+                />
+              ))}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        {showNewMessageIndicator && (
+          <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
+        )}
+        <div
+          className="relative overflow-visible bg-card-muted flex-shrink-0"
+          style={{ paddingBottom: "6px" }}
+        >
+          <AnimatePresence initial={false}>
+            {showEmojiPicker && (
+              <motion.div
+                ref={composerPickerRef}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="absolute bottom-[calc(100%+0.4rem)] left-3 right-3 z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl"
+              >
+                <div className="overflow-hidden font-sans">
+                  <EmojiPicker
+                    onEmojiClick={onEmojiClick}
+                    width="100%"
+                    height={320}
+                    theme={
+                      isDarkTheme
+                        ? (EmojiPickerTheme.DARK as any)
+                        : (EmojiPickerTheme.LIGHT as any)
+                    }
+                    autoFocusSearch={false}
+                    searchPlaceholder="Search emoji"
+                    lazyLoadEmojis={true}
+                    previewConfig={{ showPreview: false }}
+                    className="font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:22px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:30px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px] [&_.epr-header-overlay]:pb-0"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="p-2">
+            <div className="relative rounded-[1rem] border border-border bg-card px-6 shadow-sm">
+              <Textarea
+                placeholder="Message..."
+                className={cn(
+                  "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                  hasDraftText ? "pr-12" : "pr-14",
+                )}
+                rows={1}
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={handleInputFocus}
+                data-testid="textarea-message-input"
+              />
+              <div className="absolute inset-y-0 right-1.5 flex items-center">
+                {hasDraftText ? (
+                  <Button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleSendMessage}
+                    disabled={!hasDraftText}
+                    className="h-8 w-8 rounded-2xl"
+                    size="icon"
+                    title="Send Message"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    ref={composerPickerTriggerRef}
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                    title="Open emoji picker"
+                    onClick={() => setShowEmojiPicker((prev) => !prev)}
+                  >
+                    <Smile className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
     </>
   );
@@ -636,10 +644,15 @@ function MessageListItem({
   isCurrentUser: boolean;
   messageId: number | string;
 }) {
+  const formattedTimestamp = format(new Date(timestamp), "HH:mm");
+
   return (
     <div
       key={messageId}
-      className={cn("flex w-full", isCurrentUser ? "justify-end" : "justify-start")}
+      className={cn(
+        "flex w-full",
+        isCurrentUser ? "justify-end" : "justify-start",
+      )}
     >
       <div
         className={cn(
@@ -663,18 +676,21 @@ function MessageListItem({
               : "bg-brand-msg-received text-brand-msg-received-text",
           )}
         >
-          {!isCurrentUser && (
-            <span className="block text-[11px] font-semibold text-red-500 text-brand-primary/80">
-              {senderUsername}
+          <div className="flex items-center gap-2 text-[11px]">
+            <span
+              className={cn(
+                "truncate font-semibold text-red-500",
+                isCurrentUser ? "text-current/90" : "text-red-500",
+              )}
+            >
+              {isCurrentUser ? "You" : senderUsername}
             </span>
-          )}
-          <div className="flex items-end gap-2">
-            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-              {message}
+            <span className="whitespace-nowrap opacity-70">
+              {formattedTimestamp}
             </span>
-            <span className="whitespace-nowrap text-[11px] opacity-70">
-              {format(new Date(timestamp), "HH:mm")}
-            </span>
+          </div>
+          <div className="min-w-0 whitespace-pre-wrap break-words">
+            {message}
           </div>
         </div>
       </div>

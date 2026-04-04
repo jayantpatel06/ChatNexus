@@ -325,6 +325,7 @@ export function ChatArea({
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const composerPickerRef = useRef<HTMLDivElement>(null);
+  const composerPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const { toast } = useToast();
 
   // Track scroll position for loading older messages
@@ -343,7 +344,7 @@ export function ChatArea({
     PendingAttachment[]
   >([]);
   const [confirmDialogAction, setConfirmDialogAction] = useState<
-    "chat" | "attachments" | "removeFriend" | "blockUser" | null
+    "chat" | "attachments" | "removeFriend" | "blockUser" | "unblockUser" | null
   >(null);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [editTarget, setEditTarget] = useState<Message | null>(null);
@@ -686,6 +687,42 @@ export function ChatArea({
     },
   });
 
+  const unblockUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedUser) {
+        throw new Error("No user selected");
+      }
+
+      const res = await apiRequest(
+        "DELETE",
+        `/api/users/${selectedUser.userId}/block`,
+      );
+      return readJsonResponse<{ friendshipStatus: FriendshipStatusResponse }>(
+        res,
+      );
+    },
+    onSuccess: (data) => {
+      if (!selectedUser) return;
+
+      queryClient.setQueryData(
+        ["friendship-status", selectedUser.userId],
+        data.friendshipStatus,
+      );
+      void refreshOnlineUsers();
+      toast({
+        title: "User unblocked",
+        description: `You unblocked ${selectedUser.username}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to unblock user",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const editMessageMutation = useMutation({
     mutationFn: async ({
       messageId,
@@ -884,7 +921,7 @@ export function ChatArea({
     const handleRelationshipStatusUpdated = (data: {
       userAId: number;
       userBId: number;
-      reason: "friend_request" | "remove_friend" | "block_user";
+      reason: "friend_request" | "remove_friend" | "block_user" | "unblock_user";
       userAStatus: FriendshipStatusResponse;
       userBStatus: FriendshipStatusResponse;
     }) => {
@@ -1271,9 +1308,15 @@ export function ChatArea({
   }, [activeComposerPicker, closeComposerPicker, focusMessageInput]);
 
   const handlePickerTabChange = useCallback((tab: "emoji" | "gif") => {
+    if (activeComposerPicker === tab) {
+      closeComposerPicker();
+      focusMessageInput();
+      return;
+    }
+
     messageInputRef.current?.blur();
     setActiveComposerPicker(tab);
-  }, []);
+  }, [activeComposerPicker, closeComposerPicker, focusMessageInput]);
 
   useEffect(() => {
     if (!activeComposerPicker) {
@@ -1287,7 +1330,10 @@ export function ChatArea({
         return;
       }
 
-      if (composerPickerRef.current?.contains(target)) {
+      if (
+        composerPickerRef.current?.contains(target) ||
+        composerPickerTriggerRef.current?.contains(target)
+      ) {
         return;
       }
 
@@ -2110,6 +2156,11 @@ export function ChatArea({
     setConfirmDialogAction("blockUser");
   };
 
+  const handleUnblockUser = () => {
+    if (!selectedUser) return;
+    setConfirmDialogAction("unblockUser");
+  };
+
   const handleConfirmDialogAction = () => {
     if (confirmDialogAction === "attachments") {
       clearAttachmentsMutation.mutate();
@@ -2127,6 +2178,10 @@ export function ChatArea({
       blockUserMutation.mutate();
     }
 
+    if (confirmDialogAction === "unblockUser") {
+      unblockUserMutation.mutate();
+    }
+
     setConfirmDialogAction(null);
   };
 
@@ -2134,7 +2189,8 @@ export function ChatArea({
     clearChatMutation.isPending ||
     clearAttachmentsMutation.isPending ||
     removeFriendMutation.isPending ||
-    blockUserMutation.isPending;
+    blockUserMutation.isPending ||
+    unblockUserMutation.isPending;
   const isLightboxOpen = imagePreview !== null;
   const lightboxSrc = imagePreview?.url ?? "";
   const isComposerPickerOpen = activeComposerPicker !== null;
@@ -2249,17 +2305,19 @@ export function ChatArea({
     }
 
     return (
-      <div className="relative flex-1 overflow-hidden bg-background">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
-        <div className="relative flex h-full flex-col">
-          <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
-            <div className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card/95 p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
-                <Send className="h-8 w-8" />
+      <div className="flex min-w-0 flex-1 pr-2 pt-2 pb-2">
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
+          <div className="relative flex h-full flex-col">
+            <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
+              <div className="w-full max-w-3xl rounded-[2rem]  p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
+                  <Send className="h-8 w-8" />
+                </div>
+                <p className="text-xl font-semibold tracking-tight text-foreground">
+                  Select a chat to start messaging
+                </p>
               </div>
-              <p className="text-xl font-semibold tracking-tight text-foreground">
-                Select a chat to start messaging
-              </p>
             </div>
           </div>
         </div>
@@ -2348,7 +2406,9 @@ export function ChatArea({
                   ? "Clear attachments"
                   : confirmDialogAction === "removeFriend"
                     ? "Remove friend"
-                    : "Block user"}
+                    : confirmDialogAction === "blockUser"
+                      ? "Block user"
+                      : "Unblock user"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDialogAction === "chat"
@@ -2357,7 +2417,9 @@ export function ChatArea({
                   ? `This will permanently delete all attachments exchanged with ${selectedUser.username} for both users.`
                   : confirmDialogAction === "removeFriend"
                     ? `This will remove ${selectedUser.username} from your friends list.`
-                    : `This will block ${selectedUser.username}, remove any friendship, and stop future direct messages.`}
+                    : confirmDialogAction === "blockUser"
+                      ? `This will block ${selectedUser.username}, remove any friendship, and stop future direct messages.`
+                      : `This will unblock ${selectedUser.username} and allow direct messages again.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2375,8 +2437,21 @@ export function ChatArea({
       </AlertDialog>
 
       <div
-        className={cn("flex-1 flex flex-col h-full relative overflow-hidden")}
+        className={cn(
+          "relative flex-1",
+          isMobile
+            ? "flex h-full flex-col overflow-hidden"
+            : "flex min-w-0 overflow-hidden pr-2 pt-2 pb-2",
+        )}
       >
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden",
+            isMobile
+              ? "h-full bg-background"
+              : "rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]",
+          )}
+        >
         {/* Chat Header */}
         <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -2396,7 +2471,12 @@ export function ChatArea({
 
             <div className="relative flex-shrink-0">
               <div
-                className={`w-10 h-10 ${selectedUser.isGuest ? "bg-gray-500" : "bg-gradient-to-br " + getAvatarColor(selectedUser.username)} text-white rounded-full flex items-center justify-center font-medium`}
+                className="flex h-10 w-10 items-center justify-center rounded-full font-medium text-black shadow-sm"
+                style={{
+                  background: selectedUser.isGuest
+                    ? "var(--brand-muted)"
+                    : getAvatarColor(selectedUser.username),
+                }}
               >
                 {selectedUser.isGuest
                   ? "G"
@@ -2493,12 +2573,16 @@ export function ChatArea({
                     : "Remove friend"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleBlockUser}
-                  disabled={blockUserMutation.isPending || isBlockedByMe}
+                  onClick={isBlockedByMe ? handleUnblockUser : handleBlockUser}
+                  disabled={
+                    blockUserMutation.isPending || unblockUserMutation.isPending
+                  }
                 >
                   <Ban className="mr-2 h-4 w-4" />
                   {isBlockedByMe
-                    ? "User blocked"
+                    ? unblockUserMutation.isPending
+                      ? "Unblocking user..."
+                      : "Unblock user"
                     : blockUserMutation.isPending
                       ? "Blocking user..."
                       : "Block user"}
@@ -2740,7 +2824,7 @@ export function ChatArea({
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="p-2">
+          <div className="p-2 md:pb-1">
             {isChatBlocked ? (
               <div className="rounded-[1rem] border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                 {blockedNotice}
@@ -2843,6 +2927,7 @@ export function ChatArea({
                         <Button
                           variant="ghost"
                           size="icon"
+                          ref={composerPickerTriggerRef}
                           className={cn(
                             "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
                             isComposerPickerOpen && "bg-muted text-foreground",
@@ -2864,6 +2949,7 @@ export function ChatArea({
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </>
@@ -3207,6 +3293,9 @@ const MessageBubble = memo(function MessageBubble({
   onKeepComposerFocus?: () => void;
 }) {
   const shouldRestoreComposerFocusRef = useRef(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const attachments = (message as MessageWithAttachments).attachments || [];
   const reactions = message.reactions ?? [];
   const isDeleted = Boolean(message.deletedAt);
@@ -3296,6 +3385,52 @@ const MessageBubble = memo(function MessageBubble({
     );
   };
 
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    longPressOriginRef.current = null;
+  }, []);
+
+  useEffect(() => clearLongPress, [clearLongPress]);
+
+  const handleMessagePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+        return;
+      }
+
+      clearLongPress();
+      longPressOriginRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+      };
+      longPressTimerRef.current = setTimeout(() => {
+        setIsActionMenuOpen(true);
+        longPressTimerRef.current = null;
+      }, 450);
+    },
+    [clearLongPress],
+  );
+
+  const handleMessagePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!longPressOriginRef.current || longPressTimerRef.current === null) {
+        return;
+      }
+
+      const movedX = Math.abs(event.clientX - longPressOriginRef.current.x);
+      const movedY = Math.abs(event.clientY - longPressOriginRef.current.y);
+
+      if (movedX > 8 || movedY > 8) {
+        clearLongPress();
+      }
+    },
+    [clearLongPress],
+  );
+
   return (
     <div
       className={`message-bubble flex items-start gap-2 ${
@@ -3323,11 +3458,21 @@ const MessageBubble = memo(function MessageBubble({
       >
         <div
           className={cn(
-            "flex items-start gap-1",
+            "group/message relative flex items-start gap-1",
             isOwnMessage && "flex-row-reverse",
           )}
+          onPointerDown={handleMessagePointerDown}
+          onPointerMove={handleMessagePointerMove}
+          onPointerUp={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onPointerLeave={clearLongPress}
         >
-          <div className="overflow-hidden transition-all duration-300">
+          <div
+            className={cn(
+              "relative overflow-visible transition-all duration-300",
+              groupedReactions.length > 0 && "pb-3",
+            )}
+          >
             {pendingAttachment && (
               <div className="flex flex-wrap gap-2">
                 <div
@@ -3485,10 +3630,55 @@ const MessageBubble = memo(function MessageBubble({
                 </div>
               )
             )}
+
+            {groupedReactions.length > 0 && (
+              <div
+                className={cn(
+                  "absolute -bottom-1 z-10",
+                  isOwnMessage ? "right-2" : "right-2",
+                )}
+              >
+                <div className="inline-flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-muted px-0.5 py-0.5 shadow-sm scrollbar-none">
+                  {groupedReactions.map((reaction) => (
+                    <button
+                      key={reaction.emoji}
+                      type="button"
+                      onClick={() => onReact(message, reaction.emoji)}
+                      className={cn(
+                        "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-medium leading-none transition-colors",
+                        reaction.reactedByCurrentUser
+                          ? "border-primary/25 bg-primary/10 text-primary"
+                          : "border-border/60 bg-card/95 text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <span>{reaction.emoji}</span>
+                      <span
+                        className={cn(
+                          "inline-flex min-w-[1rem] items-center justify-center rounded-sm px-1 py-[1px] text-[10px] font-semibold",
+                          reaction.reactedByCurrentUser
+                            ? "bg-primary/15 text-primary"
+                            : "bg-background/90 text-foreground/80",
+                        )}
+                      >
+                        {reaction.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {!isOptimistic && (
-            <DropdownMenu>
+            <div
+              className={cn(
+                "overflow-hidden transition-all duration-150",
+                isActionMenuOpen
+                  ? "w-7 opacity-100"
+                  : "w-0 opacity-0 pointer-events-none md:group-hover/message:w-7 md:group-hover/message:opacity-100 md:group-hover/message:pointer-events-auto md:group-focus-within/message:w-7 md:group-focus-within/message:opacity-100 md:group-focus-within/message:pointer-events-auto",
+              )}
+            >
+            <DropdownMenu open={isActionMenuOpen} onOpenChange={setIsActionMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
@@ -3539,51 +3729,29 @@ const MessageBubble = memo(function MessageBubble({
                 {canDelete && (
                   <DropdownMenuItem onClick={() => onDelete(message)}>
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Delete for both
+                    Delete
                   </DropdownMenuItem>
                 )}
-                {canReact &&
-                  QUICK_REACTIONS.map((emoji) => (
-                    <DropdownMenuItem
-                      key={emoji}
-                      onClick={() => onReact(message, emoji)}
-                    >
-                      <span className="mr-2 text-base leading-none">
-                        {emoji}
-                      </span>
-                      React
-                    </DropdownMenuItem>
-                  ))}
+                {canReact && (
+                  <div className="px-2 pb-2 pt-1">
+                    <div className="flex items-center gap-1">
+                      {QUICK_REACTIONS.map((emoji) => (
+                        <DropdownMenuItem
+                          key={emoji}
+                          className="h-9 w-9 justify-center rounded-full p-0 text-base leading-none"
+                          onSelect={() => onReact(message, emoji)}
+                        >
+                          {emoji}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           )}
         </div>
-
-        {groupedReactions.length > 0 && (
-          <div
-            className={cn(
-              "flex flex-wrap gap-1",
-              isOwnMessage && "justify-end",
-            )}
-          >
-            {groupedReactions.map((reaction) => (
-              <button
-                key={reaction.emoji}
-                type="button"
-                onClick={() => onReact(message, reaction.emoji)}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
-                  reaction.reactedByCurrentUser
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <span>{reaction.emoji}</span>
-                <span>{reaction.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
         {!hasTextBubble && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {message.editedAt && !message.deletedAt && <span>edited</span>}
