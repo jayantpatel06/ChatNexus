@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { promisify } from "util";
 import { signToken } from "../lib/jwt";
+import { isPrismaUniqueConstraintError } from "../lib/prisma-errors";
 import { toPublicUser } from "../lib/user-utils";
 import {
   invalidateJwtUserCache,
@@ -150,6 +151,9 @@ async function guestLoginController(
     if (error.name === "ZodError") {
       return res.status(400).json({ message: "Invalid input data" });
     }
+    if (isPrismaUniqueConstraintError(error, "username")) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
     next(error);
   }
 }
@@ -176,6 +180,12 @@ async function registerController(
   } catch (error: any) {
     if (error.name === "ZodError") {
       return res.status(400).json({ message: "Invalid input data" });
+    }
+    if (isPrismaUniqueConstraintError(error, "gmail")) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+    if (isPrismaUniqueConstraintError(error, "username")) {
+      return res.status(400).json({ message: "Username already exists" });
     }
     next(error);
   }

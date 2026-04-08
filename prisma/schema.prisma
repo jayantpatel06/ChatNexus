@@ -12,7 +12,7 @@ model User {
   userId           Int       @id @default(autoincrement()) @map("user_id")
   gmail            String?   @unique @db.VarChar(100)
   passwordHash     String?   @map("password_hash") @db.VarChar(255)
-  username         String    @db.VarChar(50)
+  username         String    @unique @db.VarChar(50)
   age              Int?
   gender           String?   @db.VarChar(10)
   isOnline         Boolean   @default(false) @map("is_online")
@@ -113,7 +113,8 @@ model Attachment {
   fileType  String
   createdAt DateTime @default(now())
   message   Message  @relation(fields: [messageId], references: [msgId], onDelete: Cascade)
-  
+
+  @@index([messageId])
   @@map("Attachments")
 }
 

@@ -11,29 +11,82 @@ import {
 } from "../socket";
 import { storage } from "../storage";
 
-function parseHistoryParams(params: { userId?: string }, query: any) {
+type MessageHistoryCursor = {
+  timestamp: string;
+  msgId: number;
+};
+
+type ParsedHistoryCursor = { cursor?: MessageHistoryCursor } | { error: string };
+type ParsedHistoryParams =
+  | { otherUserId: number; limit: number; cursor?: MessageHistoryCursor }
+  | { error: string };
+
+function parseBoundedLimit(
+  rawLimit: unknown,
+  defaultLimit: number,
+  maxLimit: number,
+): number {
+  const parsedLimit =
+    typeof rawLimit === "string" ? Number.parseInt(rawLimit, 10) : Number.NaN;
+  if (!Number.isFinite(parsedLimit)) {
+    return defaultLimit;
+  }
+
+  return Math.max(1, Math.min(parsedLimit, maxLimit));
+}
+
+function parseHistoryCursor(cursorParam: unknown): ParsedHistoryCursor {
+  if (typeof cursorParam !== "string" || cursorParam.trim().length === 0) {
+    return { cursor: undefined };
+  }
+
+  const [timestampPart, msgIdPart] = cursorParam.split("_");
+  const timestampMs = Number(timestampPart);
+  const msgId = Number(msgIdPart);
+
+  if (
+    !timestampPart ||
+    !msgIdPart ||
+    !Number.isFinite(timestampMs) ||
+    !Number.isInteger(msgId) ||
+    msgId <= 0
+  ) {
+    return { error: "Invalid cursor" as const };
+  }
+
+  const timestamp = new Date(timestampMs);
+  if (Number.isNaN(timestamp.getTime())) {
+    return { error: "Invalid cursor" as const };
+  }
+
+  return {
+    cursor: {
+      timestamp: timestamp.toISOString(),
+      msgId,
+    },
+  };
+}
+
+function parseHistoryParams(
+  params: { userId?: string },
+  query: any,
+): ParsedHistoryParams {
   const otherUserId = parseInt(params.userId ?? "", 10);
-  if (isNaN(otherUserId)) {
+  if (isNaN(otherUserId) || otherUserId <= 0) {
     return { error: "Invalid user ID" };
   }
 
-  const limit = Math.min(parseInt((query.limit as string) ?? "40", 10) || 40, 100);
-  const cursorParam = query.cursor as string | undefined;
-
-  let cursor: { timestamp: string; msgId: number } | undefined;
-  if (cursorParam) {
-    const [tsStr, idStr] = cursorParam.split("_");
-    const msgId = Number(idStr);
-    if (!Number.isNaN(msgId) && tsStr) {
-      cursor = { timestamp: new Date(Number(tsStr)).toISOString(), msgId };
-    }
+  const limit = parseBoundedLimit(query.limit, 40, 100);
+  const parsedCursor = parseHistoryCursor(query.cursor);
+  if ("error" in parsedCursor) {
+    return parsedCursor;
   }
 
-  return { otherUserId, limit, cursor };
+  return { otherUserId, limit, cursor: parsedCursor.cursor };
 }
 
 function parseGlobalMessagesLimit(query: any) {
-  return Math.min(parseInt((query.limit as string) ?? "100", 10) || 100, 500);
+  return parseBoundedLimit(query.limit, 100, 500);
 }
 
 function parseConversationTargetUserId(params: { userId?: string }) {

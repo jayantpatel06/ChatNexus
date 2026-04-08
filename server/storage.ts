@@ -187,7 +187,7 @@ const userRepository = {
       });
     } catch (error) {
       console.error("Error updating username:", error);
-      return undefined;
+      throw error;
     }
   },
 
@@ -206,7 +206,7 @@ const userRepository = {
       });
     } catch (error) {
       console.error("Error updating user profile:", error);
-      return undefined;
+      throw error;
     }
   },
 
@@ -1698,21 +1698,48 @@ class DatabaseStorage implements IStorage {
       return 0;
     }
 
-    await this.deleteAttachmentFiles(attachments);
-    await attachmentRepository.deleteByMessageIds(
-      attachments.map((attachment) => attachment.messageId),
-    );
-
-    const removableMessageIds =
-      await messageRepository.getAttachmentOnlyMessageIdsForConversation(
-        user1Id,
-        user2Id,
-      );
-    if (removableMessageIds.length > 0) {
-      await messageRepository.deleteByIds(removableMessageIds);
+    if (!prisma) {
+      return 0;
     }
 
+    const messageIds = Array.from(
+      new Set(attachments.map((attachment) => attachment.messageId)),
+    );
+    const conversationId = getConversationId(user1Id, user2Id);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.attachment.deleteMany({
+        where: {
+          messageId: { in: messageIds },
+        },
+      });
+
+      const removableMessages = await tx.message.findMany({
+        where: {
+          conversationId,
+          message: "Sent an attachment",
+          attachments: {
+            none: {},
+          },
+        },
+        select: {
+          msgId: true,
+        },
+      });
+
+      if (removableMessages.length > 0) {
+        await tx.message.deleteMany({
+          where: {
+            msgId: {
+              in: removableMessages.map((message) => message.msgId),
+            },
+          },
+        });
+      }
+    });
+
     await this.invalidateConversationCaches(user1Id, user2Id);
+    await this.deleteAttachmentFiles(attachments);
     return attachments.length;
   }
 

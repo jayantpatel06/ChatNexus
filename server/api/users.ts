@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { jwtAuth, primeJwtUserCache } from "../middleware/jwt-auth";
 import { signToken } from "../lib/jwt";
+import { isPrismaUniqueConstraintError } from "../lib/prisma-errors";
 import { toPublicUser } from "../lib/user-utils";
 import { emitSidebarUsers, getSidebarUsersForUser } from "../socket";
 import { storage } from "../storage";
@@ -140,7 +141,16 @@ async function updateUsername(userId: number, username: string) {
     return { error: "Username already exists" as const, status: 400 as const };
   }
 
-  const updatedUser = await storage.updateUserUsername(userId, username);
+  let updatedUser: DbUser | undefined;
+  try {
+    updatedUser = await storage.updateUserUsername(userId, username);
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error, "username")) {
+      return { error: "Username already exists" as const, status: 400 as const };
+    }
+    throw error;
+  }
+
   if (!updatedUser) {
     return {
       error: "Failed to update username" as const,
@@ -180,10 +190,19 @@ async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
     }
   }
 
-  const updatedUser = await storage.updateUserProfile(user.userId, {
-    username: profile.username,
-    age: profile.age,
-  });
+  let updatedUser: DbUser | undefined;
+  try {
+    updatedUser = await storage.updateUserProfile(user.userId, {
+      username: profile.username,
+      age: profile.age,
+    });
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error, "username")) {
+      return { error: "Username already exists" as const, status: 400 as const };
+    }
+    throw error;
+  }
+
   if (!updatedUser) {
     return {
       error: "Failed to update profile" as const,

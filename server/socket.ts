@@ -312,6 +312,8 @@ async function findBestRandomChatCandidate(
     return null;
   }
 
+  const restrictedUserIds = new Set(await storage.getRestrictedUserIds(userId));
+
   let bestCandidate:
     | {
         otherUserId: number;
@@ -329,13 +331,9 @@ async function findBestRandomChatCandidate(
     if (
       randomChatSessionsByUser.has(otherUserId) ||
       !randomChatActiveUsers.has(otherUserId) ||
-      !hasActiveSocketForUser(otherUserId)
+      !hasActiveSocketForUser(otherUserId) ||
+      restrictedUserIds.has(otherUserId)
     ) {
-      continue;
-    }
-
-    const relationshipBlock = await storage.getBlockBetweenUsers(userId, otherUserId);
-    if (relationshipBlock) {
       continue;
     }
 
