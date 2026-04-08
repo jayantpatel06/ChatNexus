@@ -43,54 +43,6 @@ if (process.env.NODE_ENV !== "production") {
 
 let databaseReadyPromise: Promise<void> | null = null;
 
-/*
-if (prisma) {
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const connectWithRetry = async (
-    maxRetries = 5,
-    initialDelay = 2000,
-  ): Promise<void> => {
-    let delay = initialDelay;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await prisma.$connect();
-        console.log("✅ Database connected successfully");
-        return;
-      } catch (error: any) {
-        const isLastAttempt = attempt === maxRetries;
-
-        if (isLastAttempt) {
-          console.error(
-            "❌ Database connection failed after",
-            maxRetries,
-            "attempts:",
-            error.message,
-          );
-          console.error(
-            "Database URL (masked):",
-            process.env.DATABASE_URL?.replace(/:[^:]*@/, ":***@") || "not set",
-          );
-          throw new Error(
-            `Database connection failed after ${maxRetries} attempts: ${error.message}`,
-          );
-        }
-
-        console.warn(
-          `⚠️ Database connection failed (attempt ${attempt}/${maxRetries}). Retrying in ${delay / 1000}s...`,
-        );
-        await sleep(delay);
-        delay = Math.min(delay * 1.5, 30000);
-      }
-    }
-  };
-
-  connectWithRetry().catch((error) => {
-    console.error("Database connection ultimately failed:", error.message);
-  });
-}
-*/
 
 async function connectWithRetry(): Promise<void> {
   let delay = DATABASE_CONNECT_INITIAL_DELAY_MS;
@@ -133,4 +85,3 @@ export function ensureDatabaseReady(): Promise<void> {
   return databaseReadyPromise;
 }
 
-export const db = prisma;

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
 
 import type { NextFunction, Request, Response } from "express";
 import { setupVite, serveStatic, log } from "./vite";
@@ -54,8 +55,9 @@ function requestLoggingMiddleware(
 }
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json({ limit: "16kb" }));
+app.use(express.urlencoded({ extended: false, limit: "16kb" }));
 app.use(requestLoggingMiddleware);
 
 (async () => {
@@ -89,6 +91,27 @@ app.use(requestLoggingMiddleware);
       log(`serving on port ${port}`);
     },
   );
+
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    log(`${signal} received, shutting down gracefully...`);
+
+    server.close(() => {
+      log("HTTP server closed");
+    });
+
+    try {
+      const { prisma } = await import("./db/prisma");
+      await prisma.$disconnect();
+    } catch {}
+
+    setTimeout(() => {
+      process.exit(0);
+    }, 5000).unref();
+  };
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 })().catch((error) => {
   console.error("Server bootstrap failed:", error);
   process.exit(1);

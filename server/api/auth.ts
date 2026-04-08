@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { promisify } from "util";
 import { signToken } from "../lib/jwt";
+import { toPublicUser } from "../lib/user-utils";
 import {
   invalidateJwtUserCache,
   jwtAuth,
@@ -26,10 +27,6 @@ import { storage } from "../storage";
 
 const scryptAsync = promisify(scrypt);
 
-function toPublicUser(user: DbUser): User {
-  const { gmail: _gmail, passwordHash: _passwordHash, ...publicUser } = user;
-  return publicUser;
-}
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -42,24 +39,6 @@ async function comparePasswords(supplied: string, stored: string) {
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
-}
-
-function validateGuestUsername(username: unknown): string | null {
-  if (!username || typeof username !== "string" || username.trim().length === 0) {
-    return "Username is required";
-  }
-
-  const trimmedUsername = username.trim();
-
-  if (trimmedUsername.length < 2) {
-    return "Username must be at least 2 characters long";
-  }
-
-  if (trimmedUsername.length > 20) {
-    return "Username must be less than 20 characters";
-  }
-
-  return null;
 }
 
 function parseRegisterPayload(body: unknown): RegisterUser {
@@ -154,12 +133,8 @@ async function guestLoginController(
 ) {
   try {
     const validatedData = parseGuestLoginPayload(req.body);
-    const validationMessage = validateGuestUsername(validatedData.username);
-    if (validationMessage) {
-      return res.status(400).json({ message: validationMessage });
-    }
-
     const trimmedUsername = validatedData.username.trim();
+
     const isAvailable = await ensureUsernameIsAvailable(trimmedUsername);
     if (!isAvailable) {
       return res.status(400).json({ message: "Username already exists" });

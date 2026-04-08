@@ -235,7 +235,7 @@ ${sitemapXml}
 }
 
 function registerSupportRoutes(app: Express) {
-  app.post("/api/help-center", async (req, res, next) => {
+  app.post("/api/help-center", apiRateLimiter, async (req, res, next) => {
     const validation = validateSupportPayload(req.body);
 
     if ("error" in validation) {
@@ -263,7 +263,13 @@ function registerSupportRoutes(app: Express) {
 }
 
 function registerUploadRoutes(app: Express) {
-  app.use("/uploads", express.static("uploads"));
+  app.use("/uploads", express.static("uploads", {
+    dotfiles: "deny",
+    index: false,
+    setHeaders: (res) => {
+      res.set("X-Content-Type-Options", "nosniff");
+    },
+  }));
   app.post("/api/upload", jwtAuth, (req, res, next) => {
     upload.single("file")(req, res, (error) => {
       if (error) {

@@ -43,7 +43,9 @@ export function verifyToken(
   token: string,
 ): { userId: number; username: string; isGuest: boolean } | null {
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      algorithms: ["HS256"],
+    });
 
     if (typeof decoded === "string") {
       return null;

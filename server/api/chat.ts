@@ -155,7 +155,9 @@ async function getGlobalMessagesController(
     await cleanupExpiredGlobalMessagesIfNeeded(io);
     const limit = parseGlobalMessagesLimit(req.query);
     const messages = await storage.getGlobalMessages(limit);
-    console.log(`[API] Fetched ${messages.length} global messages (limit: ${limit})`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[API] Fetched ${messages.length} global messages (limit: ${limit})`);
+    }
     res.json(messages);
   } catch (error) {
     console.error("Error fetching global messages:", error);
@@ -242,7 +244,6 @@ function createEditMessageController(io: SocketIOServer) {
       }
 
       emitConversationMessageUpdate(io, updatedMessage);
-      await emitSidebarUsers(io, [updatedMessage.senderId, updatedMessage.receiverId]);
       res.json({ message: updatedMessage });
     } catch (error: any) {
       if (error?.name === "ZodError") {
