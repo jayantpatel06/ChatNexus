@@ -1,23 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Hide scrollbars globally for all browsers */
-html,
-body,
-* {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
 html {
   scroll-behavior: auto;
-}
-html::-webkit-scrollbar,
-body::-webkit-scrollbar,
-*::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
 }
 
 @media (prefers-reduced-motion: reduce) {
