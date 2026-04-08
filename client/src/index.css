@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -58,7 +60,8 @@ body::-webkit-scrollbar,
   --sidebar-accent-foreground: var(--brand-text);
   --sidebar-border: var(--brand-border);
   --sidebar-ring: var(--brand-primary);
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-display: "Sora", sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: 1.3rem;
@@ -113,7 +116,8 @@ body::-webkit-scrollbar,
   --sidebar-accent-foreground: var(--brand-text);
   --sidebar-border: var(--brand-border);
   --sidebar-ring: var(--brand-primary);
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-display: "Sora", sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: 1.3rem;

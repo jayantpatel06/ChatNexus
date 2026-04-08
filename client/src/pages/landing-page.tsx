@@ -1,5 +1,5 @@
 import "./landing-page.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation } from "wouter";
 import { Seo, getSiteUrl } from "@/components/seo";
 import {
@@ -8,9 +8,14 @@ import {
   Fingerprint,
   Gauge,
   Globe,
+  MessagesSquare,
+  Rocket,
   Shield,
+  Smartphone,
   Users,
   VenetianMask,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -22,7 +27,6 @@ import {
 import { useAuth } from "@/providers/auth-provider";
 import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
-import { scrollToSectionId } from "@/lib/lenis";
 import {
   useReveal,
   MagneticWrap,
@@ -42,6 +46,15 @@ type FaqItem = {
   category: string;
   question: string;
   answer: string;
+};
+
+type AboutStackItem = {
+  accent: string;
+  description: string;
+  icon: LucideIcon;
+  kicker: string;
+  tags: readonly string[];
+  title: string;
 };
 
 const LANDING_FAQS: readonly FaqItem[] = [
@@ -74,6 +87,45 @@ const LANDING_FAQS: readonly FaqItem[] = [
     question: "What can I do besides one-to-one stranger chat?",
     answer:
       "You can join global rooms, move between live conversations quickly, and use ChatNexus for both casual discovery and more active community chat.",
+  },
+] as const;
+
+const ABOUT_STACK_ITEMS: readonly AboutStackItem[] = [
+  {
+    accent: "#4fd1c5",
+    description:
+      "Guest access lets you jump into a stranger chat session immediately, so the first conversation starts in seconds instead of after a long signup flow.",
+    icon: Rocket,
+    kicker: "Instant Access",
+    tags: ["Guest Mode", "Anonymous", "No Friction"],
+    title: "Start Fast",
+  },
+  {
+    accent: "#60a5fa",
+    description:
+      "Frictionless entry, modern messaging, and fast live updates make every chat feel responsive, lightweight, and easy to continue.",
+    icon: Zap,
+    kicker: "Live System",
+    tags: ["Socket.IO", "Typing", "Presence"],
+    title: "Built for Real Time",
+  },
+  {
+    accent: "#22d3ee",
+    description:
+      "Built for people who want to meet new friends, discover live rooms, and have random conversations globally with a real-time interface.",
+    icon: MessagesSquare,
+    kicker: "Discovery",
+    tags: ["Random Chat", "Global Rooms", "New People"],
+    title: "Join Global Conversations",
+  },
+  {
+    accent: "#c084fc",
+    description:
+      "Mobile-friendly layouts and PWA support help you move between desktop and phone without losing the speed, simplicity, or comfort of the experience.",
+    icon: Smartphone,
+    kicker: "Every Device",
+    tags: ["Responsive", "PWA", "Cross Device"],
+    title: "Chat Anywhere",
   },
 ] as const;
 
@@ -164,11 +216,7 @@ export default function LandingPage() {
   const footerRef = useReveal(0.15);
 
   const dest = user ? "/dashboard" : "/auth";
-
-  const handleSectionCtaClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    scrollToSectionId("features", { offset: -112 });
-  };
+  const guestDest = user ? "/dashboard" : "/auth?mode=guest";
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -230,13 +278,9 @@ export default function LandingPage() {
               </Link>
             </MagneticWrap>
             <MagneticWrap>
-              <a
-                href="#features"
-                className="hero-btn-secondary"
-                onClick={handleSectionCtaClick}
-              >
-                Explore Features
-              </a>
+              <Link href={guestDest} className="hero-btn-secondary">
+                Login as Guest
+              </Link>
             </MagneticWrap>
           </div>
 
@@ -273,40 +317,7 @@ export default function LandingPage() {
                   global conversations instantly.
                 </p>
             </div>
-            <div className="about-bento-grid">
-              <article className="about-bento-card about-bento-card--top-left">
-                <h3 className="about-bento-title">Start Fast</h3>
-                <p className="about-bento-text">
-                  Guest access lets you jump into a stranger chat session
-                  immediately, so the first conversation starts in seconds
-                  instead of after a long signup flow.
-                </p>
-              </article>
-              <article className="about-bento-card about-bento-card--top-right">
-                <h3 className="about-bento-title">Built for Real Time</h3>
-                <p className="about-bento-text">
-                  Frictionless entry, modern messaging, and fast live updates
-                  make every chat feel responsive, lightweight, and easy to
-                  continue.
-                </p>
-              </article>
-              <article className="about-bento-card about-bento-card--middle-left">
-                <h3 className="about-bento-title">Join Global Conversations</h3>
-                <p className="about-bento-text">
-                  ChatNexus is built for people who want to meet new friends,
-                  discover live rooms, and move between random conversations
-                  with a real-time interface that feels immediate and social.
-                </p>
-              </article>
-              <article className="about-bento-card about-bento-card--middle-right">
-                <h3 className="about-bento-title">Chat Anywhere</h3>
-                <p className="about-bento-text">
-                  Mobile-friendly layouts and PWA support help you move between
-                  desktop and phone without losing the speed, simplicity, or
-                  comfort of the experience.
-                </p>
-              </article>
-            </div>
+            <AboutStack />
           </div>
         </section>
 
@@ -369,10 +380,10 @@ function BentoFeatures() {
           <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
           <VenetianMask className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h3 className="bento-feature-title mb-3 text-lg font-semibold tracking-wide">
+        <h3 className="bento-feature-title mb-3">
           Anonymous
         </h3>
-        <p className="text-sm leading-relaxed text-brand-muted">
+        <p className="landing-card-copy">
           Start conversations instantly without exposing your identity or
           getting blocked by a long signup flow.
         </p>
@@ -383,10 +394,10 @@ function BentoFeatures() {
           <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
           <Fingerprint className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
+        <h3 className="bento-feature-title mb-3">
           Secure by default
         </h3>
-        <p className="text-sm leading-relaxed text-brand-muted">
+        <p className="landing-card-copy">
           No signups required to chat. We don't track your identity or store
           chat logs to ensure your privacy.
         </p>
@@ -397,24 +408,24 @@ function BentoFeatures() {
           <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
           <Gauge className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
+        <h3 className="bento-feature-title mb-3">
           Ultra-low latency
         </h3>
-        <p className="text-sm leading-relaxed text-brand-muted">
+        <p className="landing-card-copy">
           Every millisecond counts. Our distributed backend brings latency
           down, feeling faster than light.
         </p>
       </div>
 
       <div className="bento-feature-card group relative flex flex-col overflow-hidden rounded-3xl p-8 md:col-span-2 md:flex-row">
-        <div className="relative z-10 flex flex-col justify-center md:w-[45%]">
+        <div className="relative z-10 flex flex-col items-center justify-center text-center md:w-[45%] md:items-start md:text-left">
           <div className="bento-feature-icon-shell mb-6 flex h-12 w-12 items-center justify-center rounded-full">
             <Globe className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
           </div>
-          <h3 className="bento-feature-title mb-3 text-xl font-semibold">
+          <h3 className="bento-feature-title mb-3">
             Global reach
           </h3>
-          <p className="max-w-sm text-sm leading-relaxed text-brand-muted">
+          <p className="landing-card-copy max-w-sm">
             Match with users globally in real-time. We focus on frictionless
             entry, privacy-first flows, and a mobile-friendly experience.
           </p>
@@ -444,14 +455,57 @@ function BentoFeatures() {
           <div className="absolute inset-0 scale-110 rounded-full border border-brand-primary/20 opacity-0 transition-opacity group-hover:opacity-100" />
           <Users className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
         </div>
-        <h3 className="bento-feature-title mb-3 text-lg font-semibold">
+        <h3 className="bento-feature-title mb-3">
           Make connections
         </h3>
-        <p className="text-sm leading-relaxed text-brand-muted">
+        <p className="landing-card-copy">
           Meet friends securely. Join a random session instantly.
         </p>
       </div>
     </div>
+  );
+}
+
+function AboutStack() {
+  return (
+    <section className="about-stack">
+      {ABOUT_STACK_ITEMS.map((item, index) => {
+        const Icon = item.icon;
+        return (
+          <article
+            key={item.title}
+            className="about-stack-card group"
+            style={{ "--i": index + 1, "--about-card-accent": item.accent } as CSSProperties}
+          >
+            <div className="about-stack-card-bg" />
+            <div className="about-stack-card-overlay" />
+            <div className="about-stack-card-content">
+              <div className="about-stack-card-header">
+                <span className="about-stack-card-index">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div className="bento-feature-icon-shell about-stack-card-icon relative flex h-12 w-12 items-center justify-center rounded-full">
+                  <div className="absolute inset-0 scale-110 rounded-full border border-white/10 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <Icon className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
+                </div>
+              </div>
+              <div className="about-stack-card-copy">
+                <span className="about-stack-card-kicker">{item.kicker}</span>
+                <h3 className="about-stack-card-title">{item.title}</h3>
+                <p className="about-stack-card-text">{item.description}</p>
+                <div className="about-stack-card-pills">
+                  {item.tags.map((tag) => (
+                    <span key={tag} className="about-stack-card-pill">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </section>
   );
 }
 
