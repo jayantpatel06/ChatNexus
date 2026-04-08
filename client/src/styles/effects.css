@@ -6,8 +6,9 @@
 /* ──── Design Tokens (Centralized Theme) ──── */
 html {
   --bg-light-1: #ffffff;
-  --bg-light-2: #ffffff;
-  --bg-light-3: #ffffff;
+  --bg-light-2: #fafcff;
+  --bg-light-3: #f4f8fb;
+  --bg-light-accent: #f8fbff;
   --bg-dark-1: #0f171b;
   --bg-dark-2: #14232a;
   --bg-dark-3: #1b3138;
@@ -32,7 +33,7 @@ html {
   /* 💬 MESSAGING & CHAT */
   --brand-msg-sent: #08b2e3;
   --brand-msg-sent-text: #ffffff;
-  --brand-msg-received: #f8fbff;
+  --brand-msg-received: var(--bg-light-accent);
   --brand-msg-received-text: #161514;
 
   /* ✨ GRADIENTS & GLOWS */

@@ -49,6 +49,7 @@ export function GifPicker({
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<TenorCategory[]>([]);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextPosRef = useRef("");
 
@@ -119,20 +120,31 @@ export function GifPicker({
   }, [handleMissingApiKey]);
 
   useEffect(() => {
+    if (!showCategories) {
+      return;
+    }
+
     void fetchCategories();
-  }, [fetchCategories]);
+  }, [fetchCategories, showCategories]);
 
   const searchGifs = useCallback(
     async (query: string) => {
+      abortControllerRef.current?.abort();
+
       if (!query.trim()) {
+        abortControllerRef.current = null;
         await fetchTrending();
         return;
       }
 
       if (!TENOR_API_KEY) {
+        abortControllerRef.current = null;
         handleMissingApiKey();
         return;
       }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       setLoading(true);
       setError(null);
@@ -140,6 +152,7 @@ export function GifPicker({
       try {
         const res = await fetchWithTimeout(
           `${TENOR_BASE_URL}/search?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&q=${encodeURIComponent(query)}&limit=30&media_filter=tinygif,gif`,
+          { signal: controller.signal },
         );
         if (!res.ok) {
           throw new Error("Failed to search");
@@ -151,10 +164,17 @@ export function GifPicker({
         };
         setGifs(data.results || []);
         nextPosRef.current = data.next || "";
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
         setError("Search failed. Try again.");
       } finally {
-        setLoading(false);
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+          setLoading(false);
+        }
       }
     },
     [fetchTrending, handleMissingApiKey],
@@ -175,6 +195,8 @@ export function GifPicker({
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
+
+      abortControllerRef.current?.abort();
     };
   }, [searchTerm, searchGifs]);
 

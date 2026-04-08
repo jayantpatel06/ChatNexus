@@ -136,7 +136,7 @@ model ConversationReadState {
   otherUser      User     @relation("ReadStatesOtherUser", fields: [otherUserId], references: [userId], onDelete: Cascade)
 
   @@id([userId, otherUserId])
-  @@index([userId])
+  @@index([otherUserId])
   @@map("ConversationReadStates")
 }
 

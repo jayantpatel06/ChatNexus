@@ -55,7 +55,34 @@ function requestLoggingMiddleware(
 }
 
 const app = express();
-app.use(helmet({ contentSecurityPolicy: false }));
+const isDevelopment = app.get("env") === "development";
+
+app.use(
+  helmet({
+    contentSecurityPolicy: isDevelopment
+      ? false
+      : {
+          directives: {
+            defaultSrc: ["'self'"],
+            baseUri: ["'self'"],
+            connectSrc: [
+              "'self'",
+              "https://tenor.googleapis.com",
+              "ws:",
+              "wss:",
+            ],
+            fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:", "https:"],
+            manifestSrc: ["'self'"],
+            mediaSrc: ["'self'", "blob:", "https:"],
+            objectSrc: ["'none'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            workerSrc: ["'self'", "blob:"],
+          },
+        },
+  }),
+);
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false, limit: "16kb" }));
 app.use(requestLoggingMiddleware);
@@ -75,7 +102,7 @@ app.use(requestLoggingMiddleware);
 
   app.use(errorHandler);
 
-  if (app.get("env") === "development") {
+  if (isDevelopment) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
@@ -103,7 +130,9 @@ app.use(requestLoggingMiddleware);
     try {
       const { prisma } = await import("./db/prisma");
       await prisma.$disconnect();
-    } catch {}
+    } catch (error) {
+      console.error("Failed to disconnect Prisma during shutdown:", error);
+    }
 
     setTimeout(() => {
       process.exit(0);

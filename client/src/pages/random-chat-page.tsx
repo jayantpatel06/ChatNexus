@@ -538,7 +538,7 @@ export default function RandomChatPage() {
   };
 
   const handleAddInterest = () => {
-    const normalizedInterest = interestDraft.trim();
+    const normalizedInterest = interestDraft.trim().slice(0, 24);
     if (!normalizedInterest) {
       return;
     }
@@ -1112,7 +1112,7 @@ function RandomChatConversationPanel({
           ? "Searching for a stranger"
           : currentPartner
             ? "Private room"
-            : "Private room";
+            : statusMessage;
   const handleInputFocus = () => {
     setShowEmojiPicker(false);
   };

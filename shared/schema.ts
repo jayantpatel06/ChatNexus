@@ -23,7 +23,7 @@ export const loginUserSchema = z.object({
 
 export const guestLoginSchema = z.object({
   username: z.string().min(2).max(20),
-  age: z.number().min(13).max(120),
+  age: z.number().min(18).max(120),
   gender: z.enum(["Male", "Female", "Other"]),
 });
 
@@ -37,7 +37,7 @@ export const registerUserSchema = z.object({
 
 export const updateUserProfileSchema = z.object({
   username: z.string().trim().min(2).max(20),
-  age: z.coerce.number().int().min(13).max(120),
+  age: z.coerce.number().int().min(18).max(120),
 });
 
 export const publicUserSchema = z.object({
@@ -58,7 +58,7 @@ export const insertMessageSchema = z.object({
 });
 
 export const updateMessageSchema = z.object({
-  message: z.string().trim().min(1),
+  message: z.string().trim().min(1).max(5000),
 });
 
 export const messageReactionSchema = z.object({

@@ -59,9 +59,7 @@ function shouldInferManagedPostgresSsl(parsedUrl: URL | null): boolean {
   }
 
   return (
-    hostname.endsWith(".supabase.co") ||
-    hostname.endsWith(".supabase.com") ||
-    Boolean(process.env.SUPABASE_URL?.trim())
+    hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.com")
   );
 }
 

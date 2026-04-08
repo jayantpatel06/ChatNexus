@@ -348,7 +348,7 @@ export default function AuthPage() {
               <Input
                 id="register-age"
                 type="number"
-                min={13}
+                min={18}
                 max={120}
                 inputMode="numeric"
                 placeholder="Age"

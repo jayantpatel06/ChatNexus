@@ -7,13 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type {
-  FriendRequest,
-  Message,
-  User,
-} from "@shared/schema";
+import type { FriendRequest, Message, User } from "@shared/schema";
 import {
   ArrowLeft,
+  Download,
   Expand,
   Handshake,
   Loader2,
@@ -310,29 +307,27 @@ function AttachmentThumbnail({
             Image unavailable
           </div>
         ) : (
-          <>
-            <button
-              type="button"
-              className="h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => onPreview({ url: attachment.url })}
-              title="Preview attachment"
-            >
-              <img
-                src={attachment.url}
-                alt={attachment.filename || "Shared attachment preview"}
-                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                onError={() => setHasError(true)}
-              />
-              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/65 via-black/10 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
-                  <Expand className="h-3 w-3" />
-                  Preview
-                </span>
-              </div>
-            </button>
-          </>
+          <button
+            type="button"
+            className="h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={() => onPreview({ url: attachment.url })}
+            title="Preview attachment"
+          >
+            <img
+              src={attachment.url}
+              alt={attachment.filename || "Shared attachment preview"}
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={() => setHasError(true)}
+            />
+            <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/65 via-black/10 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
+                <Expand className="h-3 w-3" />
+                Preview
+              </span>
+            </div>
+          </button>
         )}
       </div>
     </div>
@@ -647,23 +642,33 @@ export const MessageBubble = memo(function MessageBubble({
                       src={pendingAttachment.previewUrl}
                       title={pendingAttachment.file.name}
                       mimeType={pendingAttachment.file.type}
-                      showOverlay
+                      showOverlay={pendingAttachment.status !== "error"}
                       overlayLabel={
-                        pendingAttachment.status === "uploading"
-                          ? "Uploading..."
-                          : "Sending..."
+                        pendingAttachment.status === "error"
+                          ? "Upload failed"
+                          : pendingAttachment.status === "uploading"
+                            ? "Uploading..."
+                            : "Sending..."
                       }
                     />
                   ) : (
                     <div className="flex h-full items-center gap-2 px-3 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {pendingAttachment.status === "error" ? (
+                        <span className="text-sm text-red-400">
+                          Upload failed
+                        </span>
+                      ) : (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
                       <span className="flex-1 truncate text-sm">
                         {pendingAttachment.file.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {pendingAttachment.status === "uploading"
-                          ? "Uploading..."
-                          : "Sending..."}
+                        {pendingAttachment.status === "error"
+                          ? "Upload failed"
+                          : pendingAttachment.status === "uploading"
+                            ? "Uploading..."
+                            : "Sending..."}
                       </span>
                     </div>
                   )}
@@ -698,7 +703,7 @@ export const MessageBubble = memo(function MessageBubble({
                           className="rounded p-1 hover:bg-black/10"
                           title="Download"
                         >
-                          <ArrowLeft className="h-4 w-4 rotate-[-90deg]" />
+                          <Download className="h-4 w-4" />
                         </a>
                       </div>
                     )}
@@ -765,12 +770,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
 
             {groupedReactions.length > 0 && (
-              <div
-                className={cn(
-                  "absolute -bottom-1 z-10",
-                  isOwnMessage ? "right-2" : "right-2",
-                )}
-              >
+              <div className={cn("absolute -bottom-1 z-10", "right-2")}>
                 <div className="inline-flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-muted px-0.5 py-0.5 shadow-sm scrollbar-none">
                   {groupedReactions.map((reaction) => (
                     <button
@@ -898,4 +898,3 @@ export const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
-

@@ -26,7 +26,10 @@ export function assertJwtSecretConfigured(): void {
 }
 
 export function signToken(user: User): string {
-  const options: SignOptions = { expiresIn: JWT_EXPIRY_SECONDS };
+  const options: SignOptions = {
+    algorithm: "HS256",
+    expiresIn: JWT_EXPIRY_SECONDS,
+  };
 
   return jwt.sign(
     {

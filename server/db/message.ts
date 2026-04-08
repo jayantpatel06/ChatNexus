@@ -344,7 +344,7 @@ export const messageRepository = {
         prisma.$queryRaw<
           Array<{
             senderId: number;
-            unreadCount: Number;
+            unreadCount: number;
           }>
         >(Prisma.sql`
           SELECT m."sender_id" AS "senderId", COUNT(*)::int AS "unreadCount"

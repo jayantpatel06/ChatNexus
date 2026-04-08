@@ -235,7 +235,7 @@ ${sitemapXml}
 }
 
 function registerSupportRoutes(app: Express) {
-  app.post("/api/help-center", apiRateLimiter, async (req, res, next) => {
+  app.post("/api/help-center", async (req, res, next) => {
     const validation = validateSupportPayload(req.body);
 
     if ("error" in validation) {

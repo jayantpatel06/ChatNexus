@@ -7,7 +7,7 @@ export function stripConversationAttachments(messages: Message[]): Message[] {
     const attachments = message.attachments ?? [];
 
     if (attachments.length === 0) {
-      return [message];
+      return [{ ...message }];
     }
 
     if (!message.message || message.message === "Sent an attachment") {

@@ -239,7 +239,8 @@ Recommended deployment flow:
 ## Security and Validation
 
 - JWT authentication protects private API routes and the Socket.IO connection
-- Helmet is enabled on the Express server
+- JWT signing and verification are both pinned to `HS256` for defense-in-depth against algorithm confusion issues
+- Helmet is enabled on the Express server, and production now uses a real CSP while development keeps CSP disabled for Vite middleware compatibility
 - API and auth routes are rate-limited
 - Zod validates key request payloads
 - Block relationships are enforced for both messaging and social actions

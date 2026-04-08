@@ -32,7 +32,9 @@ export function isPrismaUniqueConstraintError(
   return targets.some(
     (target) =>
       target === field ||
-      target.includes(field) ||
+      target.startsWith(`${field}_`) ||
+      target.includes(`_${field}_`) ||
+      target.endsWith(`_${field}`) ||
       target.endsWith(`_${field}_key`),
   );
 }
