@@ -12,12 +12,39 @@ import type { Socket } from "socket.io-client";
 import { io } from "socket.io-client";
 import type { Message, User } from "@shared/schema";
 import { useAuth } from "@/providers/auth-provider";
-import { getStoredToken, readJsonResponse } from "@/lib/queryClient";
+import { apiRequest, readJsonResponse } from "@/lib/queryClient";
 
 const SOCKET_TRANSPORTS = ["websocket"];
 const SOCKET_RECONNECTION_DELAY_MS = 1000;
 const SOCKET_RECONNECTION_DELAY_MAX_MS = 10000;
 const SOCKET_TIMEOUT_MS = 20000;
+const IS_DEV = import.meta.env.DEV;
+
+function logSocketDebug(message: string, detail?: unknown) {
+  if (!IS_DEV) {
+    return;
+  }
+
+  if (detail === undefined) {
+    console.log(message);
+    return;
+  }
+
+  console.log(message, detail);
+}
+
+function logSocketError(message: string, detail?: unknown) {
+  if (!IS_DEV) {
+    return;
+  }
+
+  if (detail === undefined) {
+    console.error(message);
+    return;
+  }
+
+  console.error(message, detail);
+}
 
 function createSocketConnection(token: string) {
   return io(window.location.origin, {
@@ -82,19 +109,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [socket, token]);
 
   const refreshOnlineUsers = useCallback(async () => {
-    const storedToken = getStoredToken();
-    if (!storedToken) return;
-
-    const res = await fetch("/api/users/sidebar", {
-      headers: {
-        Authorization: `Bearer ${storedToken}`,
-      },
-    });
-
-    if (!res.ok) return;
-
-    const users = await readJsonResponse<User[]>(res);
-    setSidebarUsers(users);
+    try {
+      const users = await readJsonResponse<User[]>(
+        await apiRequest("GET", "/api/users/sidebar"),
+      );
+      setSidebarUsers(users);
+    } catch (error) {
+      logSocketError("Failed to refresh online users:", error);
+    }
   }, []);
 
   useEffect(() => {
@@ -120,7 +142,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && !socketIO.connected) {
-        console.log("App became visible, attempting to reconnect...");
+        logSocketDebug("App became visible, attempting to reconnect...");
         socketIO.connect();
       }
     };
@@ -129,10 +151,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socketIO.on("connect", () => {
       setIsConnected(true);
       lastTypingStateRef.current = {};
-      console.log("Socket.IO connected");
-      refreshOnlineUsers().catch((error) => {
-        console.error("Failed to refresh online users:", error);
-      });
+      logSocketDebug("Socket.IO connected");
+      void refreshOnlineUsers();
     });
 
     socketIO.on("online_users_updated", (data) => {
@@ -176,7 +196,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       lastTypingStateRef.current = {};
       typingTimeouts.forEach((timeout) => clearTimeout(timeout));
       typingTimeouts.clear();
-      console.log("Socket.IO disconnected:", reason);
+      logSocketDebug("Socket.IO disconnected:", reason);
 
       if (reason === "io server disconnect") {
         socketIO.connect();
@@ -184,7 +204,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     socketIO.on("connect_error", (error) => {
-      console.error("Socket.IO connection error:", error);
+      logSocketError("Socket.IO connection error:", error);
       setIsConnected(false);
     });
 
@@ -197,7 +217,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [user?.userId, reconnectCounter, refreshOnlineUsers]);
 
   const forceReconnect = () => {
-    console.log("Forcing socket reconnection...");
+    logSocketDebug("Forcing socket reconnection...");
     setReconnectCounter((c) => c + 1);
   };
 

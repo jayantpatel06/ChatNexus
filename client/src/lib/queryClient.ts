@@ -1,8 +1,13 @@
-import { QueryClient, type QueryFunction } from "@tanstack/react-query";
-import type { User } from "@shared/schema";
+import {
+  QueryClient,
+  type QueryFunction,
+  type QueryFunctionContext,
+} from "@tanstack/react-query";
+import { publicUserSchema, type User } from "@shared/schema";
 
 const TOKEN_KEY = "chatnexus_jwt";
 const USER_KEY = "chatnexus_user";
+const API_REQUEST_TIMEOUT_MS = 15_000;
 
 export type JwtPayload = {
   exp?: number;
@@ -29,7 +34,7 @@ export function getStoredUser(): User | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as User;
+    return publicUserSchema.parse(JSON.parse(raw));
   } catch {
     localStorage.removeItem(USER_KEY);
     return null;
@@ -67,6 +72,30 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -83,7 +112,7 @@ export async function apiRequest(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -114,11 +143,18 @@ export async function readJsonResponse<T>(res: Response): Promise<T> {
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
-export const getQueryFn: <T>(options: {
+export function getQueryFn<T>(options: {
+  on401: "throw";
+}): QueryFunction<T>;
+export function getQueryFn<T>(options: {
+  on401: "returnNull";
+}): QueryFunction<T | null>;
+export function getQueryFn<T>({
+  on401: unauthorizedBehavior,
+}: {
   on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+}) {
+  return async ({ queryKey }: QueryFunctionContext) => {
     const token = getStoredToken();
     const headers: Record<string, string> = {};
 
@@ -126,7 +162,7 @@ export const getQueryFn: <T>(options: {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetchWithTimeout(queryKey.join("/") as string, {
       headers,
     });
 
@@ -135,8 +171,9 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    return await readJsonResponse(res);
   };
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {

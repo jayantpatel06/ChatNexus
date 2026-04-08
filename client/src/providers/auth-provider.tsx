@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   apiRequest,
   decodeStoredToken,
+  fetchWithTimeout,
   getStoredToken,
   getStoredUser,
   queryClient,
@@ -61,14 +62,28 @@ const REGISTER_PATH = "/api/register";
 const GUEST_LOGIN_PATH = "/api/guest-login";
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+const IS_DEV = import.meta.env.DEV;
 
 function clearStoredSession() {
   removeStoredToken();
   removeStoredUser();
 }
 
+function logAuthWarning(message: string, detail?: unknown) {
+  if (!IS_DEV) {
+    return;
+  }
+
+  if (detail === undefined) {
+    console.warn(message);
+    return;
+  }
+
+  console.warn(message, detail);
+}
+
 async function refreshAuthToken(currentToken: string) {
-  const response = await fetch(AUTH_REFRESH_PATH, {
+  const response = await fetchWithTimeout(AUTH_REFRESH_PATH, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${currentToken}`,
@@ -83,7 +98,7 @@ async function refreshAuthToken(currentToken: string) {
 }
 
 async function fetchCurrentUser(currentToken: string) {
-  const response = await fetch(CURRENT_USER_PATH, {
+  const response = await fetchWithTimeout(CURRENT_USER_PATH, {
     headers: {
       Authorization: `Bearer ${currentToken}`,
     },
@@ -101,7 +116,7 @@ async function fetchCurrentUser(currentToken: string) {
 }
 
 async function login(credentials: LoginUser) {
-  const response = await fetch(LOGIN_PATH, {
+  const response = await fetchWithTimeout(LOGIN_PATH, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(credentials),
@@ -116,7 +131,7 @@ async function login(credentials: LoginUser) {
 }
 
 async function register(credentials: RegisterUser) {
-  const response = await fetch(REGISTER_PATH, {
+  const response = await fetchWithTimeout(REGISTER_PATH, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(credentials),
@@ -131,7 +146,7 @@ async function register(credentials: RegisterUser) {
 }
 
 async function guestLogin(payload: GuestLogin) {
-  const response = await fetch(GUEST_LOGIN_PATH, {
+  const response = await fetchWithTimeout(GUEST_LOGIN_PATH, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(payload),
@@ -263,7 +278,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             clearSession();
           }
         } else {
-          console.warn("Auth bootstrap network issue, keeping stored session");
+          logAuthWarning(
+            "Auth bootstrap network issue, keeping stored session",
+            authError,
+          );
           if (!cancelled) {
             setError(
               authError instanceof Error ? authError : new Error(message),
@@ -298,8 +316,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const nextToken = await refreshTokenIfNeeded(token);
         await syncUser(nextToken);
-      } catch {
-        console.warn("Scheduled token refresh failed");
+      } catch (error) {
+        logAuthWarning("Scheduled token refresh failed", error);
       }
     }, delay);
 
@@ -316,15 +334,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const nextToken = await refreshTokenIfNeeded(currentToken);
         await syncUser(nextToken);
-      } catch {
-        console.warn("Visibility auth sync failed");
+      } catch (error) {
+        logAuthWarning("Visibility auth sync failed", error);
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  });
+  }, [refreshTokenIfNeeded, syncUser]);
 
   const loginMutation = useMutation({
     mutationFn: login,

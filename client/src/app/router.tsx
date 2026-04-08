@@ -1,20 +1,22 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
-import AboutPage from "@/pages/about-page";
-import AuthPage from "@/pages/auth-page";
-import ChatDashboard from "@/pages/chat-dashboard-page";
-import ChatHistoryPage from "@/pages/chat-history-page";
-import ContactPage from "@/pages/contact-page";
-import FeaturesPage from "@/pages/features-page";
-import GlobalChat from "@/pages/global-chat-page";
-import HelpCenterPage from "@/pages/help-center-page";
-import LandingPage from "@/pages/landing-page";
-import NotFoundPage from "@/pages/not-found-page";
-import PrivacyPolicyPage from "@/pages/privacy-policy-page";
-import RandomChatPage from "@/pages/random-chat-page";
-import TermsOfServicePage from "@/pages/terms-of-service-page";
+import { PageLoader } from "@/components/page-loader";
 import { getAppLenis } from "@/lib/lenis";
 import { ProtectedRoute } from "./protected-route";
+
+const LandingPage = lazy(() => import("@/pages/landing-page"));
+const ChatDashboard = lazy(() => import("@/pages/chat-dashboard-page"));
+const ChatHistoryPage = lazy(() => import("@/pages/chat-history-page"));
+const GlobalChat = lazy(() => import("@/pages/global-chat-page"));
+const RandomChatPage = lazy(() => import("@/pages/random-chat-page"));
+const AuthPage = lazy(() => import("@/pages/auth-page"));
+const HelpCenterPage = lazy(() => import("@/pages/help-center-page"));
+const FeaturesPage = lazy(() => import("@/pages/features-page"));
+const AboutPage = lazy(() => import("@/pages/about-page"));
+const ContactPage = lazy(() => import("@/pages/contact-page"));
+const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page"));
+const TermsOfServicePage = lazy(() => import("@/pages/terms-of-service-page"));
+const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 function RouteScrollRestoration() {
   const [location] = useLocation();
@@ -41,21 +43,23 @@ export function AppRouter() {
   return (
     <>
       <RouteScrollRestoration />
-      <Switch>
-        <Route path="/" component={LandingPage} />
-        <ProtectedRoute path="/dashboard" component={ChatDashboard} />
-        <ProtectedRoute path="/history" component={ChatHistoryPage} />
-        <ProtectedRoute path="/global-chat" component={GlobalChat} />
-        <ProtectedRoute path="/random-chat" component={RandomChatPage} />
-        <Route path="/auth" component={AuthPage} />
-        <Route path="/help-center" component={HelpCenterPage} />
-        <Route path="/features" component={FeaturesPage} />
-        <Route path="/about" component={AboutPage} />
-        <Route path="/contact" component={ContactPage} />
-        <Route path="/privacy" component={PrivacyPolicyPage} />
-        <Route path="/terms" component={TermsOfServicePage} />
-        <Route component={NotFoundPage} />
-      </Switch>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={LandingPage} />
+          <ProtectedRoute path="/dashboard" component={ChatDashboard} />
+          <ProtectedRoute path="/history" component={ChatHistoryPage} />
+          <ProtectedRoute path="/global-chat" component={GlobalChat} />
+          <ProtectedRoute path="/random-chat" component={RandomChatPage} />
+          <Route path="/auth" component={AuthPage} />
+          <Route path="/help-center" component={HelpCenterPage} />
+          <Route path="/features" component={FeaturesPage} />
+          <Route path="/about" component={AboutPage} />
+          <Route path="/contact" component={ContactPage} />
+          <Route path="/privacy" component={PrivacyPolicyPage} />
+          <Route path="/terms" component={TermsOfServicePage} />
+          <Route component={NotFoundPage} />
+        </Switch>
+      </Suspense>
     </>
   );
 }

@@ -25,6 +25,7 @@ import {
   MagneticWrap,
 } from "@/components/effects";
 import { useToast } from "@/hooks/use-toast";
+import { fetchWithTimeout } from "@/lib/queryClient";
 import gsap from "gsap";
 
 export default function ContactPage() {
@@ -86,7 +87,7 @@ export default function ContactPage() {
 
     try {
       setIsSubmitting(true);
-      const res = await fetch("/api/help-center", {
+      const res = await fetchWithTimeout("/api/help-center", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

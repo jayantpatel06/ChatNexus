@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { Loader2 } from "lucide-react";
 import { Redirect, Route } from "wouter";
@@ -7,7 +8,7 @@ export function ProtectedRoute({
   component: Component,
 }: {
   path: string;
-  component: () => React.JSX.Element;
+  component: ComponentType;
 }) {
   const { user, isLoading } = useAuth();
 

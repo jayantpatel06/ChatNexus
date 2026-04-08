@@ -1,11 +1,33 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig(() => {
+const DEFAULT_SITE_URL = "https://chatnexus.me";
+
+function resolveSiteUrl(mode: string) {
+  const env = loadEnv(mode, process.cwd(), "");
+  const configuredSiteUrl =
+    env.VITE_SITE_URL?.trim() || env.SITE_URL?.trim() || DEFAULT_SITE_URL;
+
+  return configuredSiteUrl.replace(/\/+$/, "");
+}
+
+function staticSiteUrlPlugin(siteUrl: string): Plugin {
+  return {
+    name: "chatnexus-static-site-url",
+    transformIndexHtml(html) {
+      return html.replace(/%VITE_SITE_URL%/g, siteUrl);
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const siteUrl = resolveSiteUrl(mode);
+
   return {
     plugins: [
+      staticSiteUrlPlugin(siteUrl),
       react(),
       VitePWA({
         registerType: "autoUpdate",

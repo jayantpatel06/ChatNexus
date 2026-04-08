@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { fetchWithTimeout } from "@/lib/queryClient";
 
 const DEFAULT_ISSUE_TYPE = "account_deletion";
 const HELP_CENTER_API_PATH = "/api/help-center";
@@ -67,7 +68,7 @@ type HelpCenterRequest = {
 };
 
 async function submitHelpCenterRequest(payload: HelpCenterRequest) {
-  const response = await fetch(HELP_CENTER_API_PATH, {
+  const response = await fetchWithTimeout(HELP_CENTER_API_PATH, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
