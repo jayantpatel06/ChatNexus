@@ -4,7 +4,7 @@ import { ActiveChatProvider, useActiveChat } from "@/chat/use-active-chat";
 import { UsersSidebar } from "@/chat/users-sidebar";
 import { Seo } from "@/components/seo";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { User } from "@shared/schema";
+import { publicUserSchema, type User } from "@shared/schema";
 
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
@@ -83,7 +83,7 @@ function PrivateChatPageShellContent({
     }
 
     try {
-      onUserSelect(JSON.parse(pendingPrivateChat) as User);
+      onUserSelect(publicUserSchema.parse(JSON.parse(pendingPrivateChat)));
     } catch {
       // Ignore malformed storage values.
     } finally {

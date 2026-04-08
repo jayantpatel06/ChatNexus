@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import { Message, type MessageReactionWithUser } from "@shared/schema";
+import { stripConversationAttachments } from "@/chat/chat-message-utils";
 import { useAuth } from "@/providers/auth-provider";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,37 +30,8 @@ interface ActiveChatContextType {
 }
 
 const ActiveChatContext = createContext<ActiveChatContextType | null>(null);
-
-type MessageWithAttachments = Message & {
-  attachments?: Array<{
-    id: number;
-    url: string;
-    filename: string;
-    fileType: string;
-  }>;
-};
-
-function stripConversationAttachments(messages: Message[]): Message[] {
-  return messages.flatMap((message) => {
-    const withAttachments = message as MessageWithAttachments;
-    const attachments = withAttachments.attachments ?? [];
-
-    if (attachments.length === 0) {
-      return [message];
-    }
-
-    if (!message.message || message.message === "Sent an attachment") {
-      return [];
-    }
-
-    return [
-      {
-        ...withAttachments,
-        attachments: [],
-      } as Message,
-    ];
-  });
-}
+const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
+const HISTORY_USERS_QUERY_KEY = ["/api/users/history"] as const;
 
 // Helper to update React Query cache for a conversation
 function updateMessageCache(
@@ -121,6 +93,18 @@ function scheduleMessageCacheUpdate(
 
   window.requestAnimationFrame(() => {
     updateMessageCache(userId, otherUserId, message);
+  });
+}
+
+function invalidateConversationStatsQueries() {
+  void queryClient.invalidateQueries({
+    queryKey: CONVERSATION_STATS_QUERY_KEY,
+  });
+}
+
+function invalidateHistoryUsersQuery() {
+  void queryClient.invalidateQueries({
+    queryKey: HISTORY_USERS_QUERY_KEY,
   });
 }
 
@@ -332,6 +316,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
             otherUserId,
             confirmedMessage,
           );
+          invalidateConversationStatsQueries();
+          invalidateHistoryUsersQuery();
         }
       }
     },
@@ -362,6 +348,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       const otherUserId =
         msg.senderId === user.userId ? msg.receiverId : msg.senderId;
       scheduleMessageCacheUpdate(user.userId, otherUserId, msg);
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
     };
 
     // Acknowledge server received the message (sender's optimistic stays until confirmed)
@@ -395,6 +383,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       const otherUserId =
         msg.senderId === user.userId ? msg.receiverId : msg.senderId;
       scheduleMessageCacheUpdate(user.userId, otherUserId, msg);
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
     };
 
     const handleMessageReactionsUpdated = (data: {
@@ -429,6 +419,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
         data.messageId,
         data.reactions,
       );
+      invalidateConversationStatsQueries();
     };
 
     const handleMessageSaveError = (data: {
@@ -477,6 +468,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       });
 
       scheduleMessageCacheUpdate(user.userId, msg.receiverId, msg);
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
     };
 
     // Handle message_deleted: completely remove message from UI
@@ -494,6 +487,9 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       if (isRelevant) {
         removeMessageById(data.messageId);
       }
+
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
     };
 
     socket.on("new_message", handleNewMessage);

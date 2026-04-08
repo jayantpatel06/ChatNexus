@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { getStoredToken } from "@/lib/queryClient";
@@ -18,19 +18,10 @@ import {
   MoreVertical,
   Image as ImageIcon,
   Camera,
-  Paperclip,
   Smile,
   Send,
   ArrowLeft,
-  Expand,
   Loader2,
-  Handshake,
-  Reply,
-  Search,
-  Pencil,
-  TrendingUp,
-  Trash2,
-  UserPlus,
   UserMinus,
   X,
 } from "lucide-react";
@@ -57,33 +48,34 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AnimatePresence, motion } from "framer-motion";
-import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
+import {
+  apiRequest,
+  fetchWithTimeout,
+  queryClient,
+  readJsonResponse,
+} from "@/lib/queryClient";
 import { getStoredTheme } from "@/lib/theme";
 import EmojiPicker, {
   EmojiClickData,
   Theme as EmojiPickerTheme,
 } from "emoji-picker-react";
+import { GifPicker } from "./gif-picker";
+import { stripConversationAttachments } from "./chat-message-utils";
+import { FriendRequestCard, MessageBubble } from "./chat-message-components";
 
 const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
 
-const TENOR_API_KEY = "AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ";
-const TENOR_BASE_URL = "https://tenor.googleapis.com/v2";
-const TENOR_CLIENT_KEY = "chatnexus";
-const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
-const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
-const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ATTACHMENT_INPUT_ACCEPT = "image/*,video/mp4,video/webm";
-
-function isImageMessageUrl(url: string): boolean {
-  return IMAGE_MEDIA_URL_PATTERN.test(url) || TENOR_MEDIA_URL_PATTERN.test(url);
-}
-
-function isVideoMessageUrl(url: string): boolean {
-  return VIDEO_MEDIA_URL_PATTERN.test(url);
-}
+const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
+const IS_DEV = import.meta.env.DEV;
 
 function isUploadableAttachmentType(fileType: string): boolean {
   return (
@@ -91,31 +83,6 @@ function isUploadableAttachmentType(fileType: string): boolean {
     fileType === "video/mp4" ||
     fileType === "video/webm"
   );
-}
-
-function isVideoAttachmentType(fileType: string): boolean {
-  return fileType.startsWith("video/");
-}
-
-function getVideoMimeTypeFromUrl(url: string): string | undefined {
-  if (VIDEO_MEDIA_URL_PATTERN.test(url)) {
-    return url.toLowerCase().includes(".webm") ? "video/webm" : "video/mp4";
-  }
-
-  return undefined;
-}
-
-function getStandaloneMediaMessageUrl(content: string): string | null {
-  const normalizedContent = content.trim();
-
-  if (!normalizedContent || !/^https?:\/\/[^\s]+$/i.test(normalizedContent)) {
-    return null;
-  }
-
-  return isImageMessageUrl(normalizedContent) ||
-    isVideoMessageUrl(normalizedContent)
-    ? normalizedContent
-    : null;
 }
 
 // Optimistic message type for instant UI feedback
@@ -133,15 +100,6 @@ interface PendingAttachment {
   progress: number;
   status: "uploading" | "sending" | "error";
 }
-
-type MessageWithAttachments = Message & {
-  attachments?: Array<{
-    id: number;
-    url: string;
-    filename: string;
-    fileType: string;
-  }>;
-};
 
 type FriendRequestRecord = FriendRequest & {
   createdAt: Date | string;
@@ -164,35 +122,13 @@ type FriendshipStatusResponse = {
   blockedByUser: boolean;
 };
 
-type ChatAttachment = NonNullable<
-  MessageWithAttachments["attachments"]
->[number];
-
 type ImagePreviewState = {
   url: string;
 };
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "🙏"] as const;
-
-function stripConversationAttachments(messages: Message[]): Message[] {
-  return messages.flatMap((message) => {
-    const withAttachments = message as MessageWithAttachments;
-    const attachments = withAttachments.attachments ?? [];
-
-    if (attachments.length === 0) {
-      return [message];
-    }
-
-    if (!message.message || message.message === "Sent an attachment") {
-      return [];
-    }
-
-    return [
-      {
-        ...withAttachments,
-        attachments: [],
-      } as Message,
-    ];
+function invalidateConversationStatsQueries() {
+  void queryClient.invalidateQueries({
+    queryKey: CONVERSATION_STATS_QUERY_KEY,
   });
 }
 
@@ -207,7 +143,7 @@ function getReplyPreviewText(message: Message | null | undefined): string {
 
   const replyMessage = message.message?.trim() ?? "";
   if (!replyMessage || replyMessage === "Sent an attachment") {
-    const attachments = (message as MessageWithAttachments).attachments ?? [];
+    const attachments = message.attachments ?? [];
     return attachments.length > 0 ? "Attachment" : "Message";
   }
 
@@ -368,18 +304,15 @@ export function ChatArea({
       if (!selectedUser?.userId) {
         return { messages: [], nextCursor: null };
       }
-      const token = getStoredToken();
       const cursorParam = pageParam ? `&cursor=${pageParam}` : "";
-      const res = await fetch(
+      const res = await apiRequest(
+        "GET",
         `/api/messages/${selectedUser.userId}/history?limit=40${cursorParam}`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        },
       );
-      if (!res.ok) {
-        throw new Error("Failed to fetch messages");
-      }
-      return res.json();
+      return readJsonResponse<{
+        messages: Message[];
+        nextCursor: string | null;
+      }>(res);
     },
   });
 
@@ -452,6 +385,9 @@ export function ChatArea({
         ["friendship-status", selectedUser.userId],
         data,
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status-batch"],
+      });
       void refreshOnlineUsers();
       toast({
         title: "Friend request sent",
@@ -493,6 +429,9 @@ export function ChatArea({
         ["friendship-status", selectedUser.userId],
         data.friendshipStatus,
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status-batch"],
+      });
       void refreshOnlineUsers();
       toast({
         title:
@@ -533,6 +472,10 @@ export function ChatArea({
       queryClient.setQueryData(getMessageHistoryQueryKey(selectedUser.userId), {
         pages: [{ messages: [], nextCursor: null }],
         pageParams: [null],
+      });
+      invalidateConversationStatsQueries();
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/history"],
       });
       void refreshOnlineUsers();
       toast({
@@ -581,6 +524,7 @@ export function ChatArea({
           };
         },
       );
+      invalidateConversationStatsQueries();
       void refreshOnlineUsers();
       toast({
         title: "Attachments cleared",
@@ -621,6 +565,9 @@ export function ChatArea({
         ["friendship-status", selectedUser.userId],
         data.friendshipStatus,
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status-batch"],
+      });
       void refreshOnlineUsers();
       toast({
         title: data.removed ? "Friend removed" : "No friendship found",
@@ -659,6 +606,9 @@ export function ChatArea({
         ["friendship-status", selectedUser.userId],
         data.friendshipStatus,
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status-batch"],
+      });
       void refreshOnlineUsers();
       setReplyTarget(null);
       setEditTarget(null);
@@ -697,6 +647,9 @@ export function ChatArea({
         ["friendship-status", selectedUser.userId],
         data.friendshipStatus,
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status-batch"],
+      });
       void refreshOnlineUsers();
       toast({
         title: "User unblocked",
@@ -1516,7 +1469,7 @@ export function ChatArea({
         );
 
         const token = getStoredToken();
-        const res = await fetch("/api/upload", {
+        const res = await fetchWithTimeout("/api/upload", {
           method: "POST",
           body: formData,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1596,7 +1549,9 @@ export function ChatArea({
 
         return true;
       } catch (error) {
-        console.error("Attachment upload failed", error);
+        if (IS_DEV) {
+          console.error("Attachment upload failed", error);
+        }
 
         setPendingAttachments((prev) =>
           prev.map((pending) =>
@@ -2279,22 +2234,40 @@ export function ChatArea({
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Voice Call"
-                data-testid="button-voice-call"
-              >
-                <Phone className="w-5 h-5 text-muted-foreground" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Video Call"
-                data-testid="button-video-call"
-              >
-                <Video className="w-5 h-5 text-muted-foreground" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Voice calls coming soon"
+                      aria-label="Voice calls coming soon"
+                      disabled
+                      data-testid="button-voice-call"
+                    >
+                      <Phone className="w-5 h-5 text-muted-foreground" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Voice calls are coming soon.</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Video calls coming soon"
+                      aria-label="Video calls coming soon"
+                      disabled
+                      data-testid="button-video-call"
+                    >
+                      <Video className="w-5 h-5 text-muted-foreground" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Video calls are coming soon.</TooltipContent>
+              </Tooltip>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -2380,6 +2353,10 @@ export function ChatArea({
             ref={messagesContainerRef}
             className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background p-4 scrollbar-none overscroll-contain md:px-6 md:py-5"
             onScroll={handleScroll}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-label={`Conversation with ${selectedUser.username}`}
             data-testid="chat-messages-area"
           >
             {/* Load older messages */}
@@ -2404,16 +2381,7 @@ export function ChatArea({
               </div>
             )}
 
-            {/* System Message */}
-            <div className="flex justify-center my-4">
-              <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
-                <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
-                  🔒
-                </div>
-                Messages are end-to-end encrypted
-              </div>
-            </div>
-
+            
             {timelineItems.map((item) => {
               if (item.type === "friendRequest") {
                 return (
@@ -2648,6 +2616,11 @@ export function ChatArea({
                       placeholder={
                         editTarget ? "Edit message..." : "Message..."
                       }
+                      aria-label={
+                        editTarget
+                          ? `Edit message to ${selectedUser.username}`
+                          : `Message ${selectedUser.username}`
+                      }
                       className={cn(
                         "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
                         hasDraftText || editTarget ? "pr-12" : "pr-20 sm:pr-24",
@@ -2668,6 +2641,7 @@ export function ChatArea({
                           className="h-8 w-8 rounded-2xl"
                           size="icon"
                           title={editTarget ? "Save changes" : "Send Message"}
+                          aria-label={editTarget ? "Save edited message" : "Send message"}
                           data-testid="button-send-message"
                         >
                           <Send className="h-4 w-4" />
@@ -2679,6 +2653,7 @@ export function ChatArea({
                             size="icon"
                             className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
                             title="Take Photo"
+                            aria-label="Take photo"
                             data-testid="button-camera"
                             onClick={() => {
                               closeComposerPicker();
@@ -2692,6 +2667,7 @@ export function ChatArea({
                             size="icon"
                             className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
                             title="Attach File"
+                            aria-label="Attach file"
                             data-testid="button-attach-file"
                             onClick={() => {
                               closeComposerPicker();
@@ -2714,6 +2690,11 @@ export function ChatArea({
                                 ? "Show keyboard"
                                 : "Open GIF and emoji picker"
                             }
+                            aria-label={
+                              isComposerPickerOpen
+                                ? "Show keyboard"
+                                : "Open GIF and emoji picker"
+                            }
                             data-testid="button-picker-switch"
                             onClick={handlePickerSwitch}
                           >
@@ -2730,1104 +2711,5 @@ export function ChatArea({
         </div>
       </div>
     </>
-  );
-}
-
-const MessageContent = ({
-  content,
-  onImagePreview,
-}: {
-  content: string;
-  onImagePreview: (preview: ImagePreviewState) => void;
-}) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = content.split(urlRegex);
-
-  return (
-    <div
-      className="min-w-0 whitespace-pre-wrap break-words overflow-hidden"
-      style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
-    >
-      {parts.map((part, index) => {
-        if (!part.match(urlRegex)) {
-          return <span key={index}>{part}</span>;
-        }
-
-        const isImage = isImageMessageUrl(part);
-        const isVideo = isVideoMessageUrl(part);
-
-        if (isImage) {
-          return (
-            <InlineImagePreview
-              key={index}
-              url={part}
-              onImagePreview={onImagePreview}
-            />
-          );
-        }
-
-        if (isVideo) {
-          return <InlineVideoPreview key={index} url={part} />;
-        }
-
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            referrerPolicy="no-referrer"
-            className="break-all text-blue-500 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
-        );
-      })}
-    </div>
-  );
-};
-
-function InlineVideoPreview({ url }: { url: string }) {
-  const [hasError, setHasError] = useState(false);
-  const mimeType = getVideoMimeTypeFromUrl(url);
-
-  if (hasError) {
-    return (
-      <div className="my-2 flex max-w-[16rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
-        <span className="text-xs text-muted-foreground">
-          Video preview blocked by host
-        </span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all text-xs text-blue-500 hover:underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          Open video link
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="my-2 max-w-sm overflow-hidden rounded-2xl border border-brand-border bg-black shadow-sm">
-      <video
-        controls
-        playsInline
-        preload="metadata"
-        className="h-auto max-h-72 w-full bg-black"
-        onError={() => setHasError(true)}
-      >
-        <source src={url} type={mimeType} />
-      </video>
-    </div>
-  );
-}
-
-function InlineImagePreview({
-  url,
-  onImagePreview,
-}: {
-  url: string;
-  onImagePreview: (preview: ImagePreviewState) => void;
-}) {
-  const [hasError, setHasError] = useState(false);
-
-  if (hasError) {
-    return (
-      <div className="my-2 flex max-w-[14rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
-        <span className="text-xs text-muted-foreground">
-          Preview blocked by host
-        </span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          referrerPolicy="no-referrer"
-          className="break-all text-xs text-blue-500 hover:underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          Open image link
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="my-2 block w-full max-w-[11rem] overflow-hidden rounded-2xl border border-brand-border bg-muted/30 text-left transition-transform duration-200 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      onClick={() => onImagePreview({ url })}
-    >
-      <img
-        src={url}
-        alt="Preview"
-        className="h-28 w-full object-cover sm:h-32"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onError={() => setHasError(true)}
-      />
-    </button>
-  );
-}
-
-function FriendRequestCard({
-  request,
-  direction,
-  otherUsername,
-  isPendingAction = false,
-  onAccept,
-  onReject,
-}: {
-  request: FriendRequestRecord;
-  direction: "incoming" | "outgoing";
-  otherUsername: string;
-  isPendingAction?: boolean;
-  onAccept?: () => void;
-  onReject?: () => void;
-}) {
-  return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-md rounded-2xl border border-brand-border bg-brand-card/80 p-4 text-center shadow-sm">
-        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary/15 text-brand-primary">
-          {direction === "incoming" ? (
-            <Handshake className="h-5 w-5" />
-          ) : (
-            <UserPlus className="h-5 w-5" />
-          )}
-        </div>
-        <p className="text-sm font-medium text-foreground">
-          {direction === "incoming"
-            ? `${otherUsername} sent you a friend request.`
-            : `Friend request sent to ${otherUsername}.`}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {format(new Date(request.createdAt), "h:mm a")}
-        </p>
-
-        {direction === "incoming" ? (
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <Button
-              size="sm"
-              onClick={onAccept}
-              disabled={isPendingAction}
-              data-testid={`button-accept-friend-request-${request.id}`}
-            >
-              Accept
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onReject}
-              disabled={isPendingAction}
-              data-testid={`button-reject-friend-request-${request.id}`}
-            >
-              Reject
-            </Button>
-          </div>
-        ) : (
-          <p className="mt-4 text-xs text-muted-foreground">
-            Waiting for {otherUsername} to respond.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AttachmentThumbnail({
-  attachment,
-  onPreview,
-}: {
-  attachment: ChatAttachment;
-  onPreview: (preview: ImagePreviewState) => void;
-}) {
-  const [hasError, setHasError] = useState(false);
-
-  return (
-    <div className="w-28 sm:w-32">
-      <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm sm:h-32 sm:w-32">
-        {hasError ? (
-          <div className="flex h-full w-full items-center justify-center p-3 text-center text-[11px] text-muted-foreground">
-            Image unavailable
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => onPreview({ url: attachment.url })}
-              title="Preview attachment"
-            >
-              <img
-                src={attachment.url}
-                alt="Preview"
-                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                onError={() => setHasError(true)}
-              />
-              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/65 via-black/10 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
-                  <Expand className="h-3 w-3" />
-                  Preview
-                </span>
-              </div>
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function VideoAttachmentCard({
-  src,
-  title,
-  mimeType,
-  showOverlay = false,
-  overlayLabel,
-}: {
-  src: string;
-  title: string;
-  mimeType?: string;
-  showOverlay?: boolean;
-  overlayLabel?: string;
-}) {
-  const [hasError, setHasError] = useState(false);
-  const resolvedMimeType = mimeType ?? getVideoMimeTypeFromUrl(src);
-
-  if (hasError && !showOverlay) {
-    return (
-      <div className="flex max-w-[16rem] flex-col gap-2 rounded-2xl border border-brand-border bg-muted/30 p-3 text-left">
-        <span className="text-xs text-muted-foreground">
-          Video preview unavailable
-        </span>
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all text-xs text-blue-500 hover:underline"
-        >
-          Open video link
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-black shadow-sm">
-      <video
-        controls={!showOverlay}
-        muted={showOverlay}
-        playsInline
-        preload="metadata"
-        className="max-h-72 w-full min-w-[14rem] bg-black object-contain sm:min-w-[16rem]"
-        title={title}
-        onError={() => setHasError(true)}
-      >
-        <source src={src} type={resolvedMimeType} />
-      </video>
-      {showOverlay && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-          <div className="flex flex-col items-center gap-2 text-white">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="text-xs">{overlayLabel ?? "Uploading..."}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const MessageBubble = memo(function MessageBubble({
-  message,
-  isOwnMessage,
-  sender,
-  currentUserId,
-  isOptimistic,
-  pendingAttachment,
-  onImagePreview,
-  onReply,
-  onEdit,
-  onDelete,
-  onReact,
-  onKeepComposerFocus,
-}: {
-  message: Message;
-  isOwnMessage: boolean;
-  sender: User | null;
-  currentUserId: number | null;
-  isOptimistic?: boolean;
-  pendingAttachment?: PendingAttachment | null;
-  onImagePreview: (preview: ImagePreviewState) => void;
-  onReply: (message: Message) => void;
-  onEdit: (message: Message) => void;
-  onDelete: (message: Message) => void;
-  onReact: (message: Message, emoji: string) => void;
-  onKeepComposerFocus?: () => void;
-}) {
-  const shouldRestoreComposerFocusRef = useRef(false);
-  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const attachments = (message as MessageWithAttachments).attachments || [];
-  const reactions = message.reactions ?? [];
-  const isDeleted = Boolean(message.deletedAt);
-  const normalizedMessage = isDeleted
-    ? "Message deleted"
-    : message.message && message.message !== "Sent an attachment"
-      ? message.message
-      : "";
-  const isMediaOnlyMessage = Boolean(
-    !isDeleted &&
-    normalizedMessage &&
-    getStandaloneMediaMessageUrl(normalizedMessage),
-  );
-  const hasTextBubble = Boolean(normalizedMessage && !isMediaOnlyMessage);
-  const canReply = !isOptimistic;
-  const canReact = !isOptimistic && !isDeleted;
-  const canEdit =
-    isOwnMessage && !isOptimistic && !isDeleted && Boolean(normalizedMessage);
-  const canDelete = isOwnMessage && !isOptimistic && !isDeleted;
-
-  const groupedReactions = Array.from(
-    reactions
-      .reduce<
-        Map<
-          string,
-          { emoji: string; count: number; reactedByCurrentUser: boolean }
-        >
-      >((map, reaction) => {
-        const existing = map.get(reaction.emoji) ?? {
-          emoji: reaction.emoji,
-          count: 0,
-          reactedByCurrentUser: false,
-        };
-        existing.count += 1;
-        if (reaction.userId === currentUserId) {
-          existing.reactedByCurrentUser = true;
-        }
-        map.set(reaction.emoji, existing);
-        return map;
-      }, new Map())
-      .values(),
-  ).sort(
-    (left, right) =>
-      QUICK_REACTIONS.indexOf(left.emoji as (typeof QUICK_REACTIONS)[number]) -
-      QUICK_REACTIONS.indexOf(right.emoji as (typeof QUICK_REACTIONS)[number]),
-  );
-
-  const formatBubbleTime = (timestamp: Date | string | null) => {
-    if (!timestamp) return "";
-    return format(new Date(timestamp), "h:mm a");
-  };
-
-  const renderInlineTimestamp = () => (
-    <div className="flex shrink-0 items-center gap-1 text-[11px] font-medium opacity-55">
-      {message.editedAt && !message.deletedAt && <span>edited</span>}
-      <span>{formatBubbleTime(message.timestamp)}</span>
-    </div>
-  );
-
-  const renderReplyPreview = () => {
-    if (!message.replyTo) {
-      return null;
-    }
-
-    const replyAuthor =
-      message.replyTo.senderId === currentUserId
-        ? "You"
-        : message.replyTo.sender.username;
-    const replyPreviewText = message.replyTo.deletedAt
-      ? "Message deleted"
-      : message.replyTo.message || "Message";
-
-    return (
-      <div
-        className={cn(
-          "mb-2 rounded-xl border px-3 py-2 text-left",
-          isOwnMessage
-            ? "border-black/10 bg-black/10 text-brand-msg-sent-text/80"
-            : "border-black/10 bg-black/5 text-brand-msg-received-text/80",
-        )}
-      >
-        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] opacity-75">
-          {replyAuthor}
-        </p>
-        <p className="truncate text-sm">{replyPreviewText}</p>
-      </div>
-    );
-  };
-
-  const clearLongPress = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    longPressOriginRef.current = null;
-  }, []);
-
-  useEffect(() => clearLongPress, [clearLongPress]);
-
-  const handleMessagePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType !== "touch" && event.pointerType !== "pen") {
-        return;
-      }
-
-      clearLongPress();
-      longPressOriginRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-      longPressTimerRef.current = setTimeout(() => {
-        setIsActionMenuOpen(true);
-        longPressTimerRef.current = null;
-      }, 450);
-    },
-    [clearLongPress],
-  );
-
-  const handleMessagePointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!longPressOriginRef.current || longPressTimerRef.current === null) {
-        return;
-      }
-
-      const movedX = Math.abs(event.clientX - longPressOriginRef.current.x);
-      const movedY = Math.abs(event.clientY - longPressOriginRef.current.y);
-
-      if (movedX > 8 || movedY > 8) {
-        clearLongPress();
-      }
-    },
-    [clearLongPress],
-  );
-
-  return (
-    <div
-      className={`message-bubble flex items-start gap-2 ${
-        isOwnMessage ? "justify-end" : ""
-      } ${isOptimistic ? "opacity-70" : ""}`}
-      data-testid={`message-${message.msgId}`}
-    >
-      {!isOwnMessage && (
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-black shadow-sm"
-          style={{
-            background: sender?.isGuest
-              ? "var(--brand-muted)"
-              : getAvatarColor(sender?.username || ""),
-          }}
-        >
-          {sender?.isGuest ? "G" : getUserInitials(sender?.username || "")}
-        </div>
-      )}
-
-      <div
-        className={`min-w-0 max-w-[75%] flex flex-col gap-1 sm:max-w-xs lg:max-w-md ${
-          isOwnMessage ? "items-end" : ""
-        }`}
-      >
-        <div
-          className={cn(
-            "group/message relative flex items-start gap-1",
-            isOwnMessage && "flex-row-reverse",
-          )}
-          onPointerDown={handleMessagePointerDown}
-          onPointerMove={handleMessagePointerMove}
-          onPointerUp={clearLongPress}
-          onPointerCancel={clearLongPress}
-          onPointerLeave={clearLongPress}
-        >
-          <div
-            className={cn(
-              "relative overflow-visible transition-all duration-300",
-              groupedReactions.length > 0 && "pb-3",
-            )}
-          >
-            {pendingAttachment && (
-              <div className="flex flex-wrap gap-2">
-                <div
-                  className={cn(
-                    "relative overflow-hidden rounded-2xl border border-brand-border bg-muted/30 shadow-sm",
-                    isVideoAttachmentType(pendingAttachment.file.type)
-                      ? "w-full max-w-xs sm:max-w-sm"
-                      : "h-28 w-28 sm:h-32 sm:w-32",
-                  )}
-                >
-                  {pendingAttachment.file.type.startsWith("image/") ? (
-                    <div className="relative">
-                      <img
-                        src={pendingAttachment.previewUrl}
-                        alt={pendingAttachment.file.name}
-                        className="h-28 w-28 object-cover opacity-60 sm:h-32 sm:w-32"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <div className="flex flex-col items-center gap-2 text-white">
-                          {pendingAttachment.status === "error" ? (
-                            <span className="text-sm text-red-400">
-                              Upload failed
-                            </span>
-                          ) : (
-                            <>
-                              <Loader2 className="h-6 w-6 animate-spin" />
-                              <span className="text-xs">
-                                {pendingAttachment.status === "uploading"
-                                  ? "Uploading..."
-                                  : "Sending..."}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : isVideoAttachmentType(pendingAttachment.file.type) ? (
-                    <VideoAttachmentCard
-                      src={pendingAttachment.previewUrl}
-                      title={pendingAttachment.file.name}
-                      mimeType={pendingAttachment.file.type}
-                      showOverlay
-                      overlayLabel={
-                        pendingAttachment.status === "uploading"
-                          ? "Uploading..."
-                          : "Sending..."
-                      }
-                    />
-                  ) : (
-                    <div className="flex h-full items-center gap-2 px-3 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="flex-1 truncate text-sm">
-                        {pendingAttachment.file.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {pendingAttachment.status === "uploading"
-                          ? "Uploading..."
-                          : "Sending..."}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!pendingAttachment && attachments.length > 0 ? (
-              <div className="space-y-2">
-                {attachments.map((attachment) => (
-                  <div key={attachment.id}>
-                    {attachment.fileType.startsWith("image/") ? (
-                      <AttachmentThumbnail
-                        attachment={attachment}
-                        onPreview={onImagePreview}
-                      />
-                    ) : isVideoAttachmentType(attachment.fileType) ? (
-                      <VideoAttachmentCard
-                        src={attachment.url}
-                        title={attachment.filename}
-                        mimeType={attachment.fileType}
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 px-3 py-2">
-                        <Paperclip className="h-4 w-4" />
-                        <span className="flex-1 truncate text-sm">
-                          {attachment.filename}
-                        </span>
-                        <a
-                          href={attachment.url}
-                          download={attachment.filename}
-                          className="rounded p-1 hover:bg-black/10"
-                          title="Download"
-                        >
-                          <ArrowLeft className="h-4 w-4 rotate-[-90deg]" />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {(message.message &&
-                  message.message !== "Sent an attachment") ||
-                message.replyTo ? (
-                  <div
-                    className={`rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                      isOwnMessage
-                        ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                        : "bg-brand-msg-received text-brand-msg-received-text"
-                    }`}
-                  >
-                    {renderReplyPreview()}
-                    {message.message &&
-                      message.message !== "Sent an attachment" && (
-                        <div className="flex items-end gap-2">
-                          <div className="min-w-0 flex-1">
-                            <MessageContent
-                              content={message.message}
-                              onImagePreview={onImagePreview}
-                            />
-                          </div>
-                          {renderInlineTimestamp()}
-                        </div>
-                      )}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              !pendingAttachment && (
-                <div
-                  className={
-                    isMediaOnlyMessage
-                      ? ""
-                      : `rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                          isOwnMessage
-                            ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                            : "bg-brand-msg-received text-brand-msg-received-text"
-                        }`
-                  }
-                >
-                  {!isMediaOnlyMessage && renderReplyPreview()}
-                  {isMediaOnlyMessage ? (
-                    <MessageContent
-                      content={message.message}
-                      onImagePreview={onImagePreview}
-                    />
-                  ) : (
-                    <div className="flex items-end gap-2">
-                      <div className="min-w-0 flex-1">
-                        <MessageContent
-                          content={normalizedMessage}
-                          onImagePreview={onImagePreview}
-                        />
-                      </div>
-                      {renderInlineTimestamp()}
-                    </div>
-                  )}
-                </div>
-              )
-            )}
-
-            {groupedReactions.length > 0 && (
-              <div
-                className={cn(
-                  "absolute -bottom-1 z-10",
-                  isOwnMessage ? "right-2" : "right-2",
-                )}
-              >
-                <div className="inline-flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-muted px-0.5 py-0.5 shadow-sm scrollbar-none">
-                  {groupedReactions.map((reaction) => (
-                    <button
-                      key={reaction.emoji}
-                      type="button"
-                      onClick={() => onReact(message, reaction.emoji)}
-                      className={cn(
-                        "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-medium leading-none transition-colors",
-                        reaction.reactedByCurrentUser
-                          ? "border-primary/25 bg-primary/10 text-primary"
-                          : "border-border/60 bg-card/95 text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <span>{reaction.emoji}</span>
-                      <span
-                        className={cn(
-                          "inline-flex min-w-[1rem] items-center justify-center rounded-sm px-1 py-[1px] text-[10px] font-semibold",
-                          reaction.reactedByCurrentUser
-                            ? "bg-primary/15 text-primary"
-                            : "bg-background/90 text-foreground/80",
-                        )}
-                      >
-                        {reaction.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {!isOptimistic && (
-            <div
-              className={cn(
-                "overflow-hidden transition-all duration-150",
-                isActionMenuOpen
-                  ? "w-7 opacity-100"
-                  : "w-0 opacity-0 pointer-events-none md:group-hover/message:w-7 md:group-hover/message:opacity-100 md:group-hover/message:pointer-events-auto md:group-focus-within/message:w-7 md:group-focus-within/message:opacity-100 md:group-focus-within/message:pointer-events-auto",
-              )}
-            >
-              <DropdownMenu
-                open={isActionMenuOpen}
-                onOpenChange={setIsActionMenuOpen}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
-                    title="Message actions"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align={isOwnMessage ? "start" : "end"}
-                  onCloseAutoFocus={(event) => {
-                    if (!shouldRestoreComposerFocusRef.current) {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    shouldRestoreComposerFocusRef.current = false;
-                    requestAnimationFrame(() => {
-                      onKeepComposerFocus?.();
-                    });
-                  }}
-                >
-                  {canReply && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        shouldRestoreComposerFocusRef.current = true;
-                        onReply(message);
-                      }}
-                    >
-                      <Reply className="mr-2 h-4 w-4" />
-                      Reply
-                    </DropdownMenuItem>
-                  )}
-                  {canEdit && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        shouldRestoreComposerFocusRef.current = true;
-                        onEdit(message);
-                      }}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                  )}
-                  {canDelete && (
-                    <DropdownMenuItem onClick={() => onDelete(message)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  )}
-                  {canReact && (
-                    <div className="px-2 pb-2 pt-1">
-                      <div className="flex items-center gap-1">
-                        {QUICK_REACTIONS.map((emoji) => (
-                          <DropdownMenuItem
-                            key={emoji}
-                            className="h-9 w-9 justify-center rounded-full p-0 text-base leading-none"
-                            onSelect={() => onReact(message, emoji)}
-                          >
-                            {emoji}
-                          </DropdownMenuItem>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-        </div>
-        {!hasTextBubble && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            {message.editedAt && !message.deletedAt && <span>edited</span>}
-            <span>{formatBubbleTime(message.timestamp)}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
-
-type TenorGif = {
-  id: string;
-  title: string;
-  media_formats: {
-    tinygif?: { url: string; dims: [number, number] };
-    gif?: { url: string; dims: [number, number] };
-    nanogif?: { url: string; dims: [number, number] };
-    mediumgif?: { url: string; dims: [number, number] };
-  };
-  content_description: string;
-};
-
-type TenorCategory = {
-  searchterm: string;
-  image: string;
-};
-
-function GifPicker({
-  onGifClick,
-  autoFocusSearch = true,
-  showSearch = true,
-  showCategories = true,
-  showStatus = true,
-  showFooter = true,
-  className,
-}: {
-  onGifClick: (url: string) => void;
-  autoFocusSearch?: boolean;
-  showSearch?: boolean;
-  showCategories?: boolean;
-  showStatus?: boolean;
-  showFooter?: boolean;
-  className?: string;
-}) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [gifs, setGifs] = useState<TenorGif[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [categories, setCategories] = useState<TenorCategory[]>([]);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const nextPosRef = useRef("");
-
-  useEffect(() => {
-    if (!autoFocusSearch || !showSearch) {
-      return;
-    }
-
-    const timeout = setTimeout(() => inputRef.current?.focus(), 100);
-    return () => clearTimeout(timeout);
-  }, [autoFocusSearch, showSearch]);
-
-  useEffect(() => {
-    void fetchCategories();
-  }, []);
-
-  const fetchTrending = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${TENOR_BASE_URL}/featured?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=30&media_filter=tinygif,gif`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = (await res.json()) as {
-        results?: TenorGif[];
-        next?: string;
-      };
-      setGifs(data.results || []);
-      nextPosRef.current = data.next || "";
-    } catch {
-      setError("Failed to load GIFs");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchCategories = async () => {
-    try {
-      const res = await fetch(
-        `${TENOR_BASE_URL}/categories?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&type=trending`,
-      );
-      if (!res.ok) return;
-      const data = (await res.json()) as { tags?: TenorCategory[] };
-      setCategories((data.tags || []).slice(0, 8));
-    } catch {
-      // Categories are optional.
-    }
-  };
-
-  const searchGifs = useCallback(
-    async (query: string) => {
-      if (!query.trim()) {
-        await fetchTrending();
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(
-          `${TENOR_BASE_URL}/search?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&q=${encodeURIComponent(query)}&limit=30&media_filter=tinygif,gif`,
-        );
-        if (!res.ok) throw new Error("Failed to search");
-        const data = (await res.json()) as {
-          results?: TenorGif[];
-          next?: string;
-        };
-        setGifs(data.results || []);
-        nextPosRef.current = data.next || "";
-      } catch {
-        setError("Search failed. Try again.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchTrending],
-  );
-
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    const delay = searchTerm.trim() ? 400 : 0;
-    searchTimeoutRef.current = setTimeout(() => {
-      void searchGifs(searchTerm);
-    }, delay);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-    };
-  }, [searchTerm, searchGifs]);
-
-  const getGifUrl = (gif: TenorGif) =>
-    gif.media_formats.gif?.url ||
-    gif.media_formats.mediumgif?.url ||
-    gif.media_formats.tinygif?.url ||
-    gif.media_formats.nanogif?.url ||
-    "";
-
-  const getPreviewUrl = (gif: TenorGif) =>
-    gif.media_formats.tinygif?.url ||
-    gif.media_formats.nanogif?.url ||
-    gif.media_formats.gif?.url ||
-    "";
-
-  return (
-    <div
-      className={cn(
-        "flex h-[20rem] w-full max-w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl font-sans",
-        className,
-      )}
-    >
-      {showSearch && (
-        <div className="flex-shrink-0 px-3 pb-2 pt-3">
-          <div className="flex items-center gap-2 rounded-full border border-border bg-input px-3 py-2">
-            <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search GIFs..."
-              className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  inputRef.current?.focus();
-                }}
-                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showCategories && !searchTerm && categories.length > 0 && (
-        <div className="flex flex-shrink-0 gap-1.5 overflow-x-auto border-b border-border px-3 py-2 no-scrollbar">
-          {categories.map((category) => (
-            <button
-              key={category.searchterm}
-              onClick={() => {
-                setSearchTerm(category.searchterm);
-              }}
-              className="whitespace-nowrap rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {category.searchterm}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {showStatus && (
-        <div className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-muted-foreground">
-          <TrendingUp className="h-3 w-3" />
-          <span className="text-[10px] font-medium uppercase tracking-wider">
-            {searchTerm ? `Results for "${searchTerm}"` : "Trending"}
-          </span>
-        </div>
-      )}
-
-      <div
-        className={cn(
-          "flex-1 overflow-y-auto overflow-x-hidden px-2",
-          showFooter ? "pb-2" : "pb-3",
-          showSearch || showCategories || showStatus ? "pt-0" : "pt-2",
-        )}
-        style={{ scrollbarWidth: "none" }}
-      >
-        {loading && gifs.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
-                Loading GIFs...
-              </span>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-2 px-4 text-center">
-              <span className="text-sm text-muted-foreground">{error}</span>
-              <button
-                onClick={() => {
-                  if (searchTerm) {
-                    void searchGifs(searchTerm);
-                  } else {
-                    void fetchTrending();
-                  }
-                }}
-                className="rounded-lg border border-border bg-muted/60 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
-        ) : gifs.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <span className="text-sm text-muted-foreground">No GIFs found</span>
-          </div>
-        ) : (
-          <div className="columns-2 gap-1.5">
-            {gifs.map((gif) => (
-              <button
-                key={gif.id}
-                onClick={() => {
-                  const url = getGifUrl(gif);
-                  if (url) {
-                    onGifClick(url);
-                  }
-                }}
-                className="group relative mb-1.5 block w-full cursor-pointer overflow-hidden rounded transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
-                title={gif.content_description || gif.title}
-              >
-                <img
-                  src={getPreviewUrl(gif)}
-                  alt={gif.content_description || gif.title || "GIF"}
-                  className="block h-auto w-full bg-muted"
-                  loading="lazy"
-                  style={{
-                    minHeight: "60px",
-                  }}
-                />
-                <div className="absolute inset-0 rounded-lg bg-black/0 transition-colors group-hover:bg-black/10" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showFooter && (
-        <div className="flex flex-shrink-0 items-center justify-center border-t border-border px-3 py-1.5">
-          <span className="text-[9px] text-muted-foreground">
-            Powered by Tenor
-          </span>
-        </div>
-      )}
-    </div>
   );
 }

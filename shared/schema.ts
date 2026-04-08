@@ -40,6 +40,15 @@ export const updateUserProfileSchema = z.object({
   age: z.coerce.number().int().min(13).max(120),
 });
 
+export const publicUserSchema = z.object({
+  userId: z.number().int().positive(),
+  username: z.string().min(1).max(50),
+  age: z.number().int().min(18).max(120).nullable(),
+  gender: z.string().max(10).nullable(),
+  isOnline: z.boolean(),
+  isGuest: z.boolean(),
+});
+
 export const insertMessageSchema = z.object({
   senderId: z.number(),
   receiverId: z.number(),

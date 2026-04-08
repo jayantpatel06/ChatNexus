@@ -44,7 +44,7 @@ import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/chat/chat-navigation-menu";
-import { UserSettingsModal } from "@/chat/users-sidebar";
+import { UserSettingsModal } from "@/chat/user-settings-modal";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import type { User } from "@shared/schema";
 import { AnimatePresence, motion } from "framer-motion";

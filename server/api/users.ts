@@ -68,6 +68,31 @@ function parseFriendRequestAction(action: unknown) {
   return { error: "Invalid friend request action" as const };
 }
 
+function parseUserIdsQuery(rawValue: unknown) {
+  if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
+    return { error: "At least one user ID is required" as const };
+  }
+
+  const userIds = Array.from(
+    new Set(
+      rawValue
+        .split(",")
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
+  );
+
+  if (userIds.length === 0) {
+    return { error: "Invalid user IDs" as const };
+  }
+
+  if (userIds.length > 100) {
+    return { error: "Too many user IDs requested" as const };
+  }
+
+  return { userIds };
+}
+
 function parseProfileUpdatePayload(body: unknown): UpdateUserProfile {
   return updateUserProfileSchema.parse(body);
 }
@@ -587,6 +612,30 @@ async function getFriendshipStatusController(
   }
 }
 
+async function getBatchFriendshipStatusesController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = parseUserIdsQuery(req.query.userIds);
+    if ("error" in parsed) {
+      return res.status(400).json({ message: parsed.error });
+    }
+
+    const entries = await Promise.all(
+      parsed.userIds.map(async (otherUserId) => [
+        otherUserId,
+        await getRelationshipStatus(req.jwtUser!.userId, otherUserId),
+      ] as const),
+    );
+
+    res.json(Object.fromEntries(entries));
+  } catch (error) {
+    next(error);
+  }
+}
+
 function createSendFriendRequestController(io: SocketIOServer) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -802,6 +851,11 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/history", jwtAuth, getConversationUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);
+  app.get(
+    "/api/users/friendship-status",
+    jwtAuth,
+    getBatchFriendshipStatusesController,
+  );
   app.get("/api/users/:userId/friendship", jwtAuth, getFriendshipStatusController);
   app.post(
     "/api/users/:userId/friendship",
