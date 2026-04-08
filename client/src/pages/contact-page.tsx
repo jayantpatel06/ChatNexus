@@ -10,10 +10,6 @@ import {
   MessageCircle,
   Clock,
   Send,
-  Twitter,
-  Github,
-  Instagram,
-  Linkedin,
   Loader2,
 } from "lucide-react";
 import {
@@ -276,33 +272,6 @@ export default function ContactPage() {
                 </p>
               </div>
 
-              {/* Socials */}
-              <div>
-                <h3
-                  style={{
-                    fontSize: "0.95rem",
-                    fontWeight: 700,
-                    marginBottom: "12px",
-                    color: "var(--ln-muted)",
-                  }}
-                >
-                  Follow Us
-                </h3>
-                <div className="contact-socials">
-                  <a href="#" className="contact-social-icon" aria-label="Twitter">
-                    <Twitter className="w-[18px] h-[18px]" />
-                  </a>
-                  <a href="#" className="contact-social-icon" aria-label="GitHub">
-                    <Github className="w-[18px] h-[18px]" />
-                  </a>
-                  <a href="#" className="contact-social-icon" aria-label="Instagram">
-                    <Instagram className="w-[18px] h-[18px]" />
-                  </a>
-                  <a href="#" className="contact-social-icon" aria-label="LinkedIn">
-                    <Linkedin className="w-[18px] h-[18px]" />
-                  </a>
-                </div>
-              </div>
             </div>
           </div>
         </section>

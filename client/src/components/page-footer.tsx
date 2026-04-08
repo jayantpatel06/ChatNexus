@@ -1,6 +1,11 @@
 import "./page-footer.css";
 import { Link } from "wouter";
-import { Twitter, Github, Instagram, Linkedin } from "lucide-react";
+import {
+  FaGithub,
+  FaInstagram,
+  FaLinkedinIn,
+  FaXTwitter,
+} from "react-icons/fa6";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -16,10 +21,10 @@ const LEGAL_LINKS = [
 ];
 
 const SOCIALS = [
-  { Icon: Twitter, href: "#", label: "Twitter" },
-  { Icon: Instagram, href: "#", label: "Instagram" },
-  { Icon: Github, href: "#", label: "GitHub" },
-  { Icon: Linkedin, href: "#", label: "LinkedIn" },
+  { Icon: FaXTwitter, href: "#", label: "Twitter/X" },
+  { Icon: FaInstagram, href: "#", label: "Instagram" },
+  { Icon: FaGithub, href: "#", label: "GitHub" },
+  { Icon: FaLinkedinIn, href: "#", label: "LinkedIn" },
 ];
 
 function FooterLink({

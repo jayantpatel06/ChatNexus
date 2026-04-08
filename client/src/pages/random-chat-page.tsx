@@ -1051,7 +1051,7 @@ function RandomChatConversationPanel({
   isPartnerTyping: boolean;
   messageInput: string;
   messages: RandomChatSocketMessage[];
-  messagesContainerRef: RefObject<HTMLDivElement>;
+  messagesContainerRef: RefObject<HTMLDivElement | null>;
   onBack: () => void;
   onEmojiClick: (emojiData: EmojiClickData) => void;
   onConfirmChatEnd: () => void;
@@ -1064,8 +1064,8 @@ function RandomChatConversationPanel({
   sharedInterests: string[];
   statusMessage: string;
   showEmojiPicker: boolean;
-  composerPickerRef: RefObject<HTMLDivElement>;
-  composerPickerTriggerRef: RefObject<HTMLButtonElement>;
+  composerPickerRef: RefObject<HTMLDivElement | null>;
+  composerPickerTriggerRef: RefObject<HTMLButtonElement | null>;
 }) {
   const isComposerDisabled = isIdle || isFindingMatch;
   const hasEndedChatNotice =

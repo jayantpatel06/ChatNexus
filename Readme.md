@@ -1,254 +1,248 @@
 # ChatNexus
 
-Real-time chat built with React, Vite, Express, Socket.IO, Prisma, and PostgreSQL.
+ChatNexus is a full-stack real-time chat platform for direct messaging, public chat, and anonymous stranger matching. It combines a React single-page application, an Express API, Socket.IO realtime transport, and a PostgreSQL database managed with Prisma.
 
-Website: https://chatnexus.me
+Production site: https://chatnexus.me
 
-## What It Does
+## Overview
 
-ChatNexus supports:
+ChatNexus is designed for fast entry into live conversations without forcing every user through a full account setup. Users can join as guests, create a registered account, talk in one-to-one conversations, join the global chat stream, or enter a random chat flow that matches them with another active user.
 
-- guest and registered-user access
-- one-to-one private chat
-- global chat
-- typing indicators and online presence
-- image and GIF sharing
-- in-chat camera capture with a full-screen mobile camera UI, flip-camera control on supported phones, and `mp4` / `webm` uploads up to 5 MB
-- uploaded videos are normalized to a browser-safe MP4 format for more reliable playback across phones and desktop
-- the chat composer now uses a WhatsApp-like single pill layout: empty drafts show inline camera, attachment, and GIF/emoji actions, typed drafts collapse to a send-only state, and the integrated picker opens a floating tray with a narrower anchored width on desktop, the same mobile layout, matching emoji/GIF heights, each picker’s own built-in search field, and outside-tap dismissal
-- private chat message bubbles now use a slimmer rounded style with restored chat bubble colors, larger body text, inline bottom-right timestamps, and tighter vertical stacking for a cleaner WhatsApp-like look
-- the desktop private chat view now adds the same top-right breathing room, rounded top corners, and soft shell shadow used in global chat so the active conversation and empty desktop state feel slightly lifted
-- the private chat composer now matches global chat spacing, keeping `p-2` on mobile and desktop while trimming the desktop bottom padding to `1`
-- the private chat header avatar now uses the same gradient background rendering as the rest of the app instead of a broken class-based color path
-- the three-dot message menu now shows quick reactions as a single horizontal row of emoji buttons, and the menu trigger only appears on desktop hover or mobile long-press while overlapped reaction badges stay compact and give the counter its own tiny filled chip
-- the users sidebar now uses a leaner header with settings and logout actions side by side, keeps chat filters directly in the chat list with `All`, `Male`, `Female`, and `Friends` pills, and uses a held `History` nav placeholder plus a disabled `Random` placeholder while the private/global user list behavior stays the same
-- the global chat room now follows the same header, bubble, spacing, and composer styling as private chat, keeps only emoji and send actions in the input, and shows `You` or the sender name inline with the timestamp above each message body
-- the desktop global chat view now adds top and right breathing room with rounded top corners and a soft shell shadow so the room feels slightly lifted while mobile stays unchanged
-- the global chat composer now keeps `p-2` spacing on mobile and desktop, with desktop only tightening the bottom padding to `1` for a slightly cleaner footer edge
-- the global and private chat composer pickers now toggle closed when their trigger is pressed again, and the private chat emoji/GIF sub-tabs also close when the active tab is tapped a second time
-- global chat messages older than 30 minutes are now pruned on the next real global-chat activity, so stale messages disappear without a background polling job hitting the database while the room is idle
-- the global chat page now always refetches on entry, reconnect, and window focus so that expired messages are actually removed from the visible list for both guest and registered-user posts
-- the users sidebar now uses an inbox-style redesign: desktop gets a shared navigation rail, mobile keeps a reusable bottom navigation menu, and the private/global routing, filters, unread states, and user selection logic stay intact
-- the mobile chat list now uses a cleaner chat-app layout with a `ChatNexus` header, a pulsating online-count pill, an expanded search bar, a gender filter dropdown, recent-message ordering, and restored light/dark theme-aware styling
-- the settings modal now uses a responsive sectioned layout with `Profile`, `Preferences`, and `Blocked` views, keeps the existing profile card and registered-user detail editing flow intact, shows guest profiles as read-only with email shown as `-`, keeps the homepage-style theme toggle and logout action in the profile card, and includes UI-only preference switches until the backend wiring is added
-- private chat now supports replies, one-tap reactions, message editing, and delete-for-both on direct messages, and the header action menu now includes remove-friend and block-user controls with block-aware messaging restrictions
-- blocked users can now be managed from the settings modal through a dedicated blocked-users list with direct `Unblock` actions, so they remain reachable even after disappearing from the sidebar
-- Lenis-powered smooth page scrolling is enabled across the app, including landing-page navbar and CTA section jumps, while preserving native nested scrolling inside chat panes and other internal scroll areas
-- compact attachment thumbnails with animated in-chat lightbox preview
-- SEO-friendly public pages
-- installable PWA support
+The project ships as a single deployable web application:
 
-In development, the frontend runs through Vite middleware inside the Express server. In production, Express serves the built frontend and API from the same app.
+- A Vite-powered React frontend
+- An Express server for REST endpoints, uploads, SEO routes, and static serving
+- A Socket.IO layer for presence, messaging, typing, reactions, and matchmaking
+- A PostgreSQL data layer accessed through Prisma 7
 
-## Stack
+## Key Features
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Wouter, React Query, Framer Motion
-- Backend: Node.js, Express, Socket.IO, JWT
-- Database: PostgreSQL with Prisma
-- Cache: Redis optional
-- Tooling: TypeScript, esbuild, vite-plugin-pwa
+- Guest onboarding for low-friction anonymous entry
+- Registered member accounts with JWT-based authentication
+- Private one-to-one chat with realtime delivery
+- Global public chat for all connected users
+- Random chat matchmaking with optional interest-based matching
+- Online presence and typing indicators
+- Friend requests, friend removal, and user blocking
+- Message reply, edit, delete, and emoji reaction support
+- Image and video attachments in direct messages
+- GIF search in the composer when a Tenor API key is configured
+- Conversation history, unread state, and sidebar conversation summaries
+- Help center workflow with persisted support request submissions
+- Responsive UI plus installable PWA support
+- SEO-friendly landing, features, about, contact, privacy, and terms pages
 
-## Repo Layout
+## Product Behavior
 
-```text
-client/
-  public/           static assets, manifest, public metadata files
-  src/
-    app/            app shell and route guards
-    chat/           private chat UI and chat state
-    components/     shared UI and layout components
-    hooks/          reusable hooks
-    lib/            client helpers and utilities
-    pages/          route-level pages
-    providers/      auth and socket providers
+- Guest accounts are temporary and are cleaned up after extended disconnection.
+- Non-friend direct-message history is treated as ephemeral and can be cleaned up over time.
+- Friend conversations are retained longer than anonymous or transient conversations.
+- Global chat is intentionally temporary. Older public messages expire automatically to keep the room fresh.
+- Uploaded videos are normalized to MP4 through FFmpeg before delivery.
 
-server/
-  api/              Express route registration
-  db/               Prisma bootstrap and DB helpers
-  lib/              server utilities
-  middleware/       auth and rate-limit middleware
-  index.ts          server bootstrap
-  seo.ts            route SEO config and sitemap metadata
-  socket.ts         Socket.IO event handling
-  storage.ts        storage and persistence orchestration
+## Tech Stack
 
-shared/
-  schema.ts         shared Zod schemas and app types
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4, Wouter, TanStack Query, Framer Motion, Radix UI, react-icons |
+| Backend | Node.js, Express 5, Socket.IO, JWT, Helmet, Multer |
+| Data | PostgreSQL, Prisma 7, `@prisma/adapter-pg` |
+| Caching | Redis 5 optional |
+| Validation | Zod 4 |
+| Build Tooling | Vite, esbuild, tsx, vite-plugin-pwa |
 
-prisma/
-  schema.prisma     database schema
-```
+## Architecture
+
+### Frontend
+
+- `client/src/app`: routing, protected routes, and app shell
+- `client/src/pages`: landing, auth, dashboard, random chat, global chat, history, support, and legal pages
+- `client/src/chat`: direct-message experience, sidebar, settings, reactions, and media workflows
+- `client/src/components`: shared UI primitives and layout pieces
+- `client/src/providers`: auth, socket, and motion-related providers
+
+### Backend
+
+- `server/index.ts`: application bootstrap and environment-specific serving
+- `server/api`: REST endpoints for auth, chat, uploads, support requests, and user relationships
+- `server/socket.ts`: realtime messaging, presence, reactions, random chat, and cleanup logic
+- `server/storage.ts`: persistence orchestration, cache integration, and data access helpers
+- `server/db`: Prisma client bootstrapping, message helpers, and database connection config
+
+### Shared
+
+- `shared/schema.ts`: Zod schemas and shared runtime types used by both client and server
+- `prisma/schema.prisma`: database schema for users, friendships, friend requests, messages, reactions, attachments, global chat, blocks, and read state
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20 or newer
 - npm
-- FFmpeg available on the server PATH for uploaded video normalization
 - PostgreSQL
-- Redis optional
+- FFmpeg available on the host machine
+- Redis only if you want cache acceleration
 
-## Quick Start
+## Environment Variables
 
-1. Install dependencies:
+Copy `.env.example` to `.env` and set the values that apply to your environment.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Primary PostgreSQL connection string used by the app |
+| `DIRECT_URL` | No | Optional direct PostgreSQL URL preferred by Prisma CLI operations |
+| `DATABASE_SSL_MODE` | No | Explicit Postgres SSL mode such as `require`, `verify-ca`, `verify-full`, or `disable` |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | No | Set to `false` for providers that require SSL without strict certificate validation |
+| `JWT_SECRET` | Yes | Secret used to sign and verify authentication tokens |
+| `PORT` | No | HTTP port for the server, defaults to `5000` |
+| `FRONTEND_URL` | Yes in production | Allowed Socket.IO origin or comma-separated origins in production |
+| `SITE_URL` | Recommended | Canonical site URL used for SEO metadata and sitemap generation |
+| `VITE_SITE_URL` | Recommended | Public site URL injected into the client build |
+| `SUPPORT_REQUESTS_PATH` | No | Output file path for help-center submissions, defaults to `runtime/support-requests.ndjson` |
+| `REDIS_URL` | No | Enables Redis-backed caching for conversations and global chat |
+| `SUPABASE_URL` | No | Supabase project URL if you integrate hosted services |
+| `SUPABASE_ANON_KEY` | No | Public Supabase client key |
+| `SUPABASE_SERVICE_ROLE_KEY` | No | Server-side Supabase service key |
+| `SESSION_SECRET` | No | Legacy fallback secret for older code paths |
+| `VITE_TENOR_API_KEY` | No | Enables GIF search in the private chat composer |
+
+### Environment Notes
+
+- `JWT_SECRET` must be present. The server intentionally fails during startup when it is missing.
+- For managed Postgres providers such as Supabase, use SSL-enabled URLs such as `?sslmode=require`.
+- The Prisma runtime and Prisma CLI share the same SSL normalization logic through `database-config.ts` and `prisma.config.ts`.
+- The project scripts already set `NODE_ENV` where needed. You generally do not need to hardcode it in local development.
+- `FRONTEND_URL` is only critical in production because Socket.IO CORS is locked down there.
+
+## Local Development
+
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Copy the environment file:
+### 2. Create your environment file
 
 ```bash
 cp .env.example .env
 ```
 
-3. Fill in the required variables.
+Fill in at least `DATABASE_URL`, `JWT_SECRET`, `SITE_URL`, and `VITE_SITE_URL`. For hosted Postgres, make sure the database URL includes the correct SSL settings.
 
-4. Generate Prisma client and apply schema:
+### 3. Prepare the database
+
+Generate the Prisma client:
 
 ```bash
 npm run db:generate
+```
+
+For local schema syncing during development:
+
+```bash
 npm run db:push
 ```
 
-5. Start development:
+If you adopt Prisma migrations for ongoing schema changes:
 
 ```bash
-npm run dev
-```
-
-6. Type-check the project:
-
-```bash
-npm run check
-```
-
-## Environment Variables
-
-Copy [`.env.example`](./.env.example) to `.env`.
-
-Required:
-
-```env
-DATABASE_URL=
-JWT_SECRET=
-FRONTEND_URL=
-SITE_URL=
-VITE_SITE_URL=
-```
-
-Common:
-
-```env
-DIRECT_URL=
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-SESSION_SECRET=
-SUPPORT_REQUESTS_PATH=runtime/support-requests.ndjson
-```
-
-Notes:
-
-- `JWT_SECRET` is required. The server fails fast if it is missing.
-- `SESSION_SECRET` is retained only as a fallback for older code paths.
-- `FRONTEND_URL` is used for production Socket.IO CORS.
-- `SITE_URL` and `VITE_SITE_URL` are used for canonical URLs, sitemap output, and public SEO metadata.
-- `SUPPORT_REQUESTS_PATH` controls where help-center submissions are stored on disk.
-
-## Scripts
-
-```bash
-npm run dev
-npm run build
-npm start
-npm run check
-npm run db:generate
-npm run db:push
 npm run db:migrate
-npm run db:studio
-npm run pm2:start
 ```
 
-## Production
-
-Build:
+### 4. Start the development server
 
 ```bash
-npm run build
+npm run dev
 ```
 
-Start:
+The application runs on `http://localhost:5000` by default. In development, the Express server boots Vite in middleware mode, so both the API and the frontend run through the same process.
+
+### 5. Run the TypeScript check
 
 ```bash
-npm start
+npm run check
 ```
 
-PM2:
+## Available Scripts
 
-```bash
-npm run pm2:start
-```
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Starts the development server with `tsx` and Vite middleware |
+| `npm run build` | Generates Prisma client, builds the frontend, and bundles the server into `dist` |
+| `npm start` | Starts the production server from the generated `dist` output |
+| `npm run check` | Runs the TypeScript compiler |
+| `npm run db:generate` | Regenerates the Prisma client |
+| `npm run db:push` | Pushes the current Prisma schema to the database without creating a migration |
+| `npm run db:migrate` | Creates and applies a Prisma development migration |
+| `npm run db:deploy` | Applies committed Prisma migrations in staging or production |
+| `npm run db:studio` | Opens Prisma Studio |
+| `npm run pm2:start` | Starts the built server under PM2 |
+
+## Realtime and Messaging Capabilities
+
+ChatNexus uses Socket.IO for the parts of the product that need low-latency delivery:
+
+- direct-message delivery and optimistic confirmation
+- typing indicators
+- online and offline presence
+- reaction syncing
+- delete-for-both updates
+- random chat matchmaking and live session messaging
+- global chat broadcasts
+- relationship updates such as friend-request state changes
+
+REST endpoints are used for authentication, upload handling, history pagination, profile management, support submissions, and other request-response workflows.
+
+## Attachments and Media
+
+- Direct-message uploads support images plus `video/mp4` and `video/webm`
+- Upload size is limited to 5 MB per file
+- Uploaded videos are converted to MP4 with FFmpeg for more consistent playback
+- Files are served from the local `uploads` directory
+- GIF search is available when `VITE_TENOR_API_KEY` is configured
+
+If you deploy the app to an environment with ephemeral disk storage, plan to persist the `uploads` directory externally or replace the file storage strategy.
+
+## Caching and Persistence Notes
+
+- PostgreSQL is the source of truth for users, relationships, chat history, attachments, and global messages.
+- Redis is optional. When configured, it accelerates conversation and global-message reads and stores short-lived unread counters.
+- Support requests are written to disk as newline-delimited JSON in `runtime/support-requests.ndjson` by default.
+- Presence, random chat sessions, and several cleanup workflows are managed in memory by the server process.
+
+## Production Deployment
 
 Recommended deployment flow:
 
-1. Install dependencies.
-2. Set environment variables.
-3. Run `npm run build`.
-4. Start the server with `npm start` or PM2.
-5. Put the app behind a reverse proxy such as Nginx if needed.
+1. Install dependencies with `npm install`.
+2. Set production environment variables, including `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SITE_URL`, and `VITE_SITE_URL`.
+3. Apply schema changes with `npm run db:deploy` if you are using committed Prisma migrations.
+4. Build the application with `npm run build`.
+5. Start the server with `npm start` or `npm run pm2:start`.
+6. Put the Node process behind a reverse proxy such as Nginx if your hosting platform does not provide one.
+
+### Production Notes
+
+- The server serves the built frontend itself, so a separate frontend host is optional.
+- Socket.IO requires a correct `FRONTEND_URL` value in production or the handshake will be rejected.
+- PostgreSQL SSL must be configured correctly for managed providers.
+- FFmpeg must be installed on the production host if video uploads are enabled.
+- The `uploads` and `runtime` directories should be treated as persistent application data if you want to keep uploaded media and support-request logs.
 
 ## SEO and PWA
 
-- Public pages have route-specific SEO metadata managed on the server.
-- The home and login pages include search-focused titles and descriptions for better branded discovery.
-- `robots.txt` and `sitemap.xml` are served dynamically by Express.
-- The web manifest lives at [client/public/manifest.json](./client/public/manifest.json).
-- The service worker is registered from the client entry and is intended for production builds, not normal local dev.
+- The client is installable as a Progressive Web App.
+- A service worker is registered automatically in the client entrypoint.
+- `robots.txt`, `sitemap.xml`, and `favicon.ico` are served by the Express app.
+- Canonical metadata and public SEO values are driven from `SITE_URL` and `VITE_SITE_URL`.
 
-## Troubleshooting
+## Security and Validation
 
-### Old cached frontend files or broken modules
-
-Clear site data, unregister the service worker in DevTools, and reload.
-
-### Server fails at startup
-
-Check:
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `FRONTEND_URL`
-- `ffmpeg` is installed and available on the server PATH if video uploads are enabled
-
-### GIF picker does not load results
-
-Check whether Tenor requests are blocked by browser extensions, privacy tools, or network policies.
-
-## Current Status
-
-- Guest sign-in now collects age and gender along with the temporary username, and those values are stored on the guest profile so guest users can participate in the same profile-based filtering as members.
-- The settings modal now uses responsive tabs with mobile header navigation and a desktop side rail, keeps the existing profile card and registered-user detail editing flow in the `Profile` section, adds a UI-only `Preferences` section for push notifications, notification sound, and friend-request settings, and keeps blocked users in their own management view.
-- Private chat now supports replies, reactions, edit, and delete-for-both message actions, and users can now remove friends or block users directly from the chat header while blocked relationships are hidden from the sidebar and prevented from sending new direct messages.
-- Direct-message delivery now uses a lighter socket path for sender acknowledgment and receiver broadcast, and replies, reaction updates, and message deletes now follow the same low-overhead real-time flow with optimistic UI updates and rollback on server rejection.
-- Users can now unblock people they previously blocked from the chat header menu, and the shared relationship status/sidebar updates restore that user to normal direct-message behavior immediately.
-- The settings modal now includes a blocked-users management list with direct `Unblock` actions, so people who disappear from the sidebar after blocking can still be restored later.
-
-- The desktop sidebar section is now narrower, giving the main chat area more room without changing the shared sidebar content.
-- The users-list section now replaces the old “Recent chats / Live” status row with small `All`, `Male`, and `Female` filter pills tied to the existing gender filter state.
-- The desktop global chat view now has extra top and right breathing room with a subtle lifted shell, so the header and chat area feel detached from the canvas while mobile stays edge-to-edge.
-- The desktop private chat view now uses the same lifted shell treatment as global chat, giving both the active conversation panel and the empty desktop state extra top-right breathing room without affecting mobile.
-- The global chat composer wrapper now uses `p-2` on both breakpoints, but desktop trims the bottom edge to `pb-1` so the footer sits a touch tighter.
-- The private chat composer wrapper now mirrors that same spacing, using `p-2` on both breakpoints with `md:pb-1` so the desktop footer stays slightly tighter.
-- The private chat header avatar now renders from the shared avatar gradient value correctly, so the chat header no longer falls back to a broken class-based background.
-- Private chat reactions now overlap the message bubble corner in a tighter compact badge, with each counter sitting inside its own tiny filled chip so the number no longer looks exposed.
-- The three-dot message menu now renders quick reactions in one horizontal row, and its trigger only appears on desktop hover or after a mobile long-press on the message.
-
-- The desktop dashboard now uses a WhatsApp-style shell with a dedicated navigation rail and a richer empty chat state while preserving the existing theme and current chat actions, and the users-list panel now reuses the same `ChatNexus` header, search/filter row, and conversation list content on both mobile and desktop while only the outer shell changes by breakpoint.
-- The desktop empty chat panel beside the sidebar now shows a cleaner centered “Select a chat to start messaging” state with supporting copy and a grounded footer note.
-- The shared chat navigation menu now keeps idle items icon-only, uses `bg-muted` on hover, and switches to the darker blue primary state for the active tab while preserving the current compact rail width.
-- The mobile bottom navigation menu now uses a thinner bar height with tighter padding, slightly smaller icons, and more compact labels.
-- `npm run check` is the primary verification command in the repo.
-- No dedicated automated test suite is included yet.
+- JWT authentication protects private API routes and the Socket.IO connection
+- Helmet is enabled on the Express server
+- API and auth routes are rate-limited
+- Zod validates key request payloads
+- Block relationships are enforced for both messaging and social actions
 
 ## License
 

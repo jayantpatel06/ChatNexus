@@ -1,4 +1,6 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { createPrismaPgConfig } from "./database-config";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -22,16 +24,14 @@ function getDatabaseUrl(): string {
 const createPrismaClient = (): PrismaClient => {
   console.log("Initializing Prisma client...");
 
+  const adapter = new PrismaPg(createPrismaPgConfig(getDatabaseUrl()));
+
   return new PrismaClient({
+    adapter,
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
         : ["error"],
-    datasources: {
-      db: {
-        url: getDatabaseUrl(),
-      },
-    },
   });
 };
 
@@ -50,6 +50,7 @@ async function connectWithRetry(): Promise<void> {
   for (let attempt = 1; attempt <= DATABASE_CONNECT_MAX_RETRIES; attempt++) {
     try {
       await prisma.$connect();
+      await prisma.$queryRaw`SELECT 1`;
       console.log("Database connected successfully");
       return;
     } catch (error) {
@@ -84,4 +85,3 @@ export function ensureDatabaseReady(): Promise<void> {
 
   return databaseReadyPromise;
 }
-
