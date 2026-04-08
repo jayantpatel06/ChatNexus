@@ -2,22 +2,17 @@ import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import {
   updateUserProfileSchema,
-  type UserBlock,
   type DbUser,
   type SelfUserProfile,
   type UpdateUserProfile,
   type User,
 } from "@shared/schema";
-import { jwtAuth } from "../middleware/jwt-auth";
-import { primeJwtUserCache } from "../middleware/jwt-auth";
+import { jwtAuth, primeJwtUserCache } from "../middleware/jwt-auth";
 import { signToken } from "../lib/jwt";
+import { toPublicUser } from "../lib/user-utils";
 import { emitSidebarUsers, getSidebarUsersForUser } from "../socket";
 import { storage } from "../storage";
 
-function toPublicUser(user: DbUser): User {
-  const { gmail: _gmail, passwordHash: _passwordHash, ...publicUser } = user;
-  return publicUser;
-}
 
 function toSelfUserProfile(user: DbUser): SelfUserProfile {
   const { passwordHash: _passwordHash, ...profile } = user;
@@ -99,13 +94,6 @@ function buildFriendshipStatus(
   };
 }
 
-async function getOnlineUsers() {
-  return storage.getOnlineUsers();
-}
-
-async function getSidebarUsers(userId: number) {
-  return getSidebarUsersForUser(userId);
-}
 
 async function getRelationshipStatus(userId: number, otherUserId: number) {
   const [friendship, block] = await Promise.all([
@@ -453,7 +441,7 @@ async function getOnlineUsersController(
   next: NextFunction,
 ) {
   try {
-    res.json(await getOnlineUsers());
+    res.json(await storage.getOnlineUsers());
   } catch (error) {
     next(error);
   }
@@ -465,7 +453,19 @@ async function getSidebarUsersController(
   next: NextFunction,
 ) {
   try {
-    res.json(await getSidebarUsers(req.jwtUser!.userId));
+    res.json(await getSidebarUsersForUser(req.jwtUser!.userId));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getConversationUsersController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(await storage.getConversationUsers(req.jwtUser!.userId));
   } catch (error) {
     next(error);
   }
@@ -514,9 +514,11 @@ function createUpdateUsernameController(io: SocketIOServer) {
         return res.status(payload.status ?? 500).json({ message: payload.error });
       }
 
-      console.log(
-        `[API] Updated username for user ${user.userId} to ${validation.username}`,
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[API] Updated username for user ${user.userId} to ${validation.username}`,
+        );
+      }
 
       await emitSidebarUsers(io);
       res.json(payload);
@@ -778,6 +780,7 @@ function createUnblockUserController(io: SocketIOServer) {
 export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/online", jwtAuth, getOnlineUsersController);
   app.get("/api/users/sidebar", jwtAuth, getSidebarUsersController);
+  app.get("/api/users/history", jwtAuth, getConversationUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);
   app.get("/api/users/:userId/friendship", jwtAuth, getFriendshipStatusController);

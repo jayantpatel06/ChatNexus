@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,11 @@ type BlockedUsersResponse = {
 };
 
 type SettingsSection = "profile" | "preferences" | "blocked";
+type UsersSidebarMode = "chat" | "history";
+type ConversationStatsResponse = Record<
+  number,
+  { lastMessage: { msgId: number; senderId: number; message: string; timestamp: string } | null; unread: number }
+>;
 
 const DEFAULT_FILTERS: SidebarFilters = {
   friendsOnly: false,
@@ -123,6 +128,7 @@ function readStoredSidebarFilters(): SidebarFilters {
 interface UsersSidebarProps {
   selectedUser: User | null;
   onUserSelect: (user: User) => void;
+  mode?: UsersSidebarMode;
 }
 
 function getSidebarMessagePreview(message: unknown): string {
@@ -172,6 +178,7 @@ function formatSidebarTimestamp(timestamp: unknown): string {
 export function UsersSidebar({
   selectedUser,
   onUserSelect,
+  mode = "chat",
 }: UsersSidebarProps) {
   const { user, logoutMutation } = useAuth();
   const [location, setLocation] = useLocation();
@@ -339,7 +346,38 @@ export function UsersSidebar({
     return () => clearInterval(interval);
   }, []);
 
-  const candidateUsers = Array.from(cachedUsers.values())
+  const historyUsersQuery = useQuery({
+    queryKey: ["/api/users/history"],
+    enabled: mode === "history" && !!user,
+    queryFn: async () =>
+      readJsonResponse<User[]>(await apiRequest("GET", "/api/users/history")),
+    staleTime: 0,
+    refetchInterval: mode === "history" ? 5000 : false,
+  });
+
+  const liveSidebarUsersById = useMemo(
+    () => new Map(sidebarUsers.map((sidebarUser) => [sidebarUser.userId, sidebarUser])),
+    [sidebarUsers],
+  );
+
+  const sourceUsers = useMemo<CachedUser[]>(() => {
+    if (mode !== "history") {
+      return Array.from(cachedUsers.values());
+    }
+
+    return (historyUsersQuery.data ?? []).map((historyUser) => {
+      const liveSidebarUser = liveSidebarUsersById.get(historyUser.userId);
+
+      return {
+        ...historyUser,
+        isOnline: liveSidebarUser?.isOnline ?? historyUser.isOnline ?? false,
+        isPinned: true,
+        lastSeen: 0,
+      };
+    });
+  }, [cachedUsers, historyUsersQuery.data, liveSidebarUsersById, mode]);
+
+  const candidateUsers = sourceUsers
     .filter(
       (u) =>
         u.userId !== user?.userId &&
@@ -388,9 +426,7 @@ export function UsersSidebar({
         "GET",
         `/api/conversations/stats?userIds=${encodeURIComponent(ids)}`,
       );
-      return readJsonResponse<
-        Record<number, { lastMessage: any; unread: number }>
-      >(res);
+      return readJsonResponse<ConversationStatsResponse>(res);
     },
     refetchInterval: 5000,
     enabled: candidateUsers.length > 0,
@@ -449,7 +485,11 @@ export function UsersSidebar({
   const activeNavigationItem: ChatNavigationItem =
     location === "/global-chat"
       ? "global"
-      : "chat";
+      : location === "/history"
+        ? "history"
+        : location === "/random-chat"
+          ? "random"
+        : "chat";
 
   useEffect(() => {
     if (!selectedUser) {
@@ -504,10 +544,9 @@ export function UsersSidebar({
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random") {
-      toast({
-        title: "Random chat is coming soon",
-        description: "That menu slot is reserved for the next chat mode.",
-      });
+      if (location !== "/random-chat") {
+        setLocation("/random-chat");
+      }
       return;
     }
 
@@ -524,11 +563,9 @@ export function UsersSidebar({
     }
 
     if (item === "history") {
-      toast({
-        title: "History is coming soon",
-        description:
-          "That tab will later show your previous chats with All, Unread, and Friends filters.",
-      });
+      if (location !== "/history") {
+        setLocation("/history");
+      }
       return;
     }
 
@@ -603,7 +640,9 @@ export function UsersSidebar({
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground " />
                 <Input
                   type="text"
-                  placeholder="Search Users"
+                  placeholder={
+                    mode === "history" ? "Search Conversations" : "Search Users"
+                  }
                   className="h-11 rounded-full border-border bg-card pl-10 text-sm text-foreground 
                   md: bg-muted
                   placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
@@ -671,11 +710,17 @@ export function UsersSidebar({
             <div className="space-y-2">
               {displayUsers.length === 0 ? (
                 <div className="rounded-[1.5rem] px-4 py-10 text-center text-sm ">
-                  {isFriendFilterLoading
+                  {mode === "history" && historyUsersQuery.isPending
+                    ? "Loading conversations..."
+                    : mode === "history" && historyUsersQuery.isError
+                      ? "Failed to load conversations"
+                      : isFriendFilterLoading
                     ? "Loading friends..."
                     : searchTerm || hasActiveFilters
                       ? "No users found"
-                      : "No users available"}
+                      : mode === "history"
+                        ? "No conversations yet"
+                        : "No users available"}
                 </div>
               ) : (
                 displayUsers.map((displayUser) => {
@@ -788,7 +833,7 @@ export function UsersSidebar({
   );
 }
 
-function UserSettingsModal({
+export function UserSettingsModal({
   open,
   onOpenChange,
 }: {

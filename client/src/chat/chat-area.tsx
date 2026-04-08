@@ -12,12 +12,12 @@ import {
 } from "@shared/schema";
 import {
   Ban,
-  Camera,
   Heart,
   Phone,
   Video,
   MoreVertical,
   Image as ImageIcon,
+  Camera,
   Paperclip,
   Smile,
   Send,
@@ -25,7 +25,6 @@ import {
   Expand,
   Loader2,
   Handshake,
-  RefreshCw,
   Reply,
   Search,
   Pencil,
@@ -58,7 +57,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
 import { getStoredTheme } from "@/lib/theme";
@@ -321,9 +319,8 @@ export function ChatArea({
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const lastTypingUserIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
   const composerPickerRef = useRef<HTMLDivElement>(null);
   const composerPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const { toast } = useToast();
@@ -351,14 +348,6 @@ export function ChatArea({
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(
     null,
   );
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isCameraLoading, setIsCameraLoading] = useState(false);
-  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState<
-    "user" | "environment"
-  >(isMobile ? "environment" : "user");
-  const [availableCameraCount, setAvailableCameraCount] = useState(1);
 
   // Fetch message history when user is selected (cursor-based) with caching
   const {
@@ -755,59 +744,72 @@ export function ChatArea({
   });
 
   // Fast delete via socket with optimistic removal
-  const handleDeleteMessage = useCallback((message: Message) => {
-    const messageId = message.msgId;
+  const handleDeleteMessage = useCallback(
+    (message: Message) => {
+      const messageId = message.msgId;
 
-    // Clear edit/reply targets if they reference this message
-    if (editTarget?.msgId === messageId) {
-      setEditTarget(null);
-      setMessageText("");
-      messageTextRef.current = "";
-    }
-    if (replyTarget?.msgId === messageId) {
-      setReplyTarget(null);
-    }
+      // Clear edit/reply targets if they reference this message
+      if (editTarget?.msgId === messageId) {
+        setEditTarget(null);
+        setMessageText("");
+        messageTextRef.current = "";
+      }
+      if (replyTarget?.msgId === messageId) {
+        setReplyTarget(null);
+      }
 
-    pendingDeleteRollbackRef.current.set(messageId, message);
+      pendingDeleteRollbackRef.current.set(messageId, message);
 
-    // Optimistically remove from UI immediately
-    removeMessageById(messageId);
+      // Optimistically remove from UI immediately
+      removeMessageById(messageId);
 
-    // Send delete via socket
-    const sent = socketDeleteMessage(messageId);
-    if (!sent) {
-      pendingDeleteRollbackRef.current.delete(messageId);
-      replaceMessageLocally(message);
-      toast({
-        title: "Failed to delete message",
-        description: "Not connected. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [editTarget, replyTarget, socketDeleteMessage, removeMessageById, replaceMessageLocally, toast]);
+      // Send delete via socket
+      const sent = socketDeleteMessage(messageId);
+      if (!sent) {
+        pendingDeleteRollbackRef.current.delete(messageId);
+        replaceMessageLocally(message);
+        toast({
+          title: "Failed to delete message",
+          description: "Not connected. Please try again.",
+          variant: "destructive",
+        });
+      }
+    },
+    [
+      editTarget,
+      replyTarget,
+      socketDeleteMessage,
+      removeMessageById,
+      replaceMessageLocally,
+      toast,
+    ],
+  );
 
   // Fast reaction toggle via socket with optimistic update
-  const handleToggleReaction = useCallback((message: Message, emoji: string) => {
-    if (!user) return;
+  const handleToggleReaction = useCallback(
+    (message: Message, emoji: string) => {
+      if (!user) return;
 
-    // Optimistically update the reaction
-    const optimisticMessage = toggleReactionForMessage(message, user, emoji);
-    pendingReactionRollbackRef.current.set(message.msgId, message);
-    replaceMessageLocally(optimisticMessage);
+      // Optimistically update the reaction
+      const optimisticMessage = toggleReactionForMessage(message, user, emoji);
+      pendingReactionRollbackRef.current.set(message.msgId, message);
+      replaceMessageLocally(optimisticMessage);
 
-    // Send via socket
-    const sent = toggleReaction(message.msgId, emoji);
-    if (!sent) {
-      // Revert on failure
-      pendingReactionRollbackRef.current.delete(message.msgId);
-      replaceMessageLocally(message);
-      toast({
-        title: "Failed to update reaction",
-        description: "Not connected. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [user, toggleReaction, replaceMessageLocally, toast]);
+      // Send via socket
+      const sent = toggleReaction(message.msgId, emoji);
+      if (!sent) {
+        // Revert on failure
+        pendingReactionRollbackRef.current.delete(message.msgId);
+        replaceMessageLocally(message);
+        toast({
+          title: "Failed to update reaction",
+          description: "Not connected. Please try again.",
+          variant: "destructive",
+        });
+      }
+    },
+    [user, toggleReaction, replaceMessageLocally, toast],
+  );
 
   // Keep the HTTP mutation as fallback (for edit which doesn't have socket yet)
   const deleteMessageMutation = useMutation({
@@ -921,7 +923,11 @@ export function ChatArea({
     const handleRelationshipStatusUpdated = (data: {
       userAId: number;
       userBId: number;
-      reason: "friend_request" | "remove_friend" | "block_user" | "unblock_user";
+      reason:
+        | "friend_request"
+        | "remove_friend"
+        | "block_user"
+        | "unblock_user";
       userAStatus: FriendshipStatusResponse;
       userBStatus: FriendshipStatusResponse;
     }) => {
@@ -972,7 +978,10 @@ export function ChatArea({
       pendingReactionRollbackRef.current.delete(data.messageId);
     };
 
-    const handleReactionError = (data: { messageId?: number; error?: string }) => {
+    const handleReactionError = (data: {
+      messageId?: number;
+      error?: string;
+    }) => {
       if (data.messageId) {
         const previousMessage = pendingReactionRollbackRef.current.get(
           data.messageId,
@@ -994,7 +1003,10 @@ export function ChatArea({
       pendingDeleteRollbackRef.current.delete(data.messageId);
     };
 
-    const handleDeleteError = (data: { messageId?: number; error?: string }) => {
+    const handleDeleteError = (data: {
+      messageId?: number;
+      error?: string;
+    }) => {
       if (data.messageId) {
         const previousMessage = pendingDeleteRollbackRef.current.get(
           data.messageId,
@@ -1307,16 +1319,19 @@ export function ChatArea({
     setActiveComposerPicker("gif");
   }, [activeComposerPicker, closeComposerPicker, focusMessageInput]);
 
-  const handlePickerTabChange = useCallback((tab: "emoji" | "gif") => {
-    if (activeComposerPicker === tab) {
-      closeComposerPicker();
-      focusMessageInput();
-      return;
-    }
+  const handlePickerTabChange = useCallback(
+    (tab: "emoji" | "gif") => {
+      if (activeComposerPicker === tab) {
+        closeComposerPicker();
+        focusMessageInput();
+        return;
+      }
 
-    messageInputRef.current?.blur();
-    setActiveComposerPicker(tab);
-  }, [activeComposerPicker, closeComposerPicker, focusMessageInput]);
+      messageInputRef.current?.blur();
+      setActiveComposerPicker(tab);
+    },
+    [activeComposerPicker, closeComposerPicker, focusMessageInput],
+  );
 
   useEffect(() => {
     if (!activeComposerPicker) {
@@ -1418,104 +1433,10 @@ export function ChatArea({
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
-
-  const refreshAvailableCameras = useCallback(async () => {
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.enumerateDevices
-    ) {
-      setAvailableCameraCount(1);
-      return;
-    }
-
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter(
-        (device) => device.kind === "videoinput",
-      );
-      setAvailableCameraCount(Math.max(videoInputs.length, 1));
-    } catch {
-      setAvailableCameraCount(1);
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
     }
   }, []);
-
-  const stopCameraStream = useCallback(() => {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-    cameraStreamRef.current = null;
-
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.pause();
-      cameraVideoRef.current.srcObject = null;
-    }
-
-    setIsCameraLoading(false);
-  }, []);
-
-  const startCameraStream = useCallback(async () => {
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
-      setCameraError("Camera access is not supported in this browser.");
-      return;
-    }
-
-    stopCameraStream();
-    setCameraError(null);
-    setIsCameraLoading(true);
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: isMobile
-          ? {
-              facingMode: cameraFacingMode,
-            }
-          : true,
-        audio: false,
-      });
-
-      cameraStreamRef.current = stream;
-      await refreshAvailableCameras();
-
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = stream;
-        await cameraVideoRef.current.play().catch(() => undefined);
-      }
-    } catch (error) {
-      console.error("Camera access failed", error);
-      setCameraError("Camera access was denied or is currently unavailable.");
-    } finally {
-      setIsCameraLoading(false);
-    }
-  }, [cameraFacingMode, isMobile, refreshAvailableCameras, stopCameraStream]);
-
-  useEffect(() => {
-    setCameraFacingMode(isMobile ? "environment" : "user");
-  }, [isMobile]);
-
-  useEffect(() => {
-    if (!isCameraOpen) {
-      stopCameraStream();
-      return;
-    }
-
-    void startCameraStream();
-
-    return () => {
-      stopCameraStream();
-    };
-  }, [isCameraOpen, startCameraStream, stopCameraStream]);
-
-  const handleFlipCamera = useCallback(() => {
-    if (!isMobile || availableCameraCount < 2 || isCameraLoading) {
-      return;
-    }
-
-    setCameraFacingMode((currentFacingMode) =>
-      currentFacingMode === "environment" ? "user" : "environment",
-    );
-  }, [availableCameraCount, isCameraLoading, isMobile]);
 
   const sendAttachmentFile = useCallback(
     async (file: File) => {
@@ -1718,58 +1639,6 @@ export function ChatArea({
       replyTarget,
     ],
   );
-
-  const handleCapturePhoto = useCallback(async () => {
-    const videoElement = cameraVideoRef.current;
-
-    if (
-      !videoElement ||
-      !videoElement.videoWidth ||
-      !videoElement.videoHeight
-    ) {
-      setCameraError("Camera preview is still loading. Try again in a moment.");
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      setCameraError("Unable to capture a photo from the camera.");
-      return;
-    }
-
-    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    setIsCapturingPhoto(true);
-    setCameraError(null);
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.92);
-    });
-
-    if (!blob) {
-      setIsCapturingPhoto(false);
-      setCameraError("Unable to capture a photo from the camera.");
-      return;
-    }
-
-    const file = new File([blob], `camera-capture-${Date.now()}.jpg`, {
-      type: "image/jpeg",
-    });
-    const didSend = await sendAttachmentFile(file);
-
-    setIsCapturingPhoto(false);
-    if (didSend) {
-      setIsCameraOpen(false);
-    }
-  }, [sendAttachmentFile]);
-
-  const closeCamera = useCallback(() => {
-    setIsCameraOpen(false);
-    setCameraError(null);
-  }, []);
 
   const sendGifMessage = useCallback(
     (gifUrl: string) => {
@@ -2200,7 +2069,6 @@ export function ChatArea({
     messageText.trim().length > 0 &&
     !editMessageMutation.isPending &&
     !isChatBlocked;
-  const canFlipCamera = isMobile && availableCameraCount > 1;
 
   useEffect(() => {
     if (!isMobile || (!replyTarget && !editTarget)) {
@@ -2209,81 +2077,6 @@ export function ChatArea({
 
     focusMessageInput();
   }, [editTarget, focusMessageInput, isMobile, replyTarget]);
-
-  const cameraViewport = (
-    <div className="relative flex-1 overflow-hidden bg-black">
-      <video
-        ref={cameraVideoRef}
-        autoPlay
-        playsInline
-        muted
-        className="h-full w-full bg-black object-cover"
-      />
-
-      {(isCameraLoading || cameraError) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/72 p-6 text-center">
-          <div className="space-y-4 text-white">
-            {isCameraLoading ? (
-              <>
-                <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-                <p className="text-sm">Starting camera...</p>
-              </>
-            ) : (
-              <>
-                <p className="max-w-xs text-sm">{cameraError}</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setCameraError(null);
-                    void startCameraStream();
-                  }}
-                >
-                  Retry camera
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-8 flex items-center justify-center gap-3 px-4">
-        <Button
-          type="button"
-          size="icon"
-          className="pointer-events-auto h-11 w-11 rounded-full border border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70 disabled:opacity-45"
-          onClick={() => void handleFlipCamera()}
-          disabled={!canFlipCamera}
-          aria-label="Flip camera"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          className="pointer-events-auto h-16 w-16 rounded-full border-4 border-white bg-white text-black shadow-2xl hover:bg-white/90"
-          onClick={() => void handleCapturePhoto()}
-          disabled={isCameraLoading || isCapturingPhoto || !!cameraError}
-          aria-label="Capture photo"
-        >
-          {isCapturingPhoto ? (
-            <Loader2 className="h-6 w-6 animate-spin" />
-          ) : (
-            <Camera className="h-6 w-6" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          className="pointer-events-auto h-11 w-11 rounded-full border border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
-          onClick={closeCamera}
-          aria-label="Cancel camera"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 
   if (!selectedUser) {
     if (isMobile) {
@@ -2357,38 +2150,6 @@ export function ChatArea({
         )}
       </AnimatePresence>
 
-      {isMobile ? (
-        <AnimatePresence>
-          {isCameraOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[110] bg-background"
-            >
-              <div className="flex h-full flex-col">{cameraViewport}</div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      ) : (
-        <Dialog
-          open={isCameraOpen}
-          onOpenChange={(open) => {
-            setIsCameraOpen(open);
-            if (!open) {
-              setCameraError(null);
-            }
-          }}
-        >
-          <DialogContent className="max-w-3xl overflow-hidden border-brand-border bg-background p-0 [&>button]:hidden">
-            <DialogTitle className="sr-only">Capture and send</DialogTitle>
-            <div className="flex h-[min(80vh,42rem)] flex-col">
-              {cameraViewport}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
       <AlertDialog
         open={confirmDialogAction !== null}
         onOpenChange={(open) => {
@@ -2452,504 +2213,520 @@ export function ChatArea({
               : "rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]",
           )}
         >
-        {/* Chat Header */}
-        <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {/* Back button for mobile */}
-            {(showBackButton || isMobile) && onBack && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBack}
-                className="p-2 flex-shrink-0"
-                title="Back to users"
-                data-testid="button-back-to-users"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            )}
-
-            <div className="relative flex-shrink-0">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full font-medium text-black shadow-sm"
-                style={{
-                  background: selectedUser.isGuest
-                    ? "var(--brand-muted)"
-                    : getAvatarColor(selectedUser.username),
-                }}
-              >
-                {selectedUser.isGuest
-                  ? "G"
-                  : getUserInitials(selectedUser.username)}
-              </div>
-            </div>
-            <div className="min-w-0">
-              <h3
-                className="font-semibold text-foreground truncate"
-                data-testid={`text-chat-username-${selectedUser.userId}`}
-              >
-                {selectedUser.username}
-              </h3>
-              <div className="flex items-center gap-1 text-xs">
-                <div
-                  className={`w-2 h-2 ${
-                    isChatBlocked
-                      ? "bg-amber-500"
-                      : onlineUsers.some(
-                            (u) => u.userId === selectedUser.userId,
-                          )
-                        ? "bg-green-500"
-                        : "bg-gray-400"
-                  } rounded-full`}
-                ></div>
-                <span className="text-foreground font-medium">
-                  {isChatBlocked
-                    ? isBlockedByMe
-                      ? "Blocked"
-                      : "Restricted"
-                    : onlineUsers.some((u) => u.userId === selectedUser.userId)
-                      ? "Online"
-                      : "Offline"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Voice Call"
-              data-testid="button-voice-call"
-            >
-              <Phone className="w-5 h-5 text-muted-foreground" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Video Call"
-              data-testid="button-video-call"
-            >
-              <Video className="w-5 h-5 text-muted-foreground" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+          {/* Chat Header */}
+          <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              {/* Back button for mobile */}
+              {(showBackButton || isMobile) && onBack && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  title="More Options"
-                  data-testid="button-more-options"
+                  onClick={onBack}
+                  className="p-2 flex-shrink-0"
+                  title="Back to users"
+                  data-testid="button-back-to-users"
                 >
-                  <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                  <ArrowLeft className="w-5 h-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={handleAddFriend}
-                  disabled={
-                    addFriendMutation.isPending ||
-                    friendshipStatusQuery.isLoading ||
-                    isChatBlocked ||
-                    !!friendshipStatusQuery.data?.isFriend ||
-                    friendshipStatusQuery.data?.pendingDirection ===
-                      "incoming" ||
-                    friendshipStatusQuery.data?.pendingDirection === "outgoing"
-                  }
-                >
-                  <Heart className="mr-2 h-4 w-4" />
-                  {addFriendMenuLabel}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleRemoveFriend}
-                  disabled={
-                    removeFriendMutation.isPending ||
-                    !friendshipStatusQuery.data?.isFriend ||
-                    isChatBlocked
-                  }
-                >
-                  <UserMinus className="mr-2 h-4 w-4" />
-                  {removeFriendMutation.isPending
-                    ? "Removing friend..."
-                    : "Remove friend"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={isBlockedByMe ? handleUnblockUser : handleBlockUser}
-                  disabled={
-                    blockUserMutation.isPending || unblockUserMutation.isPending
-                  }
-                >
-                  <Ban className="mr-2 h-4 w-4" />
-                  {isBlockedByMe
-                    ? unblockUserMutation.isPending
-                      ? "Unblocking user..."
-                      : "Unblock user"
-                    : blockUserMutation.isPending
-                      ? "Blocking user..."
-                      : "Block user"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleClearAttachments}
-                  disabled={clearAttachmentsMutation.isPending}
-                >
-                  {clearAttachmentsMutation.isPending
-                    ? "Clearing attachments..."
-                    : "Clear attachments"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleClearChat}
-                  disabled={clearChatMutation.isPending}
-                >
-                  {clearChatMutation.isPending
-                    ? "Clearing chat..."
-                    : "Clear chat"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+              )}
 
-        {/* Messages Area */}
-        <div
-          ref={messagesContainerRef}
-          className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background p-4 scrollbar-none overscroll-contain md:px-6 md:py-5"
-          onScroll={handleScroll}
-          data-testid="chat-messages-area"
-        >
-          {/* Load older messages */}
-          {hasNextPage && (
-            <div className="flex justify-center my-2">
+              <div className="relative flex-shrink-0">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full font-medium text-black shadow-sm"
+                  style={{
+                    background: selectedUser.isGuest
+                      ? "var(--brand-muted)"
+                      : getAvatarColor(selectedUser.username),
+                  }}
+                >
+                  {selectedUser.isGuest
+                    ? "G"
+                    : getUserInitials(selectedUser.username)}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <h3
+                  className="font-semibold text-foreground truncate"
+                  data-testid={`text-chat-username-${selectedUser.userId}`}
+                >
+                  {selectedUser.username}
+                </h3>
+                <div className="flex items-center gap-1 text-xs">
+                  <div
+                    className={`w-2 h-2 ${
+                      isChatBlocked
+                        ? "bg-amber-500"
+                        : onlineUsers.some(
+                              (u) => u.userId === selectedUser.userId,
+                            )
+                          ? "bg-green-500"
+                          : "bg-gray-400"
+                    } rounded-full`}
+                  ></div>
+                  <span className="text-foreground font-medium">
+                    {isChatBlocked
+                      ? isBlockedByMe
+                        ? "Blocked"
+                        : "Restricted"
+                      : onlineUsers.some(
+                            (u) => u.userId === selectedUser.userId,
+                          )
+                        ? "Online"
+                        : "Offline"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleLoadOlderMessages}
-                disabled={isFetchingNextPage}
-                className="bg-primary text-primary-foreground hover:bg-primary hover:text-white text-white"
+                title="Voice Call"
+                data-testid="button-voice-call"
               >
-                {isFetchingNextPage ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading older messages...
-                  </>
-                ) : (
-                  "Load More..."
-                )}
+                <Phone className="w-5 h-5 text-muted-foreground" />
               </Button>
-            </div>
-          )}
-
-          {/* System Message */}
-          <div className="flex justify-center my-4">
-            <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
-              <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
-                🔒
-              </div>
-              Messages are end-to-end encrypted
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Video Call"
+                data-testid="button-video-call"
+              >
+                <Video className="w-5 h-5 text-muted-foreground" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="More Options"
+                    data-testid="button-more-options"
+                  >
+                    <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={handleAddFriend}
+                    disabled={
+                      addFriendMutation.isPending ||
+                      friendshipStatusQuery.isLoading ||
+                      isChatBlocked ||
+                      !!friendshipStatusQuery.data?.isFriend ||
+                      friendshipStatusQuery.data?.pendingDirection ===
+                        "incoming" ||
+                      friendshipStatusQuery.data?.pendingDirection ===
+                        "outgoing"
+                    }
+                  >
+                    <Heart className="mr-2 h-4 w-4" />
+                    {addFriendMenuLabel}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleRemoveFriend}
+                    disabled={
+                      removeFriendMutation.isPending ||
+                      !friendshipStatusQuery.data?.isFriend ||
+                      isChatBlocked
+                    }
+                  >
+                    <UserMinus className="mr-2 h-4 w-4" />
+                    {removeFriendMutation.isPending
+                      ? "Removing friend..."
+                      : "Remove friend"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={
+                      isBlockedByMe ? handleUnblockUser : handleBlockUser
+                    }
+                    disabled={
+                      blockUserMutation.isPending ||
+                      unblockUserMutation.isPending
+                    }
+                  >
+                    <Ban className="mr-2 h-4 w-4" />
+                    {isBlockedByMe
+                      ? unblockUserMutation.isPending
+                        ? "Unblocking user..."
+                        : "Unblock user"
+                      : blockUserMutation.isPending
+                        ? "Blocking user..."
+                        : "Block user"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleClearAttachments}
+                    disabled={clearAttachmentsMutation.isPending}
+                  >
+                    {clearAttachmentsMutation.isPending
+                      ? "Clearing attachments..."
+                      : "Clear attachments"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleClearChat}
+                    disabled={clearChatMutation.isPending}
+                  >
+                    {clearChatMutation.isPending
+                      ? "Clearing chat..."
+                      : "Clear chat"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
-          {timelineItems.map((item) => {
-            if (item.type === "friendRequest") {
+          {/* Messages Area */}
+          <div
+            ref={messagesContainerRef}
+            className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background p-4 scrollbar-none overscroll-contain md:px-6 md:py-5"
+            onScroll={handleScroll}
+            data-testid="chat-messages-area"
+          >
+            {/* Load older messages */}
+            {hasNextPage && (
+              <div className="flex justify-center my-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLoadOlderMessages}
+                  disabled={isFetchingNextPage}
+                  className="bg-primary text-primary-foreground hover:bg-primary hover:text-white text-white"
+                >
+                  {isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Loading older messages...
+                    </>
+                  ) : (
+                    "Load More..."
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* System Message */}
+            <div className="flex justify-center my-4">
+              <div className="bg-accent text-muted-foreground text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                <div className="w-3 h-3 gap-1 flex items-center justify-center text-accent">
+                  🔒
+                </div>
+                Messages are end-to-end encrypted
+              </div>
+            </div>
+
+            {timelineItems.map((item) => {
+              if (item.type === "friendRequest") {
+                return (
+                  <FriendRequestCard
+                    key={`friend-request-${item.request.id}`}
+                    request={item.request}
+                    direction={item.direction}
+                    otherUsername={selectedUser.username}
+                    isPendingAction={respondToFriendRequestMutation.isPending}
+                    onAccept={handleAcceptFriendRequest}
+                    onReject={handleRejectFriendRequest}
+                  />
+                );
+              }
+
+              const message = item.message;
+              const isOwnMessage = message.senderId === user?.userId;
+              const sender = isOwnMessage ? user : selectedUser;
+              const isOptimistic = (message as OptimisticMessage).isOptimistic;
+              const pendingAttachment = (message as OptimisticMessage)
+                .clientMessageId
+                ? pendingAttachments.find(
+                    (p) =>
+                      p.id === (message as OptimisticMessage).clientMessageId,
+                  )
+                : null;
+
               return (
-                <FriendRequestCard
-                  key={`friend-request-${item.request.id}`}
-                  request={item.request}
-                  direction={item.direction}
-                  otherUsername={selectedUser.username}
-                  isPendingAction={respondToFriendRequestMutation.isPending}
-                  onAccept={handleAcceptFriendRequest}
-                  onReject={handleRejectFriendRequest}
+                <MessageBubble
+                  key={
+                    (message as OptimisticMessage).clientMessageId ||
+                    message.msgId
+                  }
+                  message={message}
+                  isOwnMessage={isOwnMessage}
+                  sender={sender}
+                  currentUserId={user?.userId ?? null}
+                  isOptimistic={isOptimistic}
+                  pendingAttachment={pendingAttachment}
+                  onImagePreview={setImagePreview}
+                  onReply={handleReplyToMessage}
+                  onEdit={handleEditMessageStart}
+                  onDelete={handleDeleteSingleMessage}
+                  onReact={handleToggleReactionSafe}
+                  onKeepComposerFocus={focusMessageInput}
                 />
               );
-            }
+            })}
 
-            const message = item.message;
-            const isOwnMessage = message.senderId === user?.userId;
-            const sender = isOwnMessage ? user : selectedUser;
-            const isOptimistic = (message as OptimisticMessage).isOptimistic;
-            const pendingAttachment = (message as OptimisticMessage)
-              .clientMessageId
-              ? pendingAttachments.find(
-                  (p) =>
-                    p.id === (message as OptimisticMessage).clientMessageId,
-                )
-              : null;
-
-            return (
-              <MessageBubble
-                key={
-                  (message as OptimisticMessage).clientMessageId ||
-                  message.msgId
-                }
-                message={message}
-                isOwnMessage={isOwnMessage}
-                sender={sender}
-                currentUserId={user?.userId ?? null}
-                isOptimistic={isOptimistic}
-                pendingAttachment={pendingAttachment}
-                onImagePreview={setImagePreview}
-                onReply={handleReplyToMessage}
-                onEdit={handleEditMessageStart}
-                onDelete={handleDeleteSingleMessage}
-                onReact={handleToggleReactionSafe}
-                onKeepComposerFocus={focusMessageInput}
-              />
-            );
-          })}
-
-          {/* Typing Indicator */}
-          {typingUsers.has(selectedUser.userId) && (
-            <div className="flex items-start gap-3 message-bubble">
-              <div
-                className={`w-8 h-8 ${selectedUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(selectedUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
-              >
-                {selectedUser.isGuest
-                  ? "G"
-                  : getUserInitials(selectedUser.username)}
-              </div>
-              <div className="flex flex-col gap-1 max-w-xs lg:max-w-md">
-                <div className="bg-card border border-border rounded-lg rounded-tl-none p-3 shadow-sm">
-                  <div className="flex items-center gap-1">
-                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
-                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-75"></div>
-                    <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-150"></div>
+            {/* Typing Indicator */}
+            {typingUsers.has(selectedUser.userId) && (
+              <div className="flex items-start gap-3 message-bubble">
+                <div
+                  className={`w-8 h-8 ${selectedUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(selectedUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
+                >
+                  {selectedUser.isGuest
+                    ? "G"
+                    : getUserInitials(selectedUser.username)}
+                </div>
+                <div className="flex flex-col gap-1 max-w-xs lg:max-w-md">
+                  <div className="bg-card border border-border rounded-lg rounded-tl-none p-3 shadow-sm">
+                    <div className="flex items-center gap-1">
+                      <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
+                      <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-75"></div>
+                      <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-150"></div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* New Message Indicator - Instagram style */}
+          {showNewMessageIndicator && (
+            <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
           )}
-          <div ref={messagesEndRef} />
-        </div>
 
-        {/* New Message Indicator - Instagram style */}
-        {showNewMessageIndicator && (
-          <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
-        )}
-
-        {/* Message Input Area */}
-        <div
-          className="relative overflow-visible bg-card-muted flex-shrink-0"
-          style={{
-            paddingBottom: "6px",
-          }}
-        >
-          <AnimatePresence initial={false}>
-            {isComposerPickerOpen && (
-              <motion.div
-                ref={composerPickerRef}
-                key="composer-picker"
-                initial={
-                  isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
-                }
-                animate={
-                  isMobile
-                    ? { height: "auto", opacity: 1 }
-                    : { opacity: 1, y: 0 }
-                }
-                exit={
-                  isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
-                }
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className={cn(
-                  "absolute bottom-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl",
-                  isMobile
-                    ? "left-3 right-3"
-                    : "right-3 w-[24rem] max-w-[calc(100%-1.5rem)]",
-                )}
-              >
-                <div className="border-b border-border/70 px-3 py-2">
-                  <div className="mx-auto grid w-full grid-cols-2 overflow-hidden rounded-full  border-border ">
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
-                        activeComposerPicker === "emoji"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                      onClick={() => handlePickerTabChange("emoji")}
-                      aria-label="Emoji picker"
-                    >
-                      <Smile className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 items-center justify-center rounded-full text-xs font-semibold tracking-[0.18em] transition-colors",
-                        activeComposerPicker === "gif"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                      onClick={() => handlePickerTabChange("gif")}
-                      aria-label="GIF picker"
-                    >
-                      GIF
-                    </button>
+          {/* Message Input Area */}
+          <div
+            className="relative overflow-visible bg-card-muted flex-shrink-0"
+            style={{
+              paddingBottom: "6px",
+            }}
+          >
+            <AnimatePresence initial={false}>
+              {isComposerPickerOpen && (
+                <motion.div
+                  ref={composerPickerRef}
+                  key="composer-picker"
+                  initial={
+                    isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
+                  }
+                  animate={
+                    isMobile
+                      ? { height: "auto", opacity: 1 }
+                      : { opacity: 1, y: 0 }
+                  }
+                  exit={
+                    isMobile ? { height: 0, opacity: 0 } : { opacity: 0, y: 10 }
+                  }
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className={cn(
+                    "absolute bottom-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl",
+                    isMobile
+                      ? "left-3 right-3"
+                      : "right-3 w-[24rem] max-w-[calc(100%-1.5rem)]",
+                  )}
+                >
+                  <div className="border-b border-border/70 px-3 py-2">
+                    <div className="mx-auto grid w-full grid-cols-2 overflow-hidden rounded-full  border-border ">
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex h-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                          activeComposerPicker === "emoji"
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                        onClick={() => handlePickerTabChange("emoji")}
+                        aria-label="Emoji picker"
+                      >
+                        <Smile className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex h-8 items-center justify-center rounded-full text-xs font-semibold tracking-[0.18em] transition-colors",
+                          activeComposerPicker === "gif"
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                        onClick={() => handlePickerTabChange("gif")}
+                        aria-label="GIF picker"
+                      >
+                        GIF
+                      </button>
+                    </div>
                   </div>
-                </div>
-                {activeComposerPicker === "emoji" ? (
-                  <div className="overflow-hidden font-sans">
-                    <EmojiPicker
-                      onEmojiClick={onEmojiClick}
-                      width="100%"
-                      height={composerPickerHeight}
-                      theme={
-                        isDark
-                          ? (EmojiPickerTheme.DARK as any)
-                          : (EmojiPickerTheme.LIGHT as any)
-                      }
+                  {activeComposerPicker === "emoji" ? (
+                    <div className="overflow-hidden font-sans">
+                      <EmojiPicker
+                        onEmojiClick={onEmojiClick}
+                        width="100%"
+                        height={composerPickerHeight}
+                        theme={
+                          isDark
+                            ? (EmojiPickerTheme.DARK as any)
+                            : (EmojiPickerTheme.LIGHT as any)
+                        }
+                        autoFocusSearch={false}
+                        searchPlaceholder="Search emoji"
+                        lazyLoadEmojis={true}
+                        previewConfig={{ showPreview: false }}
+                        className={cn(
+                          "font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:24px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px] [&_.epr-header-overlay]:pb-0",
+                          isMobile &&
+                            "[--epr-emoji-size:22px] [--epr-search-input-height:30px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px]",
+                        )}
+                      />
+                    </div>
+                  ) : (
+                    <GifPicker
+                      onGifClick={sendGifMessage}
                       autoFocusSearch={false}
-                      searchPlaceholder="Search emoji"
-                      lazyLoadEmojis={true}
-                      previewConfig={{ showPreview: false }}
+                      showCategories={false}
+                      showStatus={false}
+                      showFooter={false}
                       className={cn(
-                        "font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-size:24px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px] [&_.epr-header-overlay]:pb-0",
-                        isMobile &&
-                          "[--epr-emoji-size:22px] [--epr-search-input-height:30px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px]",
+                        " rounded-none border-0 bg-transparent shadow-none",
+                        isMobile ? "h-[320px]" : "h-[320px]",
                       )}
                     />
-                  </div>
-                ) : (
-                  <GifPicker
-                    onGifClick={sendGifMessage}
-                    autoFocusSearch={false}
-                    showCategories={false}
-                    showStatus={false}
-                    showFooter={false}
-                    className={cn(
-                      " rounded-none border-0 bg-transparent shadow-none",
-                      isMobile ? "h-[320px]" : "h-[320px]",
-                    )}
-                  />
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div className="p-2 md:pb-1">
-            {isChatBlocked ? (
-              <div className="rounded-[1rem] border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-                {blockedNotice}
-              </div>
-            ) : (
-              <div className="relative">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  accept={ATTACHMENT_INPUT_ACCEPT}
-                />
-                <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
-                  {(replyTarget || editTarget) && (
-                    <div className="flex items-start justify-between gap-3 border-b border-border/70 py-3">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          {editTarget ? "Editing message" : "Replying to"}
-                        </p>
-                        <p className="truncate text-sm text-foreground">
-                          {getReplyPreviewText(editTarget ?? replyTarget)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-full text-muted-foreground"
-                        onClick={() => {
-                          setReplyTarget(null);
-                          setEditTarget(null);
-                          if (editTarget) {
-                            setMessageText("");
-                            messageTextRef.current = "";
-                          }
-                        }}
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
                   )}
-                  <Textarea
-                    ref={messageInputRef}
-                    placeholder={editTarget ? "Edit message..." : "Message..."}
-                    className={cn(
-                      "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                      hasDraftText || editTarget ? "pr-12" : "pr-28 sm:pr-32",
-                    )}
-                    rows={1}
-                    value={messageText}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    onFocus={handleInputFocus}
-                    data-testid="textarea-message-input"
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="p-2 md:pb-1">
+              {isChatBlocked ? (
+                <div className="rounded-[1rem] border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+                  {blockedNotice}
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    accept={ATTACHMENT_INPUT_ACCEPT}
                   />
-                  <div className="absolute bottom-2 right-1.5 flex items-center">
-                    {hasDraftText || editTarget ? (
-                      <Button
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={handleSendMessage}
-                        disabled={!canSendDraft}
-                        className="h-8 w-8 rounded-2xl"
-                        size="icon"
-                        title={editTarget ? "Save changes" : "Send Message"}
-                        data-testid="button-send-message"
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <>
+                  <input
+                    type="file"
+                    ref={cameraInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    accept="image/*"
+                    capture="environment"
+                  />
+                  <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
+                    {(replyTarget || editTarget) && (
+                      <div className="flex items-start justify-between gap-3 border-b border-border/70 py-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            {editTarget ? "Editing message" : "Replying to"}
+                          </p>
+                          <p className="truncate text-sm text-foreground">
+                            {getReplyPreviewText(editTarget ?? replyTarget)}
+                          </p>
+                        </div>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                          title="Capture photo"
-                          data-testid="button-open-camera"
+                          className="h-7 w-7 rounded-full text-muted-foreground"
                           onClick={() => {
-                            closeComposerPicker();
-                            setCameraError(null);
-                            setIsCameraOpen(true);
+                            setReplyTarget(null);
+                            setEditTarget(null);
+                            if (editTarget) {
+                              setMessageText("");
+                              messageTextRef.current = "";
+                            }
                           }}
+                          title="Cancel"
                         >
-                          <Camera className="h-4 w-4" />
+                          <X className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                          title="Attach File"
-                          data-testid="button-attach-file"
-                          onClick={() => {
-                            closeComposerPicker();
-                            fileInputRef.current?.click();
-                          }}
-                        >
-                          <ImageIcon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          ref={composerPickerTriggerRef}
-                          className={cn(
-                            "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
-                            isComposerPickerOpen && "bg-muted text-foreground",
-                          )}
-                          title={
-                            isComposerPickerOpen
-                              ? "Show keyboard"
-                              : "Open GIF and emoji picker"
-                          }
-                          data-testid="button-picker-switch"
-                          onClick={handlePickerSwitch}
-                        >
-                          <Smile className="h-4 w-4" />
-                        </Button>
-                      </>
+                      </div>
                     )}
+                    <Textarea
+                      ref={messageInputRef}
+                      placeholder={
+                        editTarget ? "Edit message..." : "Message..."
+                      }
+                      className={cn(
+                        "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                        hasDraftText || editTarget ? "pr-12" : "pr-20 sm:pr-24",
+                      )}
+                      rows={1}
+                      value={messageText}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      onFocus={handleInputFocus}
+                      data-testid="textarea-message-input"
+                    />
+                    <div className="absolute bottom-2 right-1.5 flex items-center">
+                      {hasDraftText || editTarget ? (
+                        <Button
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleSendMessage}
+                          disabled={!canSendDraft}
+                          className="h-8 w-8 rounded-2xl"
+                          size="icon"
+                          title={editTarget ? "Save changes" : "Send Message"}
+                          data-testid="button-send-message"
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                            title="Take Photo"
+                            data-testid="button-camera"
+                            onClick={() => {
+                              closeComposerPicker();
+                              cameraInputRef.current?.click();
+                            }}
+                          >
+                            <Camera className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                            title="Attach File"
+                            data-testid="button-attach-file"
+                            onClick={() => {
+                              closeComposerPicker();
+                              fileInputRef.current?.click();
+                            }}
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            ref={composerPickerTriggerRef}
+                            className={cn(
+                              "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                              isComposerPickerOpen &&
+                                "bg-muted text-foreground",
+                            )}
+                            title={
+                              isComposerPickerOpen
+                                ? "Show keyboard"
+                                : "Open GIF and emoji picker"
+                            }
+                            data-testid="button-picker-switch"
+                            onClick={handlePickerSwitch}
+                          >
+                            <Smile className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </>
@@ -3678,77 +3455,80 @@ const MessageBubble = memo(function MessageBubble({
                   : "w-0 opacity-0 pointer-events-none md:group-hover/message:w-7 md:group-hover/message:opacity-100 md:group-hover/message:pointer-events-auto md:group-focus-within/message:w-7 md:group-focus-within/message:opacity-100 md:group-focus-within/message:pointer-events-auto",
               )}
             >
-            <DropdownMenu open={isActionMenuOpen} onOpenChange={setIsActionMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
-                  title="Message actions"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align={isOwnMessage ? "start" : "end"}
-                onCloseAutoFocus={(event) => {
-                  if (!shouldRestoreComposerFocusRef.current) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  shouldRestoreComposerFocusRef.current = false;
-                  requestAnimationFrame(() => {
-                    onKeepComposerFocus?.();
-                  });
-                }}
+              <DropdownMenu
+                open={isActionMenuOpen}
+                onOpenChange={setIsActionMenuOpen}
               >
-                {canReply && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      shouldRestoreComposerFocusRef.current = true;
-                      onReply(message);
-                    }}
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                    title="Message actions"
                   >
-                    <Reply className="mr-2 h-4 w-4" />
-                    Reply
-                  </DropdownMenuItem>
-                )}
-                {canEdit && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      shouldRestoreComposerFocusRef.current = true;
-                      onEdit(message);
-                    }}
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                )}
-                {canDelete && (
-                  <DropdownMenuItem onClick={() => onDelete(message)}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                )}
-                {canReact && (
-                  <div className="px-2 pb-2 pt-1">
-                    <div className="flex items-center gap-1">
-                      {QUICK_REACTIONS.map((emoji) => (
-                        <DropdownMenuItem
-                          key={emoji}
-                          className="h-9 w-9 justify-center rounded-full p-0 text-base leading-none"
-                          onSelect={() => onReact(message, emoji)}
-                        >
-                          {emoji}
-                        </DropdownMenuItem>
-                      ))}
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align={isOwnMessage ? "start" : "end"}
+                  onCloseAutoFocus={(event) => {
+                    if (!shouldRestoreComposerFocusRef.current) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    shouldRestoreComposerFocusRef.current = false;
+                    requestAnimationFrame(() => {
+                      onKeepComposerFocus?.();
+                    });
+                  }}
+                >
+                  {canReply && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        shouldRestoreComposerFocusRef.current = true;
+                        onReply(message);
+                      }}
+                    >
+                      <Reply className="mr-2 h-4 w-4" />
+                      Reply
+                    </DropdownMenuItem>
+                  )}
+                  {canEdit && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        shouldRestoreComposerFocusRef.current = true;
+                        onEdit(message);
+                      }}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <DropdownMenuItem onClick={() => onDelete(message)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                  {canReact && (
+                    <div className="px-2 pb-2 pt-1">
+                      <div className="flex items-center gap-1">
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <DropdownMenuItem
+                            key={emoji}
+                            className="h-9 w-9 justify-center rounded-full p-0 text-base leading-none"
+                            onSelect={() => onReact(message, emoji)}
+                          >
+                            {emoji}
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>

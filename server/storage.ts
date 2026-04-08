@@ -24,16 +24,10 @@ import {
   conversationMessageInclude,
   getConversationId,
   messageRepository,
+  publicUserSelect,
 } from "./db/message";
+import { sortUsersByPresence } from "./lib/user-utils";
 
-const publicUserSelect = {
-  userId: true,
-  username: true,
-  age: true,
-  gender: true,
-  isOnline: true,
-  isGuest: true,
-} as const;
 
 const CacheKeys = {
   conversation: (a: number, b: number) => {
@@ -169,27 +163,6 @@ const userRepository = {
     } catch (error) {
       console.error("Error creating user:", error);
       throw error;
-    }
-  },
-
-  async deleteById(id: number): Promise<void> {
-    if (!prisma) return;
-    try {
-      await prisma.message.deleteMany({
-        where: {
-          OR: [{ senderId: id }, { receiverId: id }],
-        },
-      });
-
-      await prisma.globalMessage.deleteMany({
-        where: { senderId: id },
-      });
-
-      await prisma.user.delete({
-        where: { userId: id },
-      });
-    } catch (error) {
-      console.error("Error deleting user:", error);
     }
   },
 
@@ -428,6 +401,35 @@ const friendshipRepository = {
 
     const friendship = await friendshipRepository.getByUsers(userA, userB);
     return !!friendship;
+  },
+
+  async getFriendshipsForPairs(
+    pairs: { userId1: number; userId2: number }[],
+  ): Promise<Set<string>> {
+    if (!prisma || pairs.length === 0) return new Set();
+
+    const normalPairs = pairs.map((pair) => normalizeUserPair(pair.userId1, pair.userId2));
+
+    // Constructing a manual OR statement since we can't easily query multiple composite tuples directly in Prisma
+    const rows = await prisma.friendship.findMany({
+      where: {
+        OR: normalPairs.map((p) => ({
+          userId1: p.userId1,
+          userId2: p.userId2,
+        })),
+      },
+      select: {
+        userId1: true,
+        userId2: true,
+      },
+    });
+
+    const friendsSet = new Set<string>();
+    for (const row of rows) {
+      friendsSet.add(`${row.userId1}:${row.userId2}`);
+    }
+
+    return friendsSet;
   },
 
   async create(userA: number, userB: number): Promise<Friendship | undefined> {
@@ -716,7 +718,7 @@ export interface IStorage {
   getOnlineUsers(): Promise<User[]>;
   getUsersByIds(ids: number[]): Promise<User[]>;
   getFriendUsers(userId: number): Promise<User[]>;
-  getSidebarUsers(userId: number): Promise<User[]>;
+  getConversationUsers(userId: number): Promise<User[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   createMessageWithAttachments(
     message: InsertMessage,
@@ -790,7 +792,9 @@ export interface IStorage {
   clearConversationAttachments(user1Id: number, user2Id: number): Promise<number>;
   clearEphemeralConversationsForUser(userId: number): Promise<number>;
   cleanupExpiredEphemeralMessages(olderThan: Date): Promise<number>;
+  markConversationAsRead(userId: number, otherUserId: number): Promise<void>;
 }
+
 
 class DatabaseStorage implements IStorage {
   private async deleteAttachmentFiles(attachments: Attachment[]): Promise<void> {
@@ -828,6 +832,16 @@ class DatabaseStorage implements IStorage {
     ]);
   }
 
+  private clearBlockLookupCacheForUser(userId: number): void {
+    for (const cacheKey of Array.from(blockLookupCache.keys())) {
+      const [leftUserId, rightUserId] = cacheKey.split(":").map(Number);
+
+      if (leftUserId === userId || rightUserId === userId) {
+        blockLookupCache.delete(cacheKey);
+      }
+    }
+  }
+
   private async getConversationMessageRecord(
     messageId: number,
     userId: number,
@@ -862,7 +876,94 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: number): Promise<void> {
-    return userRepository.deleteById(id);
+    if (!prisma) {
+      return;
+    }
+
+    const [conversationPartnerIds, messages] = await Promise.all([
+      messageRepository.getConversationPartners(id),
+      prisma.message.findMany({
+        where: {
+          OR: [{ senderId: id }, { receiverId: id }],
+        },
+        select: {
+          msgId: true,
+          attachments: true,
+        },
+      }),
+    ]);
+
+    const messageIds = messages.map((message) => message.msgId);
+    const attachments = messages.flatMap((message) => message.attachments);
+
+    await prisma.$transaction(async (tx) => {
+      if (messageIds.length > 0) {
+        await tx.attachment.deleteMany({
+          where: {
+            messageId: { in: messageIds },
+          },
+        });
+      }
+
+      await tx.messageReaction.deleteMany({
+        where:
+          messageIds.length > 0
+            ? {
+                OR: [{ messageId: { in: messageIds } }, { userId: id }],
+              }
+            : { userId: id },
+      });
+
+      if (messageIds.length > 0) {
+        await tx.message.deleteMany({
+          where: {
+            msgId: { in: messageIds },
+          },
+        });
+      }
+
+      await tx.globalMessage.deleteMany({
+        where: { senderId: id },
+      });
+
+      await tx.friendRequest.deleteMany({
+        where: {
+          OR: [{ senderId: id }, { receiverId: id }],
+        },
+      });
+
+      await tx.friendship.deleteMany({
+        where: {
+          OR: [{ userId1: id }, { userId2: id }],
+        },
+      });
+
+      await tx.userBlock.deleteMany({
+        where: {
+          OR: [{ blockerId: id }, { blockedId: id }],
+        },
+      });
+
+      await tx.user.deleteMany({
+        where: { userId: id },
+      });
+    });
+
+    if (attachments.length > 0) {
+      await this.deleteAttachmentFiles(attachments);
+    }
+
+    await Promise.allSettled(
+      conversationPartnerIds.map((partnerId) =>
+        this.invalidateConversationCaches(id, partnerId),
+      ),
+    );
+
+    if (cacheClient) {
+      await cacheClient.del(CacheKeys.globalMessages()).catch(() => {});
+    }
+
+    this.clearBlockLookupCacheForUser(id);
   }
 
   async updateUserOnlineStatus(id: number, isOnline: boolean): Promise<void> {
@@ -904,46 +1005,24 @@ class DatabaseStorage implements IStorage {
     return userRepository.getByIds(allowedFriendUserIds);
   }
 
-  async getSidebarUsers(userId: number): Promise<User[]> {
-    const [onlineUsers, friendUsers, restrictedUserIds] = await Promise.all([
-      userRepository.getOnlineUsers(),
-      this.getFriendUsers(userId),
+  async getConversationUsers(userId: number): Promise<User[]> {
+    const [conversationUserIds, restrictedUserIds] = await Promise.all([
+      messageRepository.getConversationPartners(userId),
       blockRepository.getRestrictedUserIds(userId),
     ]);
 
-    const visibleOnlineUsers = onlineUsers.filter(
-      (onlineUser) => !restrictedUserIds.includes(onlineUser.userId),
+    const visibleConversationUserIds = conversationUserIds.filter(
+      (otherUserId) =>
+        otherUserId !== userId && !restrictedUserIds.includes(otherUserId),
     );
 
-    if (friendUsers.length === 0) {
-      return visibleOnlineUsers
-        .filter((onlineUser) => onlineUser.userId !== userId)
-        .sort(
-          (left, right) =>
-            Number(right.isOnline) - Number(left.isOnline) ||
-            left.username.localeCompare(right.username),
-        );
+    if (visibleConversationUserIds.length === 0) {
+      return [];
     }
 
-    const mergedUsers = new Map<number, User>();
+    const users = await userRepository.getByIds(visibleConversationUserIds);
 
-    for (const onlineUser of visibleOnlineUsers) {
-      if (onlineUser.userId !== userId) {
-        mergedUsers.set(onlineUser.userId, onlineUser);
-      }
-    }
-
-    for (const friendUser of friendUsers) {
-      if (friendUser.userId !== userId) {
-        mergedUsers.set(friendUser.userId, friendUser);
-      }
-    }
-
-    return Array.from(mergedUsers.values()).sort(
-      (left, right) =>
-        Number(right.isOnline) - Number(left.isOnline) ||
-        left.username.localeCompare(right.username),
-    );
+    return sortUsersByPresence(users);
   }
 
   async createMessage(message: InsertMessage): Promise<Message> {
@@ -1081,49 +1160,30 @@ class DatabaseStorage implements IStorage {
 
     const existingMessage = await prisma.message.findUnique({
       where: { msgId: messageId },
-      include: {
-        attachments: true,
-      },
+      include: { attachments: true },
     });
 
     if (!existingMessage) {
       return undefined;
     }
 
-    const attachments = existingMessage.attachments;
+    await this.softDeleteMessageTransaction(messageId, existingMessage.attachments);
 
-    const updatedMessage = await prisma.$transaction(async (tx) => {
-      if (attachments.length > 0) {
-        await tx.attachment.deleteMany({
-          where: { messageId },
-        });
-      }
-
-      await tx.messageReaction.deleteMany({
-        where: { messageId },
-      });
-
-      return tx.message.update({
-        where: { msgId: messageId },
-        data: {
-          message: "Message deleted",
-          deletedAt: new Date(),
-          editedAt: null,
-        },
-        include: conversationMessageInclude,
-      });
-    });
-
-    if (attachments.length > 0) {
-      await this.deleteAttachmentFiles(attachments);
+    if (existingMessage.attachments.length > 0) {
+      await this.deleteAttachmentFiles(existingMessage.attachments);
     }
 
     await this.invalidateConversationCaches(
-      updatedMessage.senderId,
-      updatedMessage.receiverId,
+      existingMessage.senderId,
+      existingMessage.receiverId,
     );
 
-    return updatedMessage;
+    const updatedMessage = await prisma.message.findUnique({
+      where: { msgId: messageId },
+      include: conversationMessageInclude,
+    });
+
+    return updatedMessage ?? undefined;
   }
 
   async deleteConversationMessageSync(
@@ -1145,7 +1205,29 @@ class DatabaseStorage implements IStorage {
       return undefined;
     }
 
-    const attachments = existingMessage.attachments;
+    await this.softDeleteMessageTransaction(messageId, existingMessage.attachments);
+
+    if (existingMessage.attachments.length > 0) {
+      await this.deleteAttachmentFiles(existingMessage.attachments);
+    }
+
+    this.invalidateConversationCaches(
+      existingMessage.senderId,
+      existingMessage.receiverId,
+    ).catch((error) => console.error("Cache invalidate error:", error));
+
+    return {
+      messageId: existingMessage.msgId,
+      senderId: existingMessage.senderId,
+      receiverId: existingMessage.receiverId,
+    };
+  }
+
+  private async softDeleteMessageTransaction(
+    messageId: number,
+    attachments: Attachment[],
+  ): Promise<void> {
+    if (!prisma) return;
 
     await prisma.$transaction(async (tx) => {
       if (attachments.length > 0) {
@@ -1167,21 +1249,38 @@ class DatabaseStorage implements IStorage {
         },
       });
     });
+  }
 
-    if (attachments.length > 0) {
-      await this.deleteAttachmentFiles(attachments);
+  private async toggleReactionTransaction(
+    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+    messageId: number,
+    userId: number,
+    emoji: string,
+  ): Promise<void> {
+    const existingReaction = await tx.messageReaction.findUnique({
+      where: {
+        messageId_userId: { messageId, userId },
+      },
+    });
+
+    if (!existingReaction) {
+      await tx.messageReaction.create({
+        data: { messageId, userId, emoji },
+      });
+    } else if (existingReaction.emoji === emoji) {
+      await tx.messageReaction.delete({
+        where: {
+          messageId_userId: { messageId, userId },
+        },
+      });
+    } else {
+      await tx.messageReaction.update({
+        where: {
+          messageId_userId: { messageId, userId },
+        },
+        data: { emoji },
+      });
     }
-
-    this.invalidateConversationCaches(
-      existingMessage.senderId,
-      existingMessage.receiverId,
-    ).catch((error) => console.error("Cache invalidate error:", error));
-
-    return {
-      messageId: existingMessage.msgId,
-      senderId: existingMessage.senderId,
-      receiverId: existingMessage.receiverId,
-    };
   }
 
   async toggleConversationReaction(
@@ -1192,45 +1291,7 @@ class DatabaseStorage implements IStorage {
     if (!prisma) return undefined;
 
     const updatedMessage = await prisma.$transaction(async (tx) => {
-      const existingReaction = await tx.messageReaction.findUnique({
-        where: {
-          messageId_userId: {
-            messageId,
-            userId,
-          },
-        },
-      });
-
-      if (!existingReaction) {
-        await tx.messageReaction.create({
-          data: {
-            messageId,
-            userId,
-            emoji,
-          },
-        });
-      } else if (existingReaction.emoji === emoji) {
-        await tx.messageReaction.delete({
-          where: {
-            messageId_userId: {
-              messageId,
-              userId,
-            },
-          },
-        });
-      } else {
-        await tx.messageReaction.update({
-          where: {
-            messageId_userId: {
-              messageId,
-              userId,
-            },
-          },
-          data: {
-            emoji,
-          },
-        });
-      }
+      await this.toggleReactionTransaction(tx, messageId, userId, emoji);
 
       return tx.message.findUnique({
         where: { msgId: messageId },
@@ -1271,55 +1332,13 @@ class DatabaseStorage implements IStorage {
         return null;
       }
 
-      const existingReaction = await tx.messageReaction.findUnique({
-        where: {
-          messageId_userId: {
-            messageId,
-            userId,
-          },
-        },
-      });
-
-      if (!existingReaction) {
-        await tx.messageReaction.create({
-          data: {
-            messageId,
-            userId,
-            emoji,
-          },
-        });
-      } else if (existingReaction.emoji === emoji) {
-        await tx.messageReaction.delete({
-          where: {
-            messageId_userId: {
-              messageId,
-              userId,
-            },
-          },
-        });
-      } else {
-        await tx.messageReaction.update({
-          where: {
-            messageId_userId: {
-              messageId,
-              userId,
-            },
-          },
-          data: {
-            emoji,
-          },
-        });
-      }
+      await this.toggleReactionTransaction(tx, messageId, userId, emoji);
 
       const reactions = await tx.messageReaction.findMany({
         where: { messageId },
-        orderBy: {
-          createdAt: "asc",
-        },
+        orderBy: { createdAt: "asc" },
         include: {
-          user: {
-            select: publicUserSelect,
-          },
+          user: { select: publicUserSelect },
         },
       });
 
@@ -1342,6 +1361,7 @@ class DatabaseStorage implements IStorage {
 
     return updatedReactionState;
   }
+
 
   private async updateMessageCaches(message: Message): Promise<void> {
     if (!cacheClient) return;
@@ -1510,12 +1530,12 @@ class DatabaseStorage implements IStorage {
 
         if (lastVal === null || unreadVal === null) {
           fallbackUserIds.add(otherId);
+        } else {
+          result.set(otherId, {
+            lastMessage: JSON.parse(lastVal),
+            unread: parseInt(unreadVal, 10),
+          });
         }
-
-        result.set(otherId, {
-          lastMessage: lastVal ? JSON.parse(lastVal) : null,
-          unread: unreadVal ? parseInt(unreadVal, 10) : 0,
-        });
       }
 
       if (fallbackUserIds.size > 0) {
@@ -1629,12 +1649,44 @@ class DatabaseStorage implements IStorage {
 
   async clearConversation(user1Id: number, user2Id: number): Promise<number> {
     const attachments = await attachmentRepository.getByConversation(user1Id, user2Id);
-    await this.deleteAttachmentFiles(attachments);
 
     const deletedCount = await messageRepository.deleteConversation(user1Id, user2Id);
+
+    await this.deleteAttachmentFiles(attachments);
     await this.invalidateConversationCaches(user1Id, user2Id);
 
     return deletedCount;
+  }
+
+  async markConversationAsRead(userId: number, otherUserId: number): Promise<void> {
+    if (!prisma) return;
+
+    try {
+      await prisma.conversationReadState.upsert({
+        where: {
+          userId_otherUserId: {
+            userId: userId,
+            otherUserId: otherUserId,
+          },
+        },
+        update: {
+          lastReadAt: new Date(),
+        },
+        create: {
+          userId: userId,
+          otherUserId: otherUserId,
+        },
+      });
+
+      // Erase the old Redis cache since it will be stale now
+      const conversationId = getConversationId(userId, otherUserId);
+      if (cacheClient) {
+        const unreadKey = CacheKeys.conversationUnread(conversationId, userId);
+        await cacheClient.del(unreadKey);
+      }
+    } catch (error) {
+      console.error("Error marking conversation as read:", error);
+    }
   }
 
   async clearConversationAttachments(
@@ -1680,19 +1732,40 @@ class DatabaseStorage implements IStorage {
 
   async cleanupExpiredEphemeralMessages(olderThan: Date): Promise<number> {
     const oldMessages = await messageRepository.getOlderThan(olderThan);
-    if (oldMessages.length === 0) {
-      return 0;
-    }
+
+    if (oldMessages.length === 0) return 0;
+
 
     const friendshipCache = new Map<string, boolean>();
     const messageIdsToDelete: number[] = [];
+
+    // Find unique pairs of users
+    const uniquePairsMap = new Map<string, { userId1: number; userId2: number }>();
+    for (const message of oldMessages) {
+      const convId = getConversationId(message.senderId, message.receiverId);
+      if (!uniquePairsMap.has(convId)) {
+        uniquePairsMap.set(convId, {
+          userId1: message.senderId,
+          userId2: message.receiverId,
+        });
+      }
+    }
+
+    // Batch fetch true friendships
+    const pairsArray = Array.from(uniquePairsMap.values());
+    const validPairsSet = await friendshipRepository.getFriendshipsForPairs(pairsArray);
 
     for (const message of oldMessages) {
       const conversationId = getConversationId(message.senderId, message.receiverId);
       let areFriends = friendshipCache.get(conversationId);
 
       if (areFriends === undefined) {
-        areFriends = await this.areFriends(message.senderId, message.receiverId);
+        // Extract the normalized keys used by the batch fetch
+        const { userId1, userId2 } = normalizeUserPair(
+          message.senderId,
+          message.receiverId,
+        );
+        areFriends = validPairsSet.has(`${userId1}:${userId2}`);
         friendshipCache.set(conversationId, areFriends);
       }
 

@@ -3,6 +3,7 @@ import { Route, Switch, useLocation } from "wouter";
 import AboutPage from "@/pages/about-page";
 import AuthPage from "@/pages/auth-page";
 import ChatDashboard from "@/pages/chat-dashboard-page";
+import ChatHistoryPage from "@/pages/chat-history-page";
 import ContactPage from "@/pages/contact-page";
 import FeaturesPage from "@/pages/features-page";
 import GlobalChat from "@/pages/global-chat-page";
@@ -10,6 +11,7 @@ import HelpCenterPage from "@/pages/help-center-page";
 import LandingPage from "@/pages/landing-page";
 import NotFoundPage from "@/pages/not-found-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
+import RandomChatPage from "@/pages/random-chat-page";
 import TermsOfServicePage from "@/pages/terms-of-service-page";
 import { getAppLenis } from "@/lib/lenis";
 import { ProtectedRoute } from "./protected-route";
@@ -42,7 +44,9 @@ export function AppRouter() {
       <Switch>
         <Route path="/" component={LandingPage} />
         <ProtectedRoute path="/dashboard" component={ChatDashboard} />
+        <ProtectedRoute path="/history" component={ChatHistoryPage} />
         <ProtectedRoute path="/global-chat" component={GlobalChat} />
+        <ProtectedRoute path="/random-chat" component={RandomChatPage} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/help-center" component={HelpCenterPage} />
         <Route path="/features" component={FeaturesPage} />

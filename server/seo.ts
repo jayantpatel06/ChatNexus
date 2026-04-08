@@ -274,6 +274,18 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     sourceFiles: ["client/src/pages/chat-dashboard-page.tsx"],
   },
   {
+    path: "/history",
+    title: "History | ChatNexus",
+    description: "Protected conversation history inside ChatNexus.",
+    heading: "Chat History",
+    summary: [
+      "This area is part of the protected ChatNexus application experience.",
+    ],
+    robots: NOINDEX_ROBOTS,
+    indexable: false,
+    sourceFiles: ["client/src/pages/chat-history-page.tsx"],
+  },
+  {
     path: "/global-chat",
     title: "Global Chat | ChatNexus",
     description: "Protected global chat inside ChatNexus.",
@@ -284,6 +296,18 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     robots: NOINDEX_ROBOTS,
     indexable: false,
     sourceFiles: ["client/src/pages/global-chat-page.tsx"],
+  },
+  {
+    path: "/random-chat",
+    title: "Random Chat | ChatNexus",
+    description: "Protected random chat inside ChatNexus.",
+    heading: "Random Chat",
+    summary: [
+      "This area is part of the protected ChatNexus application experience.",
+    ],
+    robots: NOINDEX_ROBOTS,
+    indexable: false,
+    sourceFiles: ["client/src/pages/random-chat-page.tsx"],
   },
 ] as const;
 

@@ -7,7 +7,7 @@ import type {
 } from "@shared/schema";
 import { prisma } from "./prisma";
 
-const publicUserSelect = {
+export const publicUserSelect = {
   userId: true,
   username: true,
   age: true,
@@ -76,7 +76,9 @@ export const messageRepository = {
         },
       });
 
-      console.log(`[Storage] Persisted global message: ${createdMessage.id}`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Storage] Persisted global message: ${createdMessage.id}`);
+      }
       return createdMessage;
     } catch (error) {
       console.error("Error creating global message:", error);
@@ -339,16 +341,21 @@ export const messageRepository = {
           WHERE "conversation_id" IN (${Prisma.join(conversationIds)})
           ORDER BY "conversation_id", "timestamp" DESC, "msg_id" DESC
         `),
-        prisma.message.groupBy({
-          by: ["senderId"],
-          where: {
-            receiverId: userId,
-            senderId: { in: uniqueOtherUserIds },
-          },
-          _count: {
-            _all: true,
-          },
-        }),
+        prisma.$queryRaw<
+          Array<{
+            senderId: number;
+            unreadCount: Number;
+          }>
+        >(Prisma.sql`
+          SELECT m."sender_id" AS "senderId", COUNT(*)::int AS "unreadCount"
+          FROM "Messages" m
+          LEFT JOIN "ConversationReadStates" rs 
+            ON rs.user_id = m.receiver_id AND rs.other_user_id = m.sender_id
+          WHERE m.receiver_id = ${userId}
+            AND m.sender_id IN (${Prisma.join(uniqueOtherUserIds)})
+            AND m."timestamp" > COALESCE(rs.last_read_at, '1970-01-01'::timestamp)
+          GROUP BY m.sender_id
+        `),
       ]);
 
       const lastMessageByOtherUserId = new Map<number, Message>();
@@ -362,7 +369,7 @@ export const messageRepository = {
 
       const unreadCountByOtherUserId = new Map<number, number>();
       for (const unreadCount of unreadCounts) {
-        unreadCountByOtherUserId.set(unreadCount.senderId, unreadCount._count._all);
+        unreadCountByOtherUserId.set(unreadCount.senderId, Number(unreadCount.unreadCount));
       }
 
       for (const otherUserId of uniqueOtherUserIds) {

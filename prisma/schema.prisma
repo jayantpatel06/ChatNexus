@@ -27,6 +27,8 @@ model User {
   messageReactions MessageReaction[]
   blockedUsers     UserBlock[] @relation("UserBlocksBlocker")
   blockedByUsers   UserBlock[] @relation("UserBlocksBlocked")
+  readStatesOwned  ConversationReadState[] @relation("ReadStatesUser")
+  readStatesOther  ConversationReadState[] @relation("ReadStatesOtherUser")
 
   @@map("Users")
   @@index([isOnline])
@@ -124,6 +126,19 @@ model GlobalMessage {
 
   @@map("GlobalMessages")
   @@index([timestamp])
+}
+
+model ConversationReadState {
+  userId         Int      @map("user_id")
+  otherUserId    Int      @map("other_user_id")
+  lastReadAt     DateTime @default(now()) @map("last_read_at")
+
+  user           User     @relation("ReadStatesUser", fields: [userId], references: [userId], onDelete: Cascade)
+  otherUser      User     @relation("ReadStatesOtherUser", fields: [otherUserId], references: [userId], onDelete: Cascade)
+
+  @@id([userId, otherUserId])
+  @@index([userId])
+  @@map("ConversationReadStates")
 }
 
 model UserBlock {

@@ -54,7 +54,6 @@ const navigationItems: Array<{
     id: "random",
     label: "Random",
     icon: Shuffle,
-    disabled: true,
     testId: "button-tab-random",
   },
   {
