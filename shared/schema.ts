@@ -45,7 +45,7 @@ export const insertMessageSchema = z.object({
   receiverId: z.number(),
   conversationId: z.string().optional(),
   replyToId: z.number().int().positive().optional(),
-  message: z.string().min(1),
+  message: z.string().min(1).max(5000),
 });
 
 export const updateMessageSchema = z.object({
@@ -117,7 +117,7 @@ export type InsertAttachment = z.infer<typeof insertAttachmentSchema>;
 
 export const insertGlobalMessageSchema = z.object({
   senderId: z.number(),
-  message: z.string().min(1),
+  message: z.string().min(1).max(2000),
 });
 
 export type GlobalMessage = PrismaGlobalMessage;
