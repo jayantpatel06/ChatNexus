@@ -28,6 +28,7 @@ The project ships as a single deployable web application:
 - Image and video attachments in direct messages
 - GIF search in the composer when a Tenor API key is configured
 - Conversation history, unread state, and sidebar conversation summaries
+- Responsive multi-tab settings modal for profile editing, appearance controls, and blocked-user management
 - Help center workflow with persisted support request submissions
 - Responsive UI plus installable PWA support
 - SEO-friendly landing, features, about, contact, privacy, and terms pages

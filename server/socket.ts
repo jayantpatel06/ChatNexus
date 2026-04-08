@@ -517,43 +517,16 @@ async function endRandomChatForUser(
 
 function createPresenceBroadcaster(io: SocketIOServer) {
   let presenceBroadcastScheduled = false;
-  const pendingUserIds = new Set<number>();
 
   return async (changedUserId?: number) => {
-    if (changedUserId) {
-      pendingUserIds.add(changedUserId);
-    }
-
     if (presenceBroadcastScheduled) return;
     presenceBroadcastScheduled = true;
 
     setTimeout(async () => {
       try {
         presenceBroadcastScheduled = false;
-        const userIds = pendingUserIds.size > 0 ? new Set(pendingUserIds) : undefined;
-        pendingUserIds.clear();
-
-        if (userIds) {
-          // Get friends & conversation partners of the changed users
-          const affectedUserIds = new Set<number>(userIds);
-          for (const userId of userIds) {
-            const [friends, partners] = await Promise.all([
-              storage.getFriendUsers(userId),
-              storage.getConversationUsers(userId),
-            ]);
-            for (const f of friends) affectedUserIds.add(f.userId);
-            for (const p of partners) affectedUserIds.add(p.userId);
-          }
-
-          // Only emit to affected connected users
-          const connectedIds = getConnectedUserIds();
-          const targetIds = Array.from(affectedUserIds).filter((id) =>
-            connectedIds.has(id),
-          );
-          await emitSidebarUsers(io, targetIds);
-        } else {
-          await emitSidebarUsers(io);
-        }
+        void changedUserId;
+        await emitSidebarUsers(io);
       } catch (error) {
         console.error("Failed to broadcast sidebar users:", error);
       }
@@ -1118,7 +1091,7 @@ async function handleMarkConversationRead(
   if (!userId || !data?.otherUserId) return;
 
   await storage.markConversationAsRead(userId, data.otherUserId);
-  emitSidebarUsers(io, [userId]);
+  await emitSidebarUsers(io, [userId]);
 }
 
 async function handleDisconnect(

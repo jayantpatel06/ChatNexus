@@ -10,7 +10,7 @@ export const insertUserSchema = z.object({
   gmail: z.string().email().nullable().optional(),
   passwordHash: z.string().nullable().optional(),
   username: z.string().min(1).max(50),
-  age: z.number().min(13).max(120).nullable().optional(),
+  age: z.number().min(18).max(120).nullable().optional(),
   gender: z.string().max(10).nullable().optional(),
   isOnline: z.boolean().default(false).optional(),
   isGuest: z.boolean().default(false).optional(),
@@ -31,7 +31,7 @@ export const registerUserSchema = z.object({
   gmail: z.string().email(),
   password: z.string().min(6),
   username: z.string().min(1).max(50),
-  age: z.number().min(13).max(120),
+  age: z.number().min(18).max(120),
   gender: z.enum(["Male", "Female", "Other"]),
 });
 
