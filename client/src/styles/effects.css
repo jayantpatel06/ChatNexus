@@ -85,8 +85,8 @@ html {
   --brand-muted: #e1ebe4;
   --brand-border: rgba(143, 215, 255, 0.2);
   --brand-footer: #0f171b;
-  --brand-msg-sent: #8fd7ff;
-  --brand-msg-sent-text: #082126;
+  --brand-msg-sent: #3f91cf;
+  --brand-msg-sent-text: #000000;
   --brand-msg-received: #16262d;
   --brand-msg-received-text: #f6fbfb;
   --brand-grad-start: #8fd7ff;

@@ -122,7 +122,7 @@ export function ChatNavigationMenu({
     <nav
       className={cn(
         isRail
-          ? "flex h-full w-[58px] shrink-0 flex-col justify-between rounded-sm border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur"
+          ? "flex h-full w-[68px] shrink-0 flex-col justify-between border-r border-border bg-background px-1.5 py-2"
           : "flex items-center justify-between gap-1 rounded-[1.35rem] border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur",
         className,
       )}

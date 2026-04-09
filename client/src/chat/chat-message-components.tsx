@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,12 +29,14 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
-import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { sanitizeExternalUrl } from "./chat-message-utils";
 
 const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
 const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
 const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
+const BUBBLE_APPENDIX_PATH =
+  "M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z";
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "🙏"] as const;
 
 type PendingAttachment = {
@@ -84,18 +94,21 @@ function getStandaloneMediaMessageUrl(content: string): string | null {
 const MessageContent = ({
   content,
   onImagePreview,
+  metadata,
 }: {
   content: string;
   onImagePreview: (preview: ImagePreviewState) => void;
+  metadata?: ReactNode;
 }) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = content.split(urlRegex);
 
   return (
     <div
-      className="min-w-0 whitespace-pre-wrap break-words overflow-hidden"
+      className="relative block min-w-0 whitespace-pre-wrap break-words leading-[21px]"
       style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
     >
+      {metadata}
       {parts.map((part, index) => {
         if (!part.match(urlRegex)) {
           return <span key={index}>{part}</span>;
@@ -393,6 +406,54 @@ function VideoAttachmentCard({
   );
 }
 
+function BubbleAppendix({
+  isOwnMessage,
+  fillColor,
+}: {
+  isOwnMessage: boolean;
+  fillColor: string;
+}) {
+  const filterId = useId().replace(/:/g, "");
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 9 18"
+      className={cn(
+        "pointer-events-none absolute bottom-[-1px] h-[18px] w-[9px]",
+        isOwnMessage ? "right-[-9px]" : "left-[-9px]",
+      )}
+      style={isOwnMessage ? undefined : { transform: "scaleX(-1)" }}
+    >
+      <defs>
+        <filter
+          id={filterId}
+          x="-40%"
+          y="-30%"
+          width="180%"
+          height="180%"
+          colorInterpolationFilters="sRGB"
+        >
+          <feGaussianBlur in="SourceAlpha" stdDeviation="0.55" result="blur" />
+          <feOffset in="blur" dy="0.8" result="offset" />
+          <feComponentTransfer in="offset" result="shadow">
+            <feFuncA type="linear" slope="0.2" />
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode in="shadow" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <path
+        d={BUBBLE_APPENDIX_PATH}
+        fill={fillColor}
+        filter={`url(#${filterId})`}
+      />
+    </svg>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   isOwnMessage,
@@ -443,6 +504,15 @@ export const MessageBubble = memo(function MessageBubble({
   const canEdit =
     isOwnMessage && !isOptimistic && !isDeleted && Boolean(normalizedMessage);
   const canDelete = isOwnMessage && !isOptimistic && !isDeleted;
+  const bubbleFillColor = isOwnMessage
+    ? "var(--brand-msg-sent)"
+    : "var(--brand-msg-received)";
+  const bubbleTextClass = isOwnMessage
+    ? "text-brand-msg-sent-text"
+    : "text-brand-msg-received-text";
+  const bubbleShapeClass = isOwnMessage
+    ? "rounded-[15px] rounded-br-none"
+    : "rounded-[15px] rounded-bl-none";
 
   const groupedReactions = Array.from(
     reactions
@@ -477,10 +547,10 @@ export const MessageBubble = memo(function MessageBubble({
   };
 
   const renderInlineTimestamp = () => (
-    <div className="flex shrink-0 items-center gap-1 text-[11px] font-medium opacity-55">
+    <span className="relative top-[3px] float-right ml-[7px] mr-[-6px] inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-[21px] font-medium opacity-55">
       {message.editedAt && !message.deletedAt && <span>edited</span>}
       <span>{formatBubbleTime(message.timestamp)}</span>
-    </div>
+    </span>
   );
 
   const renderReplyPreview = () => {
@@ -561,23 +631,11 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
-      className={`message-bubble flex items-start gap-2 ${
+      className={`message-bubble flex items-start ${
         isOwnMessage ? "justify-end" : ""
       } ${isOptimistic ? "opacity-70" : ""}`}
       data-testid={`message-${message.msgId}`}
     >
-      {!isOwnMessage && (
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-black shadow-sm"
-          style={{
-            background: sender?.isGuest
-              ? "var(--brand-muted)"
-              : getAvatarColor(sender?.username || ""),
-          }}
-        >
-          {sender?.isGuest ? "G" : getUserInitials(sender?.username || "")}
-        </div>
-      )}
 
       <div
         className={`min-w-0 max-w-[75%] flex flex-col gap-1 sm:max-w-xs lg:max-w-md ${
@@ -713,25 +771,26 @@ export const MessageBubble = memo(function MessageBubble({
                   message.message !== "Sent an attachment") ||
                 message.replyTo ? (
                   <div
-                    className={`rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                      isOwnMessage
-                        ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                        : "bg-brand-msg-received text-brand-msg-received-text"
-                    }`}
+                    className={cn(
+                      "relative overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
+                      bubbleShapeClass,
+                      bubbleTextClass,
+                    )}
+                    style={{ backgroundColor: bubbleFillColor }}
                   >
                     {renderReplyPreview()}
                     {message.message &&
                       message.message !== "Sent an attachment" && (
-                        <div className="flex items-end gap-2">
-                          <div className="min-w-0 flex-1">
-                            <MessageContent
-                              content={message.message}
-                              onImagePreview={onImagePreview}
-                            />
-                          </div>
-                          {renderInlineTimestamp()}
-                        </div>
+                        <MessageContent
+                          content={message.message}
+                          onImagePreview={onImagePreview}
+                          metadata={renderInlineTimestamp()}
+                        />
                       )}
+                    <BubbleAppendix
+                      isOwnMessage={isOwnMessage}
+                      fillColor={bubbleFillColor}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -741,11 +800,16 @@ export const MessageBubble = memo(function MessageBubble({
                   className={
                     isMediaOnlyMessage
                       ? ""
-                      : `rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm ${
-                          isOwnMessage
-                            ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                            : "bg-brand-msg-received text-brand-msg-received-text"
-                        }`
+                      : cn(
+                          "relative overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
+                          bubbleShapeClass,
+                          bubbleTextClass,
+                        )
+                  }
+                  style={
+                    isMediaOnlyMessage
+                      ? undefined
+                      : { backgroundColor: bubbleFillColor }
                   }
                 >
                   {!isMediaOnlyMessage && renderReplyPreview()}
@@ -755,15 +819,17 @@ export const MessageBubble = memo(function MessageBubble({
                       onImagePreview={onImagePreview}
                     />
                   ) : (
-                    <div className="flex items-end gap-2">
-                      <div className="min-w-0 flex-1">
-                        <MessageContent
-                          content={normalizedMessage}
-                          onImagePreview={onImagePreview}
-                        />
-                      </div>
-                      {renderInlineTimestamp()}
-                    </div>
+                    <MessageContent
+                      content={normalizedMessage}
+                      onImagePreview={onImagePreview}
+                      metadata={renderInlineTimestamp()}
+                    />
+                  )}
+                  {!isMediaOnlyMessage && (
+                    <BubbleAppendix
+                      isOwnMessage={isOwnMessage}
+                      fillColor={bubbleFillColor}
+                    />
                   )}
                 </div>
               )

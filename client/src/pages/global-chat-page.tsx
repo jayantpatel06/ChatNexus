@@ -197,15 +197,15 @@ export default function GlobalChat() {
           robots="noindex, nofollow"
         />
         <div
-          className="flex h-screen overflow-hidden bg-brand-bg text-brand-text"
+          className="flex h-screen overflow-hidden bg-background text-foreground"
           data-testid="global-chat-desktop-layout"
         >
           <UsersSidebar
             selectedUser={null}
             onUserSelect={handlePrivateUserSelect}
           />
-          <div className="flex min-w-0 flex-1 pr-2 pt-2 pb-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+          <div className="flex min-w-0 flex-1">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {/* Chat Header */}
             <div className="z-40 flex flex-shrink-0 items-center justify-between border-b border-border/70 bg-card p-2.5">
               <div className="flex items-center gap-3">

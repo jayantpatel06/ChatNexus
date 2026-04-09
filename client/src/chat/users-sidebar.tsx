@@ -549,8 +549,8 @@ export function UsersSidebar({
   };
 
   return (
-    <div className="h-full w-full overflow-hidden bg-background md:w-[28rem] md:bg-muted/10 md:p-2">
-      <div className="flex h-full w-full overflow-hidden bg-background md:gap-2 md:bg-transparent">
+    <div className="h-full w-full overflow-hidden bg-background md:w-[28rem] md:shrink-0 md:border-r md:border-border">
+      <div className="flex h-full w-full overflow-hidden bg-background">
         <div className="hidden md:flex md:shrink-0">
           <ChatNavigationMenu
             activeItem={activeNavigationItem}
@@ -560,7 +560,7 @@ export function UsersSidebar({
           />
         </div>
 
-        <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden md:rounded-sm md:border md:border-border/70 md:bg-card md:shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+        <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
           <div className=" px-3 pb-2 pt-2 md:px-3 md:pb-2 md:pt-2">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">

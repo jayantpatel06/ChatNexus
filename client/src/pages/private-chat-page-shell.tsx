@@ -102,7 +102,7 @@ function PrivateChatPageShellContent({
             robots="noindex, nofollow"
           />
           <div
-            className="flex h-[100dvh] flex-col overflow-hidden bg-brand-bg"
+            className="flex h-[100dvh] flex-col overflow-hidden bg-background"
             data-testid={testId}
           >
             <ChatArea
@@ -123,7 +123,7 @@ function PrivateChatPageShellContent({
           path={path}
           robots="noindex, nofollow"
         />
-        <div className="h-[100dvh] bg-brand-bg" data-testid={testId}>
+        <div className="h-[100dvh] bg-background" data-testid={testId}>
           <UsersSidebar
             selectedUser={selectedUser}
             onUserSelect={onUserSelect}
@@ -143,7 +143,7 @@ function PrivateChatPageShellContent({
         robots="noindex, nofollow"
       />
       <div
-        className="flex h-screen bg-brand-bg text-brand-text"
+        className="flex h-screen overflow-hidden bg-background text-foreground"
         data-testid={testId}
       >
         <UsersSidebar

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { Fragment, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { getStoredToken } from "@/lib/queryClient";
@@ -22,10 +22,11 @@ import {
   Send,
   ArrowLeft,
   Loader2,
+  Trash2,
   UserMinus,
   X,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { NewMessageIndicator } from "./new-message-indicator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useActiveChat } from "./use-active-chat";
@@ -76,6 +77,8 @@ const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ATTACHMENT_INPUT_ACCEPT = "image/*,video/mp4,video/webm";
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const IS_DEV = import.meta.env.DEV;
+const BUBBLE_APPENDIX_PATH =
+  "M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z";
 
 function isUploadableAttachmentType(fileType: string): boolean {
   return (
@@ -148,6 +151,20 @@ function getReplyPreviewText(message: Message | null | undefined): string {
   }
 
   return replyMessage;
+}
+
+function getTimelineDatePillLabel(timestamp: number): string {
+  const date = new Date(timestamp);
+
+  if (isToday(date)) {
+    return "Today";
+  }
+
+  if (isYesterday(date)) {
+    return "Yesterday";
+  }
+
+  return format(date, "MMMM d, yyyy");
 }
 
 function toggleReactionForMessage(
@@ -1073,6 +1090,8 @@ export function ChatArea({
 
     return items.sort((a, b) => a.timestamp - b.timestamp);
   }, [displayedMessages, pendingFriendRequest, pendingFriendRequestDirection]);
+  const showEmptyConversationState =
+    timelineItems.length === 0 && !typingUsers.has(selectedUser?.userId ?? -1);
 
   // Smart scroll - only scroll to bottom for new messages, not when loading history
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -1940,20 +1959,30 @@ export function ChatArea({
     [handleToggleReaction, user],
   );
 
-  const addFriendMenuLabel = friendshipStatusQuery.data?.isFriend
-    ? "Already friends"
-    : friendshipStatusQuery.data?.pendingDirection === "outgoing"
-      ? "Request sent"
-      : friendshipStatusQuery.data?.pendingDirection === "incoming"
-        ? "Respond in chat"
-        : addFriendMutation.isPending
-          ? "Sending request..."
-          : "Add friend";
-
+  const isFriend = friendshipStatusQuery.data?.isFriend ?? false;
+  const pendingDirection = friendshipStatusQuery.data?.pendingDirection ?? null;
   const isChatBlocked = friendshipStatusQuery.data?.isBlocked ?? false;
   const isBlockedByMe = friendshipStatusQuery.data?.blockedByMe ?? false;
   const isBlockedByUser = friendshipStatusQuery.data?.blockedByUser ?? false;
   const selectedUsername = selectedUser?.username ?? "this user";
+  const friendshipActionLabel = removeFriendMutation.isPending
+    ? "Removing Friend..."
+    : addFriendMutation.isPending
+      ? "Sending Request..."
+      : isFriend
+        ? "Remove Friend"
+        : pendingDirection === "outgoing"
+          ? "Request Sent"
+          : pendingDirection === "incoming"
+            ? "Respond in Chat"
+            : "Add Friend";
+  const isFriendshipActionDisabled =
+    friendshipStatusQuery.isLoading ||
+    addFriendMutation.isPending ||
+    removeFriendMutation.isPending ||
+    isChatBlocked ||
+    pendingDirection === "incoming" ||
+    pendingDirection === "outgoing";
   const blockedNotice = isBlockedByMe
     ? `You blocked ${selectedUsername}.`
     : isBlockedByUser
@@ -1973,6 +2002,15 @@ export function ChatArea({
   const handleRemoveFriend = () => {
     if (!selectedUser) return;
     setConfirmDialogAction("removeFriend");
+  };
+
+  const handleFriendshipAction = () => {
+    if (isFriend) {
+      handleRemoveFriend();
+      return;
+    }
+
+    handleAddFriend();
   };
 
   const handleBlockUser = () => {
@@ -2053,16 +2091,16 @@ export function ChatArea({
     }
 
     return (
-      <div className="flex min-w-0 flex-1 pr-2 pt-2 pb-2">
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+      <div className="flex min-w-0 flex-1">
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
           <div className="relative flex h-full flex-col">
             <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
-              <div className="w-full max-w-3xl rounded-[2rem]  p-8 text-center shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur lg:p-10">
+              <div className="w-full max-w-3xl p-8 text-center lg:p-10">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
                   <Send className="h-8 w-8" />
                 </div>
-                <p className="text-xl font-semibold tracking-tight text-foreground">
+                <p className="text-xl font-semibold tracking-tight text-foreground mt-6">
                   Select a chat to start messaging
                 </p>
               </div>
@@ -2157,7 +2195,7 @@ export function ChatArea({
           "relative flex-1",
           isMobile
             ? "flex h-full flex-col overflow-hidden"
-            : "flex min-w-0 overflow-hidden pr-2 pt-2 pb-2",
+            : "flex min-w-0 overflow-hidden",
         )}
       >
         <div
@@ -2165,7 +2203,7 @@ export function ChatArea({
             "flex min-h-0 flex-1 flex-col overflow-hidden",
             isMobile
               ? "h-full bg-background"
-              : "rounded-sm border border-border/70 bg-background shadow-[0_24px_60px_rgba(15,23,42,0.12)]",
+              : "bg-background",
           )}
         >
           {/* Chat Header */}
@@ -2281,33 +2319,15 @@ export function ChatArea({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    onClick={handleAddFriend}
-                    disabled={
-                      addFriendMutation.isPending ||
-                      friendshipStatusQuery.isLoading ||
-                      isChatBlocked ||
-                      !!friendshipStatusQuery.data?.isFriend ||
-                      friendshipStatusQuery.data?.pendingDirection ===
-                        "incoming" ||
-                      friendshipStatusQuery.data?.pendingDirection ===
-                        "outgoing"
-                    }
+                    onClick={handleFriendshipAction}
+                    disabled={isFriendshipActionDisabled}
                   >
-                    <Heart className="mr-2 h-4 w-4" />
-                    {addFriendMenuLabel}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleRemoveFriend}
-                    disabled={
-                      removeFriendMutation.isPending ||
-                      !friendshipStatusQuery.data?.isFriend ||
-                      isChatBlocked
-                    }
-                  >
-                    <UserMinus className="mr-2 h-4 w-4" />
-                    {removeFriendMutation.isPending
-                      ? "Removing friend..."
-                      : "Remove friend"}
+                    {isFriend ? (
+                      <UserMinus className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Heart className="mr-2 h-4 w-4" />
+                    )}
+                    {friendshipActionLabel}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={
@@ -2331,6 +2351,7 @@ export function ChatArea({
                     onClick={handleClearAttachments}
                     disabled={clearAttachmentsMutation.isPending}
                   >
+                    <ImageIcon className="mr-2 h-4 w-4" />
                     {clearAttachmentsMutation.isPending
                       ? "Clearing attachments..."
                       : "Clear attachments"}
@@ -2339,6 +2360,7 @@ export function ChatArea({
                     onClick={handleClearChat}
                     disabled={clearChatMutation.isPending}
                   >
+                    <Trash2 className="mr-2 h-4 w-4" />
                     {clearChatMutation.isPending
                       ? "Clearing chat..."
                       : "Clear chat"}
@@ -2351,7 +2373,7 @@ export function ChatArea({
           {/* Messages Area */}
           <div
             ref={messagesContainerRef}
-            className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background p-4 scrollbar-none overscroll-contain md:px-6 md:py-5"
+            className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background px-4 py-4 scrollbar-none overscroll-contain md:px-8 md:py-5"
             onScroll={handleScroll}
             role="log"
             aria-live="polite"
@@ -2381,73 +2403,140 @@ export function ChatArea({
               </div>
             )}
 
-            
-            {timelineItems.map((item) => {
-              if (item.type === "friendRequest") {
-                return (
-                  <FriendRequestCard
-                    key={`friend-request-${item.request.id}`}
-                    request={item.request}
-                    direction={item.direction}
-                    otherUsername={selectedUser.username}
-                    isPendingAction={respondToFriendRequestMutation.isPending}
-                    onAccept={handleAcceptFriendRequest}
-                    onReject={handleRejectFriendRequest}
-                  />
-                );
-              }
+            {showEmptyConversationState && (
+              <div className="flex min-h-full items-center justify-center py-6">
+                <div className="relative w-full max-w-[21rem] overflow-hidden rounded-[2rem] border border-white/5 bg-muted px-6 py-6 text-center shadow-[0_30px_80px_rgba(2,6,23,0.32)]">
+                  <div className="absolute inset-x-10 top-0 h-24 rounded-full bg-white/8 blur-3xl" />
+                  <div className="relative">
+                    <h3 className="text-[1rem] font-semibold tracking-tight text-white">
+                      No messages here yet
+                    </h3>
+                    <p className="mt-3 text-[.8rem] text-white/90">
+                      Send a message and Start the conversation with {selectedUser.username}!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              const message = item.message;
-              const isOwnMessage = message.senderId === user?.userId;
-              const sender = isOwnMessage ? user : selectedUser;
-              const isOptimistic = (message as OptimisticMessage).isOptimistic;
-              const pendingAttachment = (message as OptimisticMessage)
-                .clientMessageId
-                ? pendingAttachments.find(
-                    (p) =>
-                      p.id === (message as OptimisticMessage).clientMessageId,
-                  )
+            {timelineItems.map((item, index) => {
+              const previousItem = timelineItems[index - 1];
+              const currentDateKey = format(
+                new Date(item.timestamp),
+                "yyyy-MM-dd",
+              );
+              const previousDateKey = previousItem
+                ? format(new Date(previousItem.timestamp), "yyyy-MM-dd")
                 : null;
+              const shouldShowDatePill = currentDateKey !== previousDateKey;
+              const itemKey =
+                item.type === "friendRequest"
+                  ? `friend-request-${item.request.id}`
+                  : String(
+                      (item.message as OptimisticMessage).clientMessageId ||
+                        item.message.msgId,
+                    );
 
               return (
-                <MessageBubble
-                  key={
-                    (message as OptimisticMessage).clientMessageId ||
-                    message.msgId
-                  }
-                  message={message}
-                  isOwnMessage={isOwnMessage}
-                  sender={sender}
-                  currentUserId={user?.userId ?? null}
-                  isOptimistic={isOptimistic}
-                  pendingAttachment={pendingAttachment}
-                  onImagePreview={setImagePreview}
-                  onReply={handleReplyToMessage}
-                  onEdit={handleEditMessageStart}
-                  onDelete={handleDeleteSingleMessage}
-                  onReact={handleToggleReactionSafe}
-                  onKeepComposerFocus={focusMessageInput}
-                />
+                <Fragment key={itemKey}>
+                  {shouldShowDatePill && (
+                    <div className="flex justify-center py-2">
+                      <span className="inline-flex items-center rounded-full border border-border/60 bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+                        {getTimelineDatePillLabel(item.timestamp)}
+                      </span>
+                    </div>
+                  )}
+
+                  {item.type === "friendRequest" ? (
+                    <FriendRequestCard
+                      request={item.request}
+                      direction={item.direction}
+                      otherUsername={selectedUser.username}
+                      isPendingAction={respondToFriendRequestMutation.isPending}
+                      onAccept={handleAcceptFriendRequest}
+                      onReject={handleRejectFriendRequest}
+                    />
+                  ) : (
+                    <MessageBubble
+                      message={item.message}
+                      isOwnMessage={item.message.senderId === user?.userId}
+                      sender={
+                        item.message.senderId === user?.userId
+                          ? user
+                          : selectedUser
+                      }
+                      currentUserId={user?.userId ?? null}
+                      isOptimistic={
+                        (item.message as OptimisticMessage).isOptimistic
+                      }
+                      pendingAttachment={
+                        (item.message as OptimisticMessage).clientMessageId
+                          ? pendingAttachments.find(
+                              (p) =>
+                                p.id ===
+                                (item.message as OptimisticMessage)
+                                  .clientMessageId,
+                            )
+                          : null
+                      }
+                      onImagePreview={setImagePreview}
+                      onReply={handleReplyToMessage}
+                      onEdit={handleEditMessageStart}
+                      onDelete={handleDeleteSingleMessage}
+                      onReact={handleToggleReactionSafe}
+                      onKeepComposerFocus={focusMessageInput}
+                    />
+                  )}
+                </Fragment>
               );
             })}
 
             {/* Typing Indicator */}
             {typingUsers.has(selectedUser.userId) && (
-              <div className="flex items-start gap-3 message-bubble">
-                <div
-                  className={`w-8 h-8 ${selectedUser.isGuest ? "bg-gray-500" : `bg-gradient-to-br ${getAvatarColor(selectedUser.username)}`} text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
-                >
-                  {selectedUser.isGuest
-                    ? "G"
-                    : getUserInitials(selectedUser.username)}
-                </div>
+              <div className="flex items-start message-bubble">
                 <div className="flex flex-col gap-1 max-w-xs lg:max-w-md">
-                  <div className="bg-card border border-border rounded-lg rounded-tl-none p-3 shadow-sm">
+                  <div className="relative overflow-visible rounded-[15px] rounded-bl-none bg-brand-msg-received p-3 text-brand-msg-received-text shadow-sm">
                     <div className="flex items-center gap-1">
                       <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
                       <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-75"></div>
                       <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce delay-150"></div>
                     </div>
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 9 18"
+                      className="pointer-events-none absolute bottom-[-1px] left-[-9px] h-[18px] w-[9px]"
+                      style={{ transform: "scaleX(-1)" }}
+                    >
+                      <defs>
+                        <filter
+                          id="typing-bubble-appendix-shadow"
+                          x="-40%"
+                          y="-30%"
+                          width="180%"
+                          height="180%"
+                          colorInterpolationFilters="sRGB"
+                        >
+                          <feGaussianBlur
+                            in="SourceAlpha"
+                            stdDeviation="0.55"
+                            result="blur"
+                          />
+                          <feOffset in="blur" dy="0.8" result="offset" />
+                          <feComponentTransfer in="offset" result="shadow">
+                            <feFuncA type="linear" slope="0.2" />
+                          </feComponentTransfer>
+                          <feMerge>
+                            <feMergeNode in="shadow" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <path
+                        d={BUBBLE_APPENDIX_PATH}
+                        fill="var(--brand-msg-received)"
+                        filter="url(#typing-bubble-appendix-shadow)"
+                      />
+                    </svg>
                   </div>
                 </div>
               </div>
@@ -2581,7 +2670,7 @@ export function ChatArea({
                     accept="image/*"
                     capture="environment"
                   />
-                  <div className="relative rounded-[1rem] border bg-card border-border bg-input/70 px-6 shadow-sm">
+                  <div className="relative rounded-[1rem] border bg-card border-border bg-card px-6 shadow-sm">
                     {(replyTarget || editTarget) && (
                       <div className="flex items-start justify-between gap-3 border-b border-border/70 py-3">
                         <div className="min-w-0">
@@ -2622,7 +2711,7 @@ export function ChatArea({
                           : `Message ${selectedUser.username}`
                       }
                       className={cn(
-                        "min-h-[40px] max-h-32 rounded-none border-0 bg-transparent px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+                        "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
                         hasDraftText || editTarget ? "pr-12" : "pr-20 sm:pr-24",
                       )}
                       rows={1}
