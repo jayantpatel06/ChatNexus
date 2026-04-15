@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   Globe,
-  History,
+  LogOut,
   MessageCircle,
   Settings,
   Shuffle,
@@ -9,10 +9,10 @@ import {
 
 export type ChatNavigationItem =
   | "chat"
-  | "history"
   | "global"
   | "random"
-  | "settings";
+  | "settings"
+  | "logout";
 export const CHAT_DASHBOARD_NAVIGATION_EVENT =
   "chatnexus-dashboard-navigation";
 
@@ -39,12 +39,6 @@ const navigationItems: Array<{
     testId: "button-tab-private",
   },
   {
-    id: "history",
-    label: "History",
-    icon: History,
-    testId: "button-menu-history",
-  },
-  {
     id: "global",
     label: "Global",
     icon: Globe,
@@ -61,6 +55,12 @@ const navigationItems: Array<{
     label: "Settings",
     icon: Settings,
     testId: "button-menu-settings",
+  },
+  {
+    id: "logout",
+    label: "Logout",
+    icon: LogOut,
+    testId: "button-menu-logout",
   },
 ];
 
@@ -83,9 +83,15 @@ export function ChatNavigationMenu({
   className,
 }: ChatNavigationMenuProps) {
   const isRail = variant === "rail";
-  const primaryRailItems = navigationItems.filter((item) => item.id !== "settings");
-  const footerRailItems = navigationItems.filter((item) => item.id === "settings");
-  const itemsToRender = isRail ? primaryRailItems : navigationItems;
+  const primaryRailItems = navigationItems.filter(
+    (item) => item.id !== "settings" && item.id !== "logout",
+  );
+  const footerRailItems = navigationItems.filter(
+    (item) => item.id === "settings" || item.id === "logout",
+  );
+  const itemsToRender = isRail
+    ? primaryRailItems
+    : navigationItems.filter((item) => item.id !== "logout");
   const getButtonClasses = (isActive: boolean, disabled?: boolean) =>
     cn(
       "group relative overflow-hidden transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",

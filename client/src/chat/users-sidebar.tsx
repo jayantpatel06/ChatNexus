@@ -17,7 +17,7 @@ import { apiRequest, readJsonResponse } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
-import { Search, Filter, LogOut, Loader2 } from "lucide-react";
+import { Search, Filter, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useSocket } from "@/providers/socket-provider";
 import {
@@ -96,6 +96,7 @@ interface UsersSidebarProps {
   selectedUser: User | null;
   onUserSelect: (user: User) => void;
   mode?: UsersSidebarMode;
+  onModeChange?: (mode: UsersSidebarMode) => void;
 }
 
 function getSidebarMessagePreview(message: unknown): string {
@@ -146,6 +147,7 @@ export function UsersSidebar({
   selectedUser,
   onUserSelect,
   mode = "chat",
+  onModeChange,
 }: UsersSidebarProps) {
   const { user, logoutMutation } = useAuth();
   const [location, setLocation] = useLocation();
@@ -452,18 +454,19 @@ export function UsersSidebar({
 
   const onlineCount = displayUsers.filter((u) => u.isOnline).length;
   const hasActiveFilters =
-    appliedFilters.friendsOnly || appliedFilters.gender !== "all";
+    appliedFilters.friendsOnly ||
+    appliedFilters.gender !== "all" ||
+    mode === "history";
+  const isHistoryMode = mode === "history";
   const isFriendFilterLoading =
     appliedFilters.friendsOnly &&
     friendshipStatusBatchQuery.isPending;
   const activeNavigationItem: ChatNavigationItem =
     location === "/global-chat"
       ? "global"
-      : location === "/history"
-        ? "history"
-        : location === "/random-chat"
+      : location === "/random-chat"
           ? "random"
-        : "chat";
+          : "chat";
 
   useEffect(() => {
     if (!selectedUser) {
@@ -516,6 +519,10 @@ export function UsersSidebar({
     }));
   };
 
+  const handleHistoryFilterToggle = () => {
+    onModeChange?.(mode === "history" ? "chat" : "history");
+  };
+
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random") {
       if (location !== "/random-chat") {
@@ -529,16 +536,14 @@ export function UsersSidebar({
       return;
     }
 
-    if (item === "global") {
-      if (location !== "/global-chat") {
-        setLocation("/global-chat");
-      }
+    if (item === "logout") {
+      handleLogout();
       return;
     }
 
-    if (item === "history") {
-      if (location !== "/history") {
-        setLocation("/history");
+    if (item === "global") {
+      if (location !== "/global-chat") {
+        setLocation("/global-chat");
       }
       return;
     }
@@ -569,44 +574,30 @@ export function UsersSidebar({
                 </h3>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium shadow-sm",
-                    isConnected
-                      ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                      : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
-                  )}
-                  data-testid="text-online-count"
-                >
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span
-                      className={cn(
-                        "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
-                        isConnected ? "bg-emerald-500" : "bg-rose-500",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "relative inline-flex h-2.5 w-2.5 rounded-full",
-                        isConnected ? "bg-emerald-500" : "bg-rose-500",
-                      )}
-                    />
-                  </span>
-                  <span>{onlineCount} online</span>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  title="Logout"
-                  aria-label="Logout"
-                  data-testid="button-logout"
-                  className="h-11 w-11 rounded-full  text-muted-foreground shadow-[0_12px_28px_rgba(15,23,42,0.08)] hover:bg-accent hover:text-foreground"
-                >
-                  <LogOut className="h-6 w-6" />
-                </Button>
+              <div
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium shadow-sm",
+                  isConnected
+                    ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+                    : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
+                )}
+                data-testid="text-online-count"
+              >
+                <span className="relative flex h-2.5 w-2.5">
+                  <span
+                    className={cn(
+                      "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
+                      isConnected ? "bg-emerald-500" : "bg-rose-500",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "relative inline-flex h-2.5 w-2.5 rounded-full",
+                      isConnected ? "bg-emerald-500" : "bg-rose-500",
+                    )}
+                  />
+                </span>
+                <span>{onlineCount} online</span>
               </div>
             </div>
 
@@ -679,20 +670,34 @@ export function UsersSidebar({
               >
                 Friends
               </button>
+              <button
+                type="button"
+                onClick={handleHistoryFilterToggle}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  mode === "history"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+                data-testid="button-pill-history"
+                aria-pressed={mode === "history"}
+              >
+                History
+              </button>
             </div>
 
             <div className="space-y-2" role="listbox" aria-label="Available chats">
               {displayUsers.length === 0 ? (
                 <div className="rounded-[1.5rem] px-4 py-10 text-center text-sm ">
-                  {mode === "history" && historyUsersQuery.isPending
+                  {isHistoryMode && historyUsersQuery.isPending
                     ? "Loading conversations..."
-                    : mode === "history" && historyUsersQuery.isError
+                    : isHistoryMode && historyUsersQuery.isError
                       ? "Failed to load conversations"
                       : isFriendFilterLoading
                     ? "Loading friends..."
                     : searchTerm || hasActiveFilters
                       ? "No users found"
-                      : mode === "history"
+                      : isHistoryMode
                         ? "No conversations yet"
                         : "No users available"}
                 </div>

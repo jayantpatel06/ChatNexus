@@ -8,10 +8,9 @@ import { publicUserSchema, type User } from "@shared/schema";
 
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
-type PrivateChatPageMode = "chat" | "history";
+export type PrivateChatPageMode = "chat" | "history";
 
 type PrivateChatPageShellProps = {
-  mode: PrivateChatPageMode;
   title: string;
   description: string;
   path: string;
@@ -19,13 +18,13 @@ type PrivateChatPageShellProps = {
 };
 
 export function PrivateChatPageShell({
-  mode,
   title,
   description,
   path,
   testId,
 }: PrivateChatPageShellProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [mode, setMode] = useState<PrivateChatPageMode>("chat");
 
   const handleUserSelect = (user: User) => {
     setSelectedUser(user);
@@ -39,6 +38,7 @@ export function PrivateChatPageShell({
     <ActiveChatProvider>
       <PrivateChatPageShellContent
         mode={mode}
+        onModeChange={setMode}
         title={title}
         description={description}
         path={path}
@@ -53,6 +53,7 @@ export function PrivateChatPageShell({
 
 function PrivateChatPageShellContent({
   mode,
+  onModeChange,
   title,
   description,
   path,
@@ -61,6 +62,8 @@ function PrivateChatPageShellContent({
   onUserSelect,
   onBack,
 }: PrivateChatPageShellProps & {
+  mode: PrivateChatPageMode;
+  onModeChange: (mode: PrivateChatPageMode) => void;
   selectedUser: User | null;
   onUserSelect: (user: User) => void;
   onBack: () => void;
@@ -128,6 +131,7 @@ function PrivateChatPageShellContent({
             selectedUser={selectedUser}
             onUserSelect={onUserSelect}
             mode={mode}
+            onModeChange={onModeChange}
           />
         </div>
       </>
@@ -150,6 +154,7 @@ function PrivateChatPageShellContent({
           selectedUser={selectedUser}
           onUserSelect={onUserSelect}
           mode={mode}
+          onModeChange={onModeChange}
         />
         <ChatArea
           selectedUser={selectedUser}

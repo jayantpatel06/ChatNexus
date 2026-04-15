@@ -510,13 +510,6 @@ export default function RandomChatPage() {
       return;
     }
 
-    if (item === "history") {
-      if (location !== "/history") {
-        setLocation("/history");
-      }
-      return;
-    }
-
     if (item === "global") {
       if (location !== "/global-chat") {
         setLocation("/global-chat");
