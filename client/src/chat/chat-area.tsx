@@ -67,7 +67,10 @@ import EmojiPicker, {
   Theme as EmojiPickerTheme,
 } from "emoji-picker-react";
 import { GifPicker } from "./gif-picker";
-import { stripConversationAttachments } from "./chat-message-utils";
+import {
+  getReplyPreviewText,
+  stripConversationAttachments,
+} from "./chat-message-utils";
 import { FriendRequestCard, MessageBubble } from "./chat-message-components";
 
 const getMessageHistoryQueryKey = (userId: number) =>
@@ -77,6 +80,8 @@ const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ATTACHMENT_INPUT_ACCEPT = "image/*,video/mp4,video/webm";
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const IS_DEV = import.meta.env.DEV;
+const EXACT_BOTTOM_THRESHOLD_PX = 24;
+const AUTO_SCROLL_NEAR_BOTTOM_THRESHOLD_PX = 160;
 const BUBBLE_APPENDIX_PATH =
   "M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z";
 
@@ -135,24 +140,6 @@ function invalidateConversationStatsQueries() {
   });
 }
 
-function getReplyPreviewText(message: Message | null | undefined): string {
-  if (!message) {
-    return "";
-  }
-
-  if (message.deletedAt) {
-    return "Message deleted";
-  }
-
-  const replyMessage = message.message?.trim() ?? "";
-  if (!replyMessage || replyMessage === "Sent an attachment") {
-    const attachments = message.attachments ?? [];
-    return attachments.length > 0 ? "Attachment" : "Message";
-  }
-
-  return replyMessage;
-}
-
 function getTimelineDatePillLabel(timestamp: number): string {
   const date = new Date(timestamp);
 
@@ -165,6 +152,10 @@ function getTimelineDatePillLabel(timestamp: number): string {
   }
 
   return format(date, "MMMM d, yyyy");
+}
+
+function getDistanceFromBottom(container: HTMLDivElement): number {
+  return container.scrollHeight - container.scrollTop - container.clientHeight;
 }
 
 function toggleReactionForMessage(
@@ -288,6 +279,7 @@ export function ChatArea({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageIndicator, setShowNewMessageIndicator] = useState(false);
   const userSentMessageRef = useRef(false); // Track if user just sent a message
+  const isNearBottomRef = useRef(true);
 
   // Pending attachments for upload preview
   const [pendingAttachments, setPendingAttachments] = useState<
@@ -699,10 +691,6 @@ export function ChatArea({
       setEditTarget(null);
       setMessageText("");
       messageTextRef.current = "";
-      toast({
-        title: "Message updated",
-        description: "Your message has been edited.",
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -1095,9 +1083,20 @@ export function ChatArea({
 
   // Smart scroll - only scroll to bottom for new messages, not when loading history
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    const container = messagesContainerRef.current;
+
+    if (container) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior,
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+
     setShowNewMessageIndicator(false);
     setIsAtBottom(true);
+    isNearBottomRef.current = true;
   }, []);
 
   // Track scroll position to determine if user is at bottom (Instagram-style)
@@ -1105,15 +1104,16 @@ export function ChatArea({
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    // Consider "at bottom" if within 150px of the bottom
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const atBottom = distanceFromBottom < 150;
+    const distanceFromBottom = getDistanceFromBottom(container);
+    const atBottom = distanceFromBottom <= EXACT_BOTTOM_THRESHOLD_PX;
+    const isNearBottom =
+      distanceFromBottom <= AUTO_SCROLL_NEAR_BOTTOM_THRESHOLD_PX;
 
     setIsAtBottom(atBottom);
+    isNearBottomRef.current = isNearBottom;
 
     // Hide new message indicator when user scrolls to bottom
-    if (atBottom) {
+    if (isNearBottom) {
       setShowNewMessageIndicator(false);
     }
   }, []);
@@ -1147,6 +1147,12 @@ export function ChatArea({
   const prevLastMessageIdRef = useRef<number | null>(null);
 
   useEffect(() => {
+    isNearBottomRef.current = true;
+    setIsAtBottom(true);
+    setShowNewMessageIndicator(false);
+  }, [selectedUser?.userId]);
+
+  useEffect(() => {
     const currentCount = displayedMessages.length;
     const prevCount = prevMessageCountRef.current;
     const lastMessage = displayedMessages[displayedMessages.length - 1];
@@ -1168,28 +1174,22 @@ export function ChatArea({
         }, 50);
       });
     } else if (isNewMessage) {
-      // New message received or sent
-      const isOwnMessage = lastMessage?.senderId === user?.userId;
+      const shouldAutoScroll = isNearBottomRef.current;
 
-      if (userSentMessageRef.current || isOwnMessage) {
-        // User sent a message - always scroll to bottom (Instagram behavior)
-        // Use slight delay to ensure message is rendered
+      if (shouldAutoScroll) {
         requestAnimationFrame(() => {
-          scrollToBottom("smooth");
+          scrollToBottom(userSentMessageRef.current ? "smooth" : "auto");
         });
-        userSentMessageRef.current = false;
-      } else if (isAtBottom) {
-        // Received message while at bottom - auto scroll smoothly
-        scrollToBottom("smooth");
       } else {
-        // Received message while scrolled up - show indicator (Instagram behavior)
         setShowNewMessageIndicator(true);
       }
+
+      userSentMessageRef.current = false;
     }
 
     prevMessageCountRef.current = currentCount;
     prevLastMessageIdRef.current = lastMessageId;
-  }, [displayedMessages, scrollToBottom, isAtBottom, user?.userId]);
+  }, [displayedMessages, scrollToBottom]);
 
   // Auto-scroll when typing indicator appears (so user can see it)
   useEffect(() => {
@@ -2373,7 +2373,7 @@ export function ChatArea({
           {/* Messages Area */}
           <div
             ref={messagesContainerRef}
-            className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background px-4 py-4 scrollbar-none overscroll-contain md:px-8 md:py-5"
+            className="relative min-h-0 flex-1 overflow-y-auto space-y-1.5 bg-background px-4 -mb-1 scrollbar-none overscroll-contain md:px-8"
             onScroll={handleScroll}
             role="log"
             aria-live="polite"
@@ -2553,7 +2553,7 @@ export function ChatArea({
           <div
             className="relative overflow-visible bg-card-muted flex-shrink-0"
             style={{
-              paddingBottom: "6px",
+              paddingBottom: "2px",
             }}
           >
             <AnimatePresence initial={false}>
@@ -2648,7 +2648,7 @@ export function ChatArea({
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="p-2 md:pb-1">
+            <div className="px-2 pt-2 pb-1 md:pb-1">
               {isChatBlocked ? (
                 <div className="rounded-[1rem] border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                   {blockedNotice}
@@ -2677,7 +2677,13 @@ export function ChatArea({
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             {editTarget ? "Editing message" : "Replying to"}
                           </p>
-                          <p className="truncate text-sm text-foreground">
+                          <p
+                            className="min-w-0 whitespace-pre-wrap break-words text-sm text-foreground"
+                            style={{
+                              wordBreak: "break-word",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
                             {getReplyPreviewText(editTarget ?? replyTarget)}
                           </p>
                         </div>
@@ -2712,7 +2718,9 @@ export function ChatArea({
                       }
                       className={cn(
                         "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                        hasDraftText || editTarget ? "pr-12" : "pr-20 sm:pr-24",
+                        hasDraftText || editTarget
+                          ? "pr-12"
+                          : "pl-6 pr-14 sm:pr-16",
                       )}
                       rows={1}
                       value={messageText}
@@ -2721,6 +2729,24 @@ export function ChatArea({
                       onFocus={handleInputFocus}
                       data-testid="textarea-message-input"
                     />
+                    {!hasDraftText && !editTarget && (
+                      <div className="absolute bottom-2 left-1.5 flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                          title="Take Photo"
+                          aria-label="Take photo"
+                          data-testid="button-camera"
+                          onClick={() => {
+                            closeComposerPicker();
+                            cameraInputRef.current?.click();
+                          }}
+                        >
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                     <div className="absolute bottom-2 right-1.5 flex items-center">
                       {hasDraftText || editTarget ? (
                         <Button
@@ -2737,20 +2763,6 @@ export function ChatArea({
                         </Button>
                       ) : (
                         <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                            title="Take Photo"
-                            aria-label="Take photo"
-                            data-testid="button-camera"
-                            onClick={() => {
-                              closeComposerPicker();
-                              cameraInputRef.current?.click();
-                            }}
-                          >
-                            <Camera className="h-4 w-4" />
-                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

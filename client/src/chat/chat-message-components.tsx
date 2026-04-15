@@ -30,7 +30,10 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sanitizeExternalUrl } from "./chat-message-utils";
+import {
+  getQuotedReplyPreviewText,
+  sanitizeExternalUrl,
+} from "./chat-message-utils";
 
 const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
 const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
@@ -562,23 +565,24 @@ export const MessageBubble = memo(function MessageBubble({
       message.replyTo.senderId === currentUserId
         ? "You"
         : message.replyTo.sender.username;
-    const replyPreviewText = message.replyTo.deletedAt
-      ? "Message deleted"
-      : message.replyTo.message || "Message";
+    const replyPreviewText = getQuotedReplyPreviewText(message.replyTo);
 
     return (
       <div
         className={cn(
-          "mb-2 rounded-xl border px-3 py-2 text-left",
+          "mb-1 -ml-2 w-[calc(100%+1rem)] min-w-0 max-w-[calc(100%+1rem)] rounded-xl border-l-2 px-3 py-1.5 text-left",
           isOwnMessage
-            ? "border-black/10 bg-black/10 text-brand-msg-sent-text/80"
-            : "border-black/10 bg-black/5 text-brand-msg-received-text/80",
+            ? "border-l-violet-500 border-y-black/10 border-r-black/10 bg-black/10 text-brand-msg-sent-text/80"
+            : "border-l-violet-500 border-y-black/10 border-r-black/10 bg-black/5 text-brand-msg-received-text/80",
         )}
+        style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
       >
-        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] opacity-75">
+        <p className="min-w-0 whitespace-pre-wrap break-words text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-500">
           {replyAuthor}
         </p>
-        <p className="truncate text-sm">{replyPreviewText}</p>
+        <p className="min-w-0 whitespace-pre-wrap break-words text-sm">
+          {replyPreviewText}
+        </p>
       </div>
     );
   };
@@ -772,7 +776,7 @@ export const MessageBubble = memo(function MessageBubble({
                 message.replyTo ? (
                   <div
                     className={cn(
-                      "relative overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
+                      "relative min-w-0 max-w-full overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
                       bubbleShapeClass,
                       bubbleTextClass,
                     )}
@@ -801,7 +805,7 @@ export const MessageBubble = memo(function MessageBubble({
                     isMediaOnlyMessage
                       ? ""
                       : cn(
-                          "relative overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
+                          "relative min-w-0 max-w-full overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
                           bubbleShapeClass,
                           bubbleTextClass,
                         )
@@ -837,7 +841,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {groupedReactions.length > 0 && (
               <div className={cn("absolute -bottom-1 z-10", "right-2")}>
-                <div className="inline-flex max-w-[calc(100%-0.5rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-muted px-0.5 py-0.5 shadow-sm scrollbar-none">
+                <div className="inline-flex max-w-[calc(100%-0.2rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-muted px-0.5 py-0.5 shadow-sm scrollbar-none">
                   {groupedReactions.map((reaction) => (
                     <button
                       key={reaction.emoji}
@@ -871,10 +875,10 @@ export const MessageBubble = memo(function MessageBubble({
           {!isOptimistic && (
             <div
               className={cn(
-                "overflow-hidden transition-all duration-150",
+                "w-0 overflow-hidden transition-opacity duration-150 md:w-7 md:shrink-0",
                 isActionMenuOpen
                   ? "w-7 opacity-100"
-                  : "w-0 opacity-0 pointer-events-none md:group-hover/message:w-7 md:group-hover/message:opacity-100 md:group-hover/message:pointer-events-auto md:group-focus-within/message:w-7 md:group-focus-within/message:opacity-100 md:group-focus-within/message:pointer-events-auto",
+                  : "opacity-0 pointer-events-none md:opacity-0 md:group-hover/message:opacity-100 md:group-hover/message:pointer-events-auto md:group-focus-within/message:opacity-100 md:group-focus-within/message:pointer-events-auto",
               )}
             >
               <DropdownMenu

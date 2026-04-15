@@ -133,6 +133,7 @@ html {
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    user-select: none;
   }
 
   /* Mobile keyboard handling */
