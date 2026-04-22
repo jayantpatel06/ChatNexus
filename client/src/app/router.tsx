@@ -6,7 +6,8 @@ import { ProtectedRoute } from "./protected-route";
 
 const LandingPage = lazy(() => import("@/pages/landing-page"));
 const ChatDashboard = lazy(() => import("@/pages/chat-dashboard-page"));
-const GlobalChat = lazy(() => import("@/pages/global-chat-page"));
+const GlobalChat = lazy(() => import("@/chat/global-chat-sidebar"));
+const GlobalChatRoom = lazy(() => import("@/chat/global-chat-room-panel"));
 const RandomChatPage = lazy(() => import("@/pages/random-chat-page"));
 const SettingsPage = lazy(() => import("@/pages/settings-page"));
 const AuthPage = lazy(() => import("@/pages/auth-page"));
@@ -82,6 +83,7 @@ export function AppRouter() {
         <Switch>
           <Route path="/" component={LandingPage} />
           <ProtectedRoute path="/dashboard" component={ChatDashboard} />
+          <ProtectedRoute path="/global-chat/room" component={GlobalChatRoom} />
           <ProtectedRoute path="/global-chat" component={GlobalChat} />
           <ProtectedRoute path="/random-chat" component={RandomChatPage} />
           <ProtectedRoute path="/settings" component={SettingsPage} />

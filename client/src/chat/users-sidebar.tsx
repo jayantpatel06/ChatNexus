@@ -465,7 +465,7 @@ export function UsersSidebar({
     !user?.isGuest &&
     friendUsersQuery.isPending;
   const activeNavigationItem: ChatNavigationItem =
-    location === "/global-chat"
+    location.startsWith("/global-chat")
       ? "global"
       : location === "/random-chat"
           ? "random"

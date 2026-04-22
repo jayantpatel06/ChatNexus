@@ -18,7 +18,7 @@ export function MobileBottomNav() {
       label: "Global",
       icon: Globe,
       href: "/global-chat",
-      isActive: location === "/global-chat",
+      isActive: location.startsWith("/global-chat"),
     },
     {
       id: "random",
