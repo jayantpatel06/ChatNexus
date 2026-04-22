@@ -19,6 +19,7 @@ import { UsersSidebar } from "@/chat/users-sidebar";
 import { useSocket } from "@/providers/socket-provider";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages"] as const;
@@ -459,7 +460,7 @@ export default function GlobalChat() {
           <NewMessageIndicator onClick={() => scrollToBottom("smooth")} />
         )}
         <div
-          className="relative overflow-visible bg-card-muted flex-shrink-0"
+          className="relative mb-[calc(env(safe-area-inset-bottom)+6.25rem)] overflow-visible bg-card-muted flex-shrink-0"
           style={{ paddingBottom: "6px" }}
         >
           <AnimatePresence initial={false}>
@@ -535,6 +536,7 @@ export default function GlobalChat() {
             </div>
           </div>
         </div>
+        <MobileBottomNav />
       </div>
     </>
   );

@@ -510,6 +510,18 @@ async function getSidebarUsersController(
   }
 }
 
+async function getFriendUsersController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(await storage.getFriendUsers(req.jwtUser!.userId));
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function getConversationUsersController(
   req: Request,
   res: Response,
@@ -978,6 +990,7 @@ function createUnblockUserController(io: SocketIOServer) {
 export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/online", jwtAuth, getOnlineUsersController);
   app.get("/api/users/sidebar", jwtAuth, getSidebarUsersController);
+  app.get("/api/users/friends", jwtAuth, getFriendUsersController);
   app.get("/api/users/history", jwtAuth, getConversationUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);

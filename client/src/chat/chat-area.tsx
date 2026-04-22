@@ -395,7 +395,7 @@ export function ChatArea({
         data,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       void refreshOnlineUsers();
       toast({
@@ -439,7 +439,7 @@ export function ChatArea({
         data.friendshipStatus,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       void refreshOnlineUsers();
       toast({
@@ -575,7 +575,7 @@ export function ChatArea({
         data.friendshipStatus,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       void refreshOnlineUsers();
       toast({
@@ -616,7 +616,7 @@ export function ChatArea({
         data.friendshipStatus,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       void refreshOnlineUsers();
       setReplyTarget(null);
@@ -657,7 +657,7 @@ export function ChatArea({
         data.friendshipStatus,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       void refreshOnlineUsers();
       toast({

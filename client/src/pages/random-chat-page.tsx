@@ -44,7 +44,7 @@ import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/chat/chat-navigation-menu";
-import { UserSettingsModal } from "@/chat/user-settings-modal";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import type { User } from "@shared/schema";
 import { AnimatePresence, motion } from "framer-motion";
@@ -120,7 +120,6 @@ export default function RandomChatPage() {
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const isMobile = useIsMobile();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferences, setPreferences] = useState<RandomChatPreferences>(() =>
     readStoredRandomChatPreferences(),
   );
@@ -499,7 +498,9 @@ export default function RandomChatPage() {
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "settings") {
-      setSettingsOpen(true);
+      if (location !== "/settings") {
+        setLocation("/settings");
+      }
       return;
     }
 
@@ -514,6 +515,11 @@ export default function RandomChatPage() {
       if (location !== "/global-chat") {
         setLocation("/global-chat");
       }
+      return;
+    }
+
+    if (item === "logout") {
+      logoutMutation.mutate();
       return;
     }
 
@@ -754,7 +760,7 @@ export default function RandomChatPage() {
             type="button"
             onClick={handleAddInterest}
             size="icon"
-            className="h-9 w-9 rounded-full shrink-0"
+            className="h-9 w-9 shrink-0 rounded-full"
             title="Add interest"
             data-testid="button-add-random-interest"
           >
@@ -763,7 +769,7 @@ export default function RandomChatPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+94px)] pt-10 scrollbar-none md:px-3 md:pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[120px] pt-10 scrollbar-none md:px-3 md:pb-4">
         {sidebarContent}
       </div>
     </div>
@@ -780,7 +786,7 @@ export default function RandomChatPage() {
             robots="noindex, nofollow"
           />
           <div
-            className="h-[100dvh] bg-brand-bg flex flex-col"
+            className="flex h-[100dvh] flex-col bg-brand-bg"
             data-testid="random-chat-mobile-layout"
           >
             {conversationPanel}
@@ -798,23 +804,14 @@ export default function RandomChatPage() {
           robots="noindex, nofollow"
         />
         <div
-          className="h-[100dvh] bg-brand-bg"
+          className="flex h-[100dvh] flex-col bg-brand-bg"
           data-testid="random-chat-mobile-layout"
         >
-          <div className="relative h-full w-full overflow-hidden bg-background">
+          <div className="flex-1 min-h-0 overflow-hidden bg-background">
             {sharedSidebarPanel}
-
-            <div className="absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] md:hidden">
-              <ChatNavigationMenu
-                activeItem={activeNavigationItem}
-                onSelect={handleNavigationSelect}
-                variant="bottom"
-              />
-            </div>
           </div>
+          <MobileBottomNav />
         </div>
-
-        <UserSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       </>
     );
   }
@@ -850,8 +847,6 @@ export default function RandomChatPage() {
           {conversationPanel}
         </div>
       </div>
-
-      <UserSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }

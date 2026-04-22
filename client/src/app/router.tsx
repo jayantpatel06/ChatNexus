@@ -8,6 +8,7 @@ const LandingPage = lazy(() => import("@/pages/landing-page"));
 const ChatDashboard = lazy(() => import("@/pages/chat-dashboard-page"));
 const GlobalChat = lazy(() => import("@/pages/global-chat-page"));
 const RandomChatPage = lazy(() => import("@/pages/random-chat-page"));
+const SettingsPage = lazy(() => import("@/pages/settings-page"));
 const AuthPage = lazy(() => import("@/pages/auth-page"));
 const HelpCenterPage = lazy(() => import("@/pages/help-center-page"));
 const FeaturesPage = lazy(() => import("@/pages/features-page"));
@@ -83,6 +84,7 @@ export function AppRouter() {
           <ProtectedRoute path="/dashboard" component={ChatDashboard} />
           <ProtectedRoute path="/global-chat" component={GlobalChat} />
           <ProtectedRoute path="/random-chat" component={RandomChatPage} />
+          <ProtectedRoute path="/settings" component={SettingsPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/help-center" component={HelpCenterPage} />
           <Route path="/features" component={FeaturesPage} />

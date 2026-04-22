@@ -1,0 +1,71 @@
+import { cn } from "@/lib/utils";
+import { MessageCircle, Globe, Shuffle, Settings } from "lucide-react";
+import { Link, useLocation } from "wouter";
+
+export function MobileBottomNav() {
+  const [location] = useLocation();
+
+  const navItems = [
+    {
+      id: "chat",
+      label: "Chats",
+      icon: MessageCircle,
+      href: "/dashboard",
+      isActive: location === "/dashboard",
+    },
+    {
+      id: "global",
+      label: "Global",
+      icon: Globe,
+      href: "/global-chat",
+      isActive: location === "/global-chat",
+    },
+    {
+      id: "random",
+      label: "Random",
+      icon: Shuffle,
+      href: "/random-chat",
+      isActive: location === "/random-chat",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      href: "/settings",
+      isActive: location === "/settings",
+    },
+  ];
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-1 md:hidden">
+      <nav
+        className="pointer-events-auto mx-auto flex w-fit max-w-full items-center justify-center gap-1 rounded-full border border-border/80 bg-card/90 p-1  backdrop-blur"
+        aria-label="Mobile chat navigation"
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.id} href={item.href}>
+              <a
+                className={cn(
+                  "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
+                  item.isActive
+                    ? "bg-primary/14 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon
+                  className="h-[22px] w-[22px]"
+                  strokeWidth={item.isActive ? 2.4 : 2}
+                />
+                <span className="whitespace-nowrap text-[12px] font-medium leading-none tracking-tight">
+                  {item.label}
+                </span>
+              </a>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}

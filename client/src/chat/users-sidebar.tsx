@@ -11,20 +11,20 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import type { User } from "@shared/schema";
 import { apiRequest, readJsonResponse } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
-import { Search, Filter, Loader2 } from "lucide-react";
+import { MoreVertical, Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useSocket } from "@/providers/socket-provider";
 import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/chat/chat-navigation-menu";
-import { UserSettingsModal } from "@/chat/user-settings-modal";
 
 // Extended user type with online status tracking
 interface CachedUser extends User {
@@ -46,12 +46,6 @@ type SidebarFilters = {
   friendsOnly: boolean;
   gender: "all" | "male" | "female";
 };
-
-type FriendshipStatusResponse = {
-  isFriend: boolean;
-};
-
-type FriendshipStatusBatchResponse = Record<number, FriendshipStatusResponse>;
 type UsersSidebarMode = "chat" | "history";
 type ConversationStatsResponse = Record<
   number,
@@ -154,7 +148,6 @@ export function UsersSidebar({
   const { toast } = useToast();
   const { sidebarUsers, isConnected } = useSocket();
   const [searchTerm, setSearchTerm] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<SidebarFilters>(
     () => readStoredSidebarFilters(),
   );
@@ -315,12 +308,21 @@ export function UsersSidebar({
     return () => clearInterval(interval);
   }, []);
 
+  const friendUsersQuery = useQuery({
+    queryKey: ["/api/users/friends"],
+    enabled: !!user && !user.isGuest,
+    queryFn: async () =>
+      readJsonResponse<User[]>(await apiRequest("GET", "/api/users/friends")),
+    staleTime: 60_000,
+  });
+
   const historyUsersQuery = useQuery({
     queryKey: ["/api/users/history"],
-    enabled: mode === "history" && !!user,
+    enabled: !!user,
     queryFn: async () =>
       readJsonResponse<User[]>(await apiRequest("GET", "/api/users/history")),
     staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const liveSidebarUsersById = useMemo(
@@ -328,22 +330,57 @@ export function UsersSidebar({
     [sidebarUsers],
   );
 
+  const friendUserIds = useMemo(
+    () =>
+      new Set((friendUsersQuery.data ?? []).map((friendUser) => friendUser.userId)),
+    [friendUsersQuery.data],
+  );
+
   const sourceUsers = useMemo<CachedUser[]>(() => {
     if (mode !== "history") {
-      return Array.from(cachedUsers.values());
+      if (!appliedFilters.friendsOnly || user?.isGuest) {
+        return Array.from(cachedUsers.values());
+      }
+
+      return (friendUsersQuery.data ?? []).map((friendUser) => {
+        const liveSidebarUser = liveSidebarUsersById.get(friendUser.userId);
+        const cachedUser = cachedUsers.get(friendUser.userId);
+
+        return {
+          ...cachedUser,
+          ...friendUser,
+          isOnline: liveSidebarUser?.isOnline ?? cachedUser?.isOnline ?? false,
+          isPinned: true,
+          lastSeen: cachedUser?.lastSeen ?? 0,
+        };
+      });
     }
 
     return (historyUsersQuery.data ?? []).map((historyUser) => {
       const liveSidebarUser = liveSidebarUsersById.get(historyUser.userId);
+      const cachedUser = cachedUsers.get(historyUser.userId);
 
       return {
+        ...cachedUser,
         ...historyUser,
-        isOnline: liveSidebarUser?.isOnline ?? historyUser.isOnline ?? false,
+        isOnline:
+          liveSidebarUser?.isOnline ??
+          cachedUser?.isOnline ??
+          historyUser.isOnline ??
+          false,
         isPinned: true,
-        lastSeen: 0,
+        lastSeen: cachedUser?.lastSeen ?? 0,
       };
     });
-  }, [cachedUsers, historyUsersQuery.data, liveSidebarUsersById, mode]);
+  }, [
+    appliedFilters.friendsOnly,
+    cachedUsers,
+    friendUsersQuery.data,
+    historyUsersQuery.data,
+    liveSidebarUsersById,
+    mode,
+    user?.isGuest,
+  ]);
 
   const candidateUsers = sourceUsers
     .filter(
@@ -354,41 +391,6 @@ export function UsersSidebar({
           (appliedFilters.gender === "male" && u.gender === "Male") ||
           (appliedFilters.gender === "female" && u.gender === "Female")),
     );
-
-  const shouldLoadFriendships =
-    !!user && !user.isGuest && candidateUsers.length > 0;
-
-  const friendshipStatusBatchQuery = useQuery({
-    queryKey: [
-      "friendship-status-batch",
-      candidateUsers.map((candidateUser) => candidateUser.userId).join(","),
-    ],
-    queryFn: async () => {
-      if (!shouldLoadFriendships) {
-        return {};
-      }
-
-      const userIds = candidateUsers
-        .map((candidateUser) => candidateUser.userId)
-        .join(",");
-      const res = await apiRequest(
-        "GET",
-        `/api/users/friendship-status?userIds=${encodeURIComponent(userIds)}`,
-      );
-      return readJsonResponse<FriendshipStatusBatchResponse>(res);
-    },
-    enabled: shouldLoadFriendships,
-    staleTime: 60_000,
-  });
-
-  const friendUserIds = new Set<number>();
-  Object.entries(friendshipStatusBatchQuery.data ?? {}).forEach(
-    ([userId, status]) => {
-      if (status?.isFriend) {
-        friendUserIds.add(Number(userId));
-      }
-    },
-  );
 
   // Fetch conversation stats for candidate users
   const { data: conversationStats } = useQuery({
@@ -460,7 +462,8 @@ export function UsersSidebar({
   const isHistoryMode = mode === "history";
   const isFriendFilterLoading =
     appliedFilters.friendsOnly &&
-    friendshipStatusBatchQuery.isPending;
+    !user?.isGuest &&
+    friendUsersQuery.isPending;
   const activeNavigationItem: ChatNavigationItem =
     location === "/global-chat"
       ? "global"
@@ -532,7 +535,9 @@ export function UsersSidebar({
     }
 
     if (item === "settings") {
-      setSettingsOpen(true);
+      if (location !== "/settings") {
+        setLocation("/settings");
+      }
       return;
     }
 
@@ -566,127 +571,89 @@ export function UsersSidebar({
         </div>
 
         <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
-          <div className=" px-3 pb-2 pt-2 md:px-3 md:pb-2 md:pt-2">
+          <div className="px-3 pb-2 pt-2 md:px-3 md:pb-2 md:pt-2">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex items-center gap-2">
                 <h3 className="truncate px-2 text-2xl font-semibold leading-none tracking-tight text-foreground">
                   ChatNexus
                 </h3>
+                <div
+                  className="text-xs font-medium text-muted-foreground flex items-center"
+                  data-testid="text-online-count"
+                >
+                  <span className="relative flex h-2.5 w-2.5 mr-1.5">
+                    <span
+                      className={cn(
+                        "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
+                        isConnected ? "bg-emerald-500" : "bg-rose-500",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "relative inline-flex h-2.5 w-2.5 rounded-full",
+                        isConnected ? "bg-emerald-500" : "bg-rose-500",
+                      )}
+                    />
+                  </span>
+                  <span>{onlineCount} online</span>
+                </div>
               </div>
 
-              <div
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium shadow-sm",
-                  isConnected
-                    ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                    : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
-                )}
-                data-testid="text-online-count"
-              >
-                <span className="relative flex h-2.5 w-2.5">
-                  <span
-                    className={cn(
-                      "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
-                      isConnected ? "bg-emerald-500" : "bg-rose-500",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "relative inline-flex h-2.5 w-2.5 rounded-full",
-                      isConnected ? "bg-emerald-500" : "bg-rose-500",
-                    )}
-                  />
-                </span>
-                <span>{onlineCount} online</span>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                    <MoreVertical className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Filters</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup
+                    value={appliedFilters.gender}
+                    onValueChange={(val) => handleGenderFilterChange(val)}
+                  >
+                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="male">Male</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="female">Female</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={appliedFilters.friendsOnly}
+                    onCheckedChange={handleFriendsFilterToggle}
+                    disabled={!user || user.isGuest}
+                  >
+                    Friends
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={mode === "history"}
+                    onCheckedChange={handleHistoryFilterToggle}
+                  >
+                    History
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
-            <div className="mt-2 flex items-center gap-3 md:mt-2">
+            <div className="mt-3 flex items-center gap-3 md:mt-2">
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground " />
                 <Input
                   type="text"
-                  placeholder="Search Users"
-                  aria-label="Search users"
+                  placeholder="Search chats"
+                  aria-label="Search chats"
                   className="h-11 rounded-full border-border bg-card pl-10 text-sm text-foreground 
-                  md: bg-muted
+                  md:bg-muted
                   placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   data-testid="input-search-users"
                 />
               </div>
-
-            
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+94px)] p-1 scrollbar-none md:px-3 md:pb-4">
-            <div className="mb-3 flex items-center gap-2 px-1">
-              {[
-                { value: "all", label: "All" },
-                { value: "male", label: "Male" },
-                { value: "female", label: "Female" },
-              ].map((option) => {
-                const isActive = appliedFilters.gender === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleGenderFilterChange(option.value)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-                    )}
-                    data-testid={`button-pill-${option.value}`}
-                    aria-pressed={isActive}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={handleFriendsFilterToggle}
-                disabled={!user || user.isGuest}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                  appliedFilters.friendsOnly
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-                  (!user || user.isGuest) &&
-                    "cursor-not-allowed opacity-55 hover:bg-muted hover:text-muted-foreground",
-                )}
-                data-testid="button-pill-friends"
-                aria-pressed={appliedFilters.friendsOnly}
-                title={
-                  !user || user.isGuest
-                    ? "Register or log in to use the friends filter"
-                    : "Show only friends"
-                }
-              >
-                Friends
-              </button>
-              <button
-                type="button"
-                onClick={handleHistoryFilterToggle}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                  mode === "history"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-                data-testid="button-pill-history"
-                aria-pressed={mode === "history"}
-              >
-                History
-              </button>
-            </div>
-
-            <div className="space-y-2" role="listbox" aria-label="Available chats">
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-[100px] pt-1 scrollbar-none md:px-3 md:pb-4">
+            <div className="space-y-[2px]" role="listbox" aria-label="Available chats">
               {displayUsers.length === 0 ? (
                 <div className="rounded-[1.5rem] px-4 py-10 text-center text-sm ">
                   {isHistoryMode && historyUsersQuery.isPending
@@ -719,10 +686,10 @@ export function UsersSidebar({
                       key={displayUser.userId}
                       variant="ghost"
                       className={cn(
-                        "group h-auto w-full justify-start rounded-[1.6rem] border border-transparent bg-card px-3 py-3 text-card-foreground shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition-all hover:border-border hover:bg-accent/40",
+                        "group h-auto w-full justify-start rounded-[1.6rem] border border-transparent bg-transparent px-3 py-3 text-card-foreground shadow-none transition-colors hover:bg-accent/30",
                         selectedUser?.userId === displayUser.userId
-                          ? "border-border bg-accent shadow-[0_12px_30px_rgba(15,23,42,0.08)]"
-                          : "bg-card",
+                          ? "bg-accent/70"
+                          : "bg-transparent",
                       )}
                       onClick={() => onUserSelect(displayUser)}
                       aria-selected={selectedUser?.userId === displayUser.userId}
@@ -799,17 +766,8 @@ export function UsersSidebar({
             </div>
           </div>
 
-          <div className="absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] md:hidden">
-            <ChatNavigationMenu
-              activeItem={activeNavigationItem}
-              onSelect={handleNavigationSelect}
-              variant="bottom"
-            />
-          </div>
         </div>
       </div>
-
-      <UserSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

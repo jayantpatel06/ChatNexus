@@ -424,7 +424,7 @@ export function UserSettingsModal({
         }),
       );
       void queryClient.invalidateQueries({
-        queryKey: ["friendship-status-batch"],
+        queryKey: ["/api/users/friends"],
       });
       toast({
         title: "Unblocked",

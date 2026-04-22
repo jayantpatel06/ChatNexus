@@ -4,6 +4,7 @@ import { ChatArea } from "@/chat/chat-area";
 import { ActiveChatProvider, useActiveChat } from "@/chat/use-active-chat";
 import { UsersSidebar } from "@/chat/users-sidebar";
 import { Seo } from "@/components/seo";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { publicUserSchema, type User } from "@shared/schema";
 
@@ -152,13 +153,16 @@ function PrivateChatPageShellContent({
           path={path}
           robots="noindex, nofollow"
         />
-        <div className="h-[100dvh] bg-background" data-testid={testId}>
-          <UsersSidebar
-            selectedUser={selectedUser}
-            onUserSelect={onUserSelect}
-            mode={mode}
-            onModeChange={onModeChange}
-          />
+        <div className="flex h-[100dvh] flex-col bg-background" data-testid={testId}>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <UsersSidebar
+              selectedUser={selectedUser}
+              onUserSelect={onUserSelect}
+              mode={mode}
+              onModeChange={onModeChange}
+            />
+          </div>
+          <MobileBottomNav />
         </div>
       </>
     );
