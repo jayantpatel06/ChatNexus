@@ -14,6 +14,12 @@ import { messageRateLimiter } from "./middleware/rate-limit";
 import { getConversationId } from "./db/message";
 import { sortUsersByPresence } from "./lib/user-utils";
 import { storage } from "./storage";
+import {
+  enqueueAndDeliver as enqueueNotification,
+  processRetryQueue,
+  cleanupExpired as cleanupExpiredNotifications,
+  handleUserReconnect,
+} from "./lib/notification-service";
 
 declare module "socket.io" {
   interface Socket {
@@ -99,6 +105,8 @@ const privateMessageAttachmentSchema = insertAttachmentSchema.omit({
 const guestDisconnectionTimes = new Map<number, number>();
 const pendingOfflineUpdates = new Map<number, NodeJS.Timeout>();
 const connectedSocketIdsByUser = new Map<number, Set<string>>();
+// Tracks sockets where the browser tab is currently hidden / minimised
+const hiddenSocketIds = new Set<string>();
 const randomChatActiveUsers = new Set<number>();
 const randomChatPreferencesByUser = new Map<number, RandomChatPreferences>();
 const randomChatQueueByUser = new Map<number, RandomChatQueueEntry>();
@@ -233,6 +241,7 @@ function removeConnectedSocket(userId: number, socketId: string): boolean {
   }
 
   socketIds.delete(socketId);
+  hiddenSocketIds.delete(socketId);
 
   if (socketIds.size === 0) {
     connectedSocketIdsByUser.delete(userId);
@@ -240,6 +249,24 @@ function removeConnectedSocket(userId: number, socketId: string): boolean {
   }
 
   return false;
+}
+
+function shouldSendPushToUser(userId: number): boolean {
+  const socketIds = connectedSocketIdsByUser.get(userId);
+
+  // If user has no active sockets, they are completely offline -> send push
+  if (!socketIds || socketIds.size === 0) {
+    return true;
+  }
+
+  // If user has active sockets, ONLY send push if ALL of their sockets have the tab hidden/minimised
+  for (const socketId of socketIds) {
+    if (!hiddenSocketIds.has(socketId)) {
+      return false; // Found at least one visible tab
+    }
+  }
+
+  return true; // All active sockets are currently hidden
 }
 
 function hasActiveSocketForUser(userId: number): boolean {
@@ -643,6 +670,10 @@ function startPeriodicCleanup(
       if (deletedUsers > 0 || deletedExpiredMessages > 0) {
         await broadcastOnlineUsers();
       }
+
+      // Process durable notification retry queue and clean up expired records
+      await processRetryQueue();
+      await cleanupExpiredNotifications();
     } catch (error) {
       console.error("Error during periodic cleanup:", error);
     }
@@ -751,6 +782,30 @@ async function persistAndDeliverMessage(
       message: persistedMessage,
       clientMessageId,
     });
+
+    // Check if we need to send a push notification
+    const areFriends = await storage.areFriends(
+      socket.userId,
+      data.receiverId,
+    );
+    const senderUser = await storage.getUser(socket.userId);
+    const pushEligible = shouldSendPushToUser(data.receiverId);
+
+    if (areFriends && pushEligible) {
+      console.log(
+        `[Notification] Enqueuing push: sender=${socket.userId} receiver=${data.receiverId}`,
+      );
+      await enqueueNotification({
+        senderId: socket.userId,
+        senderUsername: senderUser?.username ?? "New message",
+        receiverId: data.receiverId,
+        message: persistedMessage,
+      });
+    } else if (process.env.NODE_ENV !== "production" || !areFriends) {
+      console.log(
+        `[Notification] Push skipped: sender=${socket.userId} receiver=${data.receiverId} (friends=${areFriends}, eligible=${pushEligible})`,
+      );
+    }
   } catch (error) {
     console.error("Message persistence/delivery error:", error);
     socket.emit("message_save_error", {
@@ -1094,6 +1149,42 @@ async function handleMarkConversationRead(
   await emitSidebarUsers(io, [userId]);
 }
 
+/**
+ * On socket reconnect, compute unread message counts from friends and emit
+ * a `missed_messages_summary` event so the client can invalidate caches and
+ * show relevant catch-up UI.
+ */
+async function emitMissedMessagesSummary(socket: Socket): Promise<void> {
+  if (!socket.userId) return;
+
+  try {
+    const unreadCounts = await storage.getUnreadMessageCountsForUser(
+      socket.userId,
+    );
+    if (unreadCounts.size === 0) return;
+
+    const senderIds = Array.from(unreadCounts.keys());
+    const senders = await storage.getUsersByIds(senderIds);
+
+    const conversations = senders.map((sender) => ({
+      senderId: sender.userId,
+      senderUsername: sender.username,
+      unreadCount: unreadCounts.get(sender.userId) ?? 0,
+      conversationUrl: `/dashboard?user=${sender.userId}`,
+    }));
+
+    socket.emit("missed_messages_summary", { conversations });
+    console.log(
+      `[Notification] Emitted missed_messages_summary to user=${socket.userId}: ${conversations.length} conversation(s)`,
+    );
+  } catch (error) {
+    console.error(
+      `[Notification] Failed to emit missed_messages_summary for user=${socket.userId}:`,
+      error,
+    );
+  }
+}
+
 async function handleDisconnect(
   socket: Socket,
   io: SocketIOServer,
@@ -1207,6 +1298,10 @@ export function setupSocketHandlers(io: SocketIOServer): void {
       socket.join(`user:${socket.userId}`);
       guestDisconnectionTimes.delete(socket.userId);
       await broadcastOnlineUsers(socket.userId);
+
+      // Clear pending notifications for reconnected user and send missed messages summary
+      void handleUserReconnect(socket.userId);
+      void emitMissedMessagesSummary(socket);
     }
 
     socket.on("private_message", async (data: PrivateMessagePayload) => {
@@ -1281,6 +1376,28 @@ export function setupSocketHandlers(io: SocketIOServer): void {
 
     socket.on("mark_conversation_read", async (data: { otherUserId: number }) => {
       await handleMarkConversationRead(socket, io, data);
+    });
+
+    socket.on(
+      "mark_read_from_notification",
+      async (data: { senderId: number }) => {
+        if (!socket.userId || !data?.senderId) return;
+        await storage.markConversationAsRead(socket.userId, data.senderId);
+        await storage.clearPendingNotificationsForUserFromSender(
+          socket.userId,
+          data.senderId,
+        );
+        await emitSidebarUsers(io, [socket.userId]);
+      },
+    );
+
+    // Client reports its tab visibility state so the server knows whether to send a push
+    socket.on("tab_visibility_changed", (data: { hidden: boolean }) => {
+      if (data?.hidden) {
+        hiddenSocketIds.add(socket.id);
+      } else {
+        hiddenSocketIds.delete(socket.id);
+      }
     });
 
     socket.on("disconnect", async () => {

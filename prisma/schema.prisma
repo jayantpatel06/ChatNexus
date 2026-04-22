@@ -27,9 +27,26 @@ model User {
   blockedByUsers   UserBlock[] @relation("UserBlocksBlocked")
   readStatesOwned  ConversationReadState[] @relation("ReadStatesUser")
   readStatesOther  ConversationReadState[] @relation("ReadStatesOtherUser")
+  pushSubscriptions PushSubscription[]
+  receivedNotifications PendingNotification[] @relation("ReceivedNotifications")
+  sentNotifications     PendingNotification[] @relation("SentNotifications")
 
   @@map("Users")
   @@index([isOnline])
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("PushSubscriptions")
 }
 
 model Friendship {
@@ -152,4 +169,25 @@ model UserBlock {
   @@index([blockerId])
   @@index([blockedId])
   @@map("UserBlocks")
+}
+
+model PendingNotification {
+  id          Int       @id @default(autoincrement())
+  receiverId  Int       @map("receiver_id")
+  senderId    Int       @map("sender_id")
+  messageId   Int       @map("message_id")
+  payload     Json
+  status      String    @default("pending") @db.VarChar(20)
+  attempts    Int       @default(0)
+  nextRetryAt DateTime? @map("next_retry_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  deliveredAt DateTime? @map("delivered_at")
+  expiresAt   DateTime  @map("expires_at")
+
+  receiver    User      @relation("ReceivedNotifications", fields: [receiverId], references: [userId], onDelete: Cascade)
+  sender      User      @relation("SentNotifications", fields: [senderId], references: [userId], onDelete: Cascade)
+
+  @@index([receiverId, status])
+  @@index([status, nextRetryAt])
+  @@map("PendingNotifications")
 }

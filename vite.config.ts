@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
       staticSiteUrlPlugin(siteUrl),
       react(),
       VitePWA({
+        strategies: "injectManifest",
+        srcDir: "src",
+        filename: "sw.ts",
         registerType: "autoUpdate",
         manifest: false,
         includeAssets: [

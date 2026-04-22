@@ -38,10 +38,45 @@ function RouteScrollRestoration() {
   return null;
 }
 
+function NotificationNavigationBridge() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.data?.type !== "chatnexus:navigate-from-notification" ||
+        typeof event.data?.url !== "string"
+      ) {
+        return;
+      }
+
+      const nextUrl = new URL(event.data.url, window.location.origin);
+      if (nextUrl.origin !== window.location.origin) {
+        window.location.assign(nextUrl.toString());
+        return;
+      }
+
+      setLocation(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+      window.focus();
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, [setLocation]);
+
+  return null;
+}
+
 export function AppRouter() {
   return (
     <>
       <RouteScrollRestoration />
+      <NotificationNavigationBridge />
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={LandingPage} />

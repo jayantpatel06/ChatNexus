@@ -140,23 +140,62 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     const socketIO = createSocketConnection(token);
 
+    // Track pending visibility state so it can be flushed on reconnect.
+    // Without this, hiding the tab during a reconnect would leave the server
+    // thinking the tab is visible → push notifications would be suppressed.
+    let pendingHiddenState: boolean | null = null;
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && !socketIO.connected) {
+      const isVisible = document.visibilityState === "visible";
+      if (isVisible && !socketIO.connected) {
         logSocketDebug("App became visible, attempting to reconnect...");
         socketIO.connect();
       }
+
+      if (socketIO.connected) {
+        socketIO.emit("tab_visibility_changed", { hidden: !isVisible });
+        pendingHiddenState = null;
+      } else {
+        // Socket is reconnecting — queue the state for when it connects
+        pendingHiddenState = !isVisible;
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === "chatnexus:mark-read") {
+        const senderId = event.data.senderId;
+        if (senderId && socketIO.connected) {
+          socketIO.emit("mark_read_from_notification", { senderId });
+        }
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
 
     socketIO.on("connect", () => {
       setIsConnected(true);
       lastTypingStateRef.current = {};
       logSocketDebug("Socket.IO connected");
+
+      // Emit the most recent visibility state. If a visibilitychange fired
+      // while we were disconnected, flush that queued value; otherwise report
+      // the current document state.
+      const hiddenToEmit = pendingHiddenState ?? document.visibilityState !== "visible";
+      socketIO.emit("tab_visibility_changed", { hidden: hiddenToEmit });
+      pendingHiddenState = null;
+
       void refreshOnlineUsers();
     });
 
     socketIO.on("online_users_updated", (data) => {
       setSidebarUsers(data.users);
+    });
+
+    socketIO.on("missed_messages_summary", (data) => {
+      if (data?.conversations?.length > 0) {
+        // Invalidate state to fetch the new unread counts
+        void refreshOnlineUsers();
+      }
     });
 
     const typingTimeouts = new Map<number, NodeJS.Timeout>();
@@ -211,6 +250,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(socketIO);
 
     return () => {
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       socketIO.disconnect();
     };

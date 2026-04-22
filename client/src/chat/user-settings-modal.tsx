@@ -3,6 +3,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { useSocket } from "@/providers/socket-provider";
 import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
+import {
+  getPushSubscriptionStatus,
+  isPushNotificationsSupported,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+} from "@/lib/push-notifications";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleButton2 } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
@@ -38,10 +44,10 @@ type BlockedUsersResponse = {
 };
 
 const DEFAULT_SETTINGS_PREFERENCES = {
-  pushNotifications: true,
+  pushNotifications: false,
   notificationSound: true,
   allowFriendRequests: true,
-} as const;
+};
 
 type PreferenceKey = keyof typeof DEFAULT_SETTINGS_PREFERENCES;
 
@@ -145,9 +151,11 @@ function ProfileSection({
 function PreferencesSection({
   preferenceDraft,
   onPreferenceToggle,
+  isPushNotificationsBusy,
 }: {
   preferenceDraft: typeof DEFAULT_SETTINGS_PREFERENCES;
   onPreferenceToggle: (key: PreferenceKey, checked: boolean) => void;
+  isPushNotificationsBusy: boolean;
 }) {
   const preferences = [
     {
@@ -183,6 +191,9 @@ function PreferencesSection({
               </div>
               <Switch
                 checked={preferenceDraft[pref.key]}
+                disabled={
+                  pref.key === "pushNotifications" && isPushNotificationsBusy
+                }
                 onCheckedChange={(checked) =>
                   onPreferenceToggle(pref.key, checked)
                 }
@@ -317,6 +328,13 @@ export function UserSettingsModal({
     staleTime: 0,
   });
 
+  const pushSubscriptionStatusQuery = useQuery({
+    queryKey: ["/api/notifications/push-subscription"],
+    enabled: open && !!user && !user.isGuest && isPushNotificationsSupported(),
+    queryFn: getPushSubscriptionStatus,
+    staleTime: 0,
+  });
+
   const profile = profileQuery.data ?? (user ? { ...user, gmail: null } : null);
   const isGuestUser = user?.isGuest ?? false;
   const blockedUsers = blockedUsersQuery.data?.users ?? [];
@@ -331,6 +349,18 @@ export function UserSettingsModal({
     setActiveSection("profile");
     setPreferenceDraft(DEFAULT_SETTINGS_PREFERENCES);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setPreferenceDraft((prev) => ({
+      ...prev,
+      pushNotifications:
+        !!pushSubscriptionStatusQuery.data?.enabled && !isGuestUser,
+    }));
+  }, [isGuestUser, open, pushSubscriptionStatusQuery.data?.enabled]);
 
   useEffect(() => {
     if (!open || !profileQuery.data) return;
@@ -404,6 +434,43 @@ export function UserSettingsModal({
     onError: (error: Error) => {
       toast({
         title: "Failed to unblock",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const pushNotificationsMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (enabled) {
+        await subscribeToPushNotifications();
+      } else {
+        await unsubscribeFromPushNotifications();
+      }
+    },
+    onSuccess: (_data, enabled) => {
+      queryClient.setQueryData(["/api/notifications/push-subscription"], {
+        enabled,
+        count: enabled ? 1 : 0,
+      });
+      setPreferenceDraft((prev) => ({
+        ...prev,
+        pushNotifications: enabled,
+      }));
+      toast({
+        title: enabled ? "Notifications enabled" : "Notifications disabled",
+        description: enabled
+          ? "Friend messages will notify you when you are offline."
+          : "Push notifications are turned off for this device.",
+      });
+    },
+    onError: (error: Error) => {
+      setPreferenceDraft((prev) => ({
+        ...prev,
+        pushNotifications: !!pushSubscriptionStatusQuery.data?.enabled,
+      }));
+      toast({
+        title: "Notification update failed",
         description: error.message,
         variant: "destructive",
       });
@@ -587,7 +654,39 @@ export function UserSettingsModal({
             ) : activeSection === "preferences" ? (
               <PreferencesSection
                 preferenceDraft={preferenceDraft}
+                isPushNotificationsBusy={
+                  pushSubscriptionStatusQuery.isFetching ||
+                  pushNotificationsMutation.isPending
+                }
                 onPreferenceToggle={(key, checked) => {
+                  if (key === "pushNotifications") {
+                    if (isGuestUser) {
+                      toast({
+                        title: "Notifications unavailable",
+                        description:
+                          "Register an account and add friends to use message notifications.",
+                      });
+                      return;
+                    }
+
+                    if (!isPushNotificationsSupported()) {
+                      toast({
+                        title: "Notifications unsupported",
+                        description:
+                          "This browser or device does not support push notifications.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    setPreferenceDraft((prev) => ({
+                      ...prev,
+                      pushNotifications: checked,
+                    }));
+                    pushNotificationsMutation.mutate(checked);
+                    return;
+                  }
+
                   setPreferenceDraft((prev) => ({
                     ...prev,
                     [key]: checked,

@@ -27,6 +27,7 @@ import {
   setStoredToken,
   setStoredUser,
 } from "@/lib/queryClient";
+import { unsubscribeFromPushNotifications } from "@/lib/push-notifications";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -403,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      await unsubscribeFromPushNotifications().catch(() => undefined);
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {

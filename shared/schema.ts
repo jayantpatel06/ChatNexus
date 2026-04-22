@@ -157,3 +157,46 @@ export type UserBlock = {
   blockedId: number;
   createdAt: Date;
 };
+
+export type PushSubscriptionRecord = {
+  id: number;
+  userId: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const webPushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
+
+export type WebPushSubscriptionInput = z.infer<
+  typeof webPushSubscriptionSchema
+>;
+
+export type PendingNotificationRecord = {
+  id: number;
+  receiverId: number;
+  senderId: number;
+  messageId: number;
+  payload: { title: string; body: string; url: string; tag: string; senderId: number };
+  status: string;
+  attempts: number;
+  nextRetryAt: Date | null;
+  createdAt: Date;
+  deliveredAt: Date | null;
+  expiresAt: Date;
+};
+
+export type MissedMessagesSummaryEntry = {
+  senderId: number;
+  senderUsername: string;
+  unreadCount: number;
+  conversationUrl: string;
+};

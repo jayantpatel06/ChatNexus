@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearch } from "wouter";
 import { ChatArea } from "@/chat/chat-area";
 import { ActiveChatProvider, useActiveChat } from "@/chat/use-active-chat";
 import { UsersSidebar } from "@/chat/users-sidebar";
@@ -70,6 +71,7 @@ function PrivateChatPageShellContent({
 }) {
   const { setActiveUserId } = useActiveChat();
   const isMobile = useIsMobile();
+  const search = useSearch();
 
   useEffect(() => {
     setActiveUserId(selectedUser?.userId ?? null);
@@ -93,6 +95,30 @@ function PrivateChatPageShellContent({
       sessionStorage.removeItem(PENDING_PRIVATE_CHAT_KEY);
     }
   }, [mode, onUserSelect, selectedUser]);
+
+  useEffect(() => {
+    if (mode !== "chat") return;
+
+    const params = new URLSearchParams(search);
+    const userIdParam = params.get("user");
+    if (!userIdParam) return;
+
+    const userId = parseInt(userIdParam, 10);
+    const cleanedSearch = new URLSearchParams(search);
+    cleanedSearch.delete("user");
+    const nextSearch = cleanedSearch.toString();
+    const newUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, document.title, newUrl);
+
+    if (isNaN(userId) || selectedUser?.userId === userId) return;
+
+    import("@/lib/queryClient").then(({ apiRequest, readJsonResponse }) => {
+      apiRequest("GET", `/api/users/${userId}`)
+        .then(readJsonResponse)
+        .then((user) => onUserSelect(publicUserSchema.parse(user)))
+        .catch(console.error);
+    });
+  }, [mode, onUserSelect, search, selectedUser?.userId]);
 
   if (isMobile) {
     if (selectedUser) {

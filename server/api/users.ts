@@ -2,16 +2,19 @@ import type { Express, NextFunction, Request, Response } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import {
   updateUserProfileSchema,
+  webPushSubscriptionSchema,
   type DbUser,
   type SelfUserProfile,
   type UpdateUserProfile,
   type User,
+  type WebPushSubscriptionInput,
 } from "@shared/schema";
 import { jwtAuth, primeJwtUserCache } from "../middleware/jwt-auth";
 import { signToken } from "../lib/jwt";
 import { isPrismaUniqueConstraintError } from "../lib/prisma-errors";
 import { toPublicUser } from "../lib/user-utils";
 import { emitSidebarUsers, getSidebarUsersForUser } from "../socket";
+import { getWebPushPublicKey, isWebPushAvailable } from "../lib/push";
 import { storage } from "../storage";
 
 
@@ -95,6 +98,10 @@ function parseUserIdsQuery(rawValue: unknown) {
 
 function parseProfileUpdatePayload(body: unknown): UpdateUserProfile {
   return updateUserProfileSchema.parse(body);
+}
+
+function parseWebPushSubscriptionPayload(body: unknown): WebPushSubscriptionInput {
+  return webPushSubscriptionSchema.parse(body);
 }
 
 function buildFriendshipStatus(
@@ -544,6 +551,94 @@ async function getBlockedUsersController(
   }
 }
 
+async function getWebPushPublicKeyController(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const publicKey = getWebPushPublicKey();
+    if (!publicKey || !isWebPushAvailable()) {
+      return res.status(503).json({
+        message: "Push notifications are not configured on the server",
+      });
+    }
+
+    res.json({ publicKey });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getPushSubscriptionStatusController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const subscriptions = await storage.getPushSubscriptions(req.jwtUser!.userId);
+    const endpoint =
+      typeof req.query.endpoint === "string" ? req.query.endpoint.trim() : "";
+
+    res.json({
+      enabled: endpoint
+        ? subscriptions.some((subscription) => subscription.endpoint === endpoint)
+        : subscriptions.length > 0,
+      count: subscriptions.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function savePushSubscriptionController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const payload = parseWebPushSubscriptionPayload(req.body);
+    const subscription = await storage.savePushSubscription(
+      req.jwtUser!.userId,
+      payload,
+    );
+
+    if (!subscription) {
+      return res.status(500).json({
+        message: "Failed to save push subscription",
+      });
+    }
+
+    res.status(201).json({ ok: true });
+  } catch (error: any) {
+    if (error?.name === "ZodError") {
+      return res.status(400).json({ message: "Invalid push subscription" });
+    }
+
+    next(error);
+  }
+}
+
+async function deletePushSubscriptionController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const endpoint =
+      typeof req.body?.endpoint === "string" ? req.body.endpoint.trim() : "";
+
+    if (!endpoint) {
+      return res.status(400).json({ message: "Subscription endpoint required" });
+    }
+
+    await storage.deletePushSubscription(req.jwtUser!.userId, endpoint);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
 function createUpdateUsernameController(io: SocketIOServer) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -699,6 +794,41 @@ function createSendFriendRequestController(io: SocketIOServer) {
   };
 }
 
+export async function getUserController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = parseTargetUserId(req.params.userId);
+    if ("error" in parsed) {
+      res.status(400).json({ message: parsed.error });
+      return;
+    }
+
+    const { userId } = parsed;
+
+    const [user, isBlockedOrBlocking] = await Promise.all([
+      storage.getUser(userId),
+      storage.getBlockBetweenUsers(req.jwtUser!.userId, userId),
+    ]);
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    if (isBlockedOrBlocking) {
+      res.status(403).json({ message: "Not permitted to view this user" });
+      return;
+    }
+
+    res.json(toPublicUser(user));
+  } catch (error) {
+    next(error);
+  }
+}
+
 function createRespondFriendRequestController(io: SocketIOServer) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -851,6 +981,33 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/history", jwtAuth, getConversationUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);
+
+  app.get("/api/users/:userId", jwtAuth, async (req, res, next) => {
+    try {
+      const parsed = parseTargetUserId(req.params.userId);
+      if ("error" in parsed) return res.status(400).json({ message: parsed.error });
+      const { userId } = parsed;
+      const [user, isBlockedOrBlocking] = await Promise.all([
+        storage.getUser(userId),
+        storage.getBlockBetweenUsers(req.jwtUser!.userId, userId),
+      ]);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (isBlockedOrBlocking) return res.status(403).json({ message: "Not permitted to view this user" });
+      res.json(toPublicUser(user));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get(
+    "/api/notifications/vapid-public-key",
+    jwtAuth,
+    getWebPushPublicKeyController,
+  );
+  app.get(
+    "/api/notifications/push-subscription",
+    jwtAuth,
+    getPushSubscriptionStatusController,
+  );
   app.get(
     "/api/users/friendship-status",
     jwtAuth,
@@ -877,6 +1034,16 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
     "/api/users/:userId/block",
     jwtAuth,
     createUnblockUserController(io),
+  );
+  app.post(
+    "/api/notifications/push-subscription",
+    jwtAuth,
+    savePushSubscriptionController,
+  );
+  app.delete(
+    "/api/notifications/push-subscription",
+    jwtAuth,
+    deletePushSubscriptionController,
   );
   app.put("/api/user/profile", jwtAuth, createUpdateProfileController(io));
   app.put("/api/user/username", jwtAuth, createUpdateUsernameController(io));
