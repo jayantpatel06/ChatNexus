@@ -75,9 +75,13 @@ export default function PageFooter() {
         <Link href="/">
           <div className="site-footer__brand">
             <img
-              src="/assets/images/image.png"
-              alt="ChatNexus Logo"
+              src="/assets/images/logo-48.png"
+              alt=""
               className="site-footer__logo-img"
+              width="48"
+              height="48"
+              loading="lazy"
+              decoding="async"
             />
             <span className="site-footer__brand-name">ChatNexus</span>
           </div>

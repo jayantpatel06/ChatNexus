@@ -612,6 +612,7 @@ export function applySeoToHtml(
   html: string,
   page: ResolvedSeoPage,
   siteUrl: string,
+  cspNonce = "",
 ) {
   const canonicalUrl = resolveAbsoluteUrl(siteUrl, page.path);
   const imageUrl = resolveAbsoluteUrl(
@@ -664,6 +665,7 @@ export function applySeoToHtml(
     /<noscript id="seo-noscript-fallback">[\s\S]*?<\/noscript>\s*/i,
     "",
   );
+  nextHtml = nextHtml.replace(/%CSP_NONCE%/g, escapeHtml(cspNonce));
 
   return replaceTagContent(
     nextHtml,

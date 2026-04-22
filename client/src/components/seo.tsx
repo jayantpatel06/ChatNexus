@@ -20,6 +20,7 @@ const DEFAULT_LOCALE = "en_US";
 const DEFAULT_OG_IMAGE_SIZE = 512;
 const DEFAULT_ROBOTS =
   "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+const CSP_NONCE_SELECTOR = 'meta[name="csp-nonce"]';
 const STRUCTURED_DATA_ID = "seo-structured-data";
 
 function removeHeadElement(selector: string) {
@@ -81,6 +82,15 @@ function resolveUrl(siteUrl: string, path = "/") {
 
 function isNoindexRobots(robots: string) {
   return /(?:^|,\s*)noindex(?:$|,\s*)/i.test(robots);
+}
+
+function getCspNonce() {
+  return (
+    document.head
+      .querySelector(CSP_NONCE_SELECTOR)
+      ?.getAttribute("content")
+      ?.trim() || ""
+  );
 }
 
 function buildDefaultStructuredData({
@@ -240,6 +250,11 @@ export function Seo({
         script.id = STRUCTURED_DATA_ID;
         script.type = "application/ld+json";
         document.head.appendChild(script);
+      }
+
+      const cspNonce = getCspNonce();
+      if (cspNonce) {
+        script.setAttribute("nonce", cspNonce);
       }
 
       script.textContent = JSON.stringify(effectiveStructuredData);

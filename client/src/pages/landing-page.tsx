@@ -1,5 +1,5 @@
 import "./landing-page.css";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { Link, useLocation } from "wouter";
 import { Seo, getSiteUrl } from "@/components/seo";
 import {
@@ -10,14 +10,12 @@ import {
   Globe,
   MessagesSquare,
   Rocket,
-  Shield,
   Smartphone,
   Users,
   VenetianMask,
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Accordion,
   AccordionContent,
@@ -31,12 +29,7 @@ import {
   useReveal,
   MagneticWrap,
   CustomCursor,
-  PagePreloader,
-  AmbientOrbs,
 } from "@/components/effects";
-import gsap from "gsap";
-import { Global } from "recharts";
-import GlobalChat from "./global-chat-page";
 
 const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
 const HOME_SEO_DESCRIPTION =
@@ -172,41 +165,8 @@ export default function LandingPage() {
   ];
 
   /* ── preloader state ── */
-  const [loaded, setLoaded] = useState(false);
 
   /* ── hero entrance ── */
-  const heroTitle = useRef<HTMLHeadingElement>(null);
-  const heroSub = useRef<HTMLParagraphElement>(null);
-  const heroCta = useRef<HTMLDivElement>(null);
-  const heroScroll = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!loaded) return;
-    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-    tl.fromTo(
-      heroTitle.current,
-      { y: 60, opacity: 0, filter: "blur(8px)" },
-      { y: 0, opacity: 1, filter: "blur(0px)", duration: 1 },
-    )
-      .fromTo(
-        heroSub.current,
-        { y: 40, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8 },
-        "-=0.5",
-      )
-      .fromTo(
-        heroCta.current,
-        { y: 30, opacity: 0, scale: 0.95 },
-        { y: 0, opacity: 1, scale: 1, duration: 0.7 },
-        "-=0.4",
-      )
-      .fromTo(
-        heroScroll.current,
-        { opacity: 0, y: -10 },
-        { opacity: 1, y: 0, duration: 0.6 },
-        "-=0.2",
-      );
-  }, [loaded]);
 
   /* ── section reveal refs ── */
   const sectionTitleRef = useReveal(0.2);
@@ -237,11 +197,6 @@ export default function LandingPage() {
         keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus"
         structuredData={seoStructuredData}
       />
-      <PagePreloader
-        ready={!isLoading}
-        onComplete={() => setLoaded(true)}
-      />
-
       {/* ═══════ Main Content ═══════ */}
       <div className="landing-root">
         <CustomCursor />
@@ -251,24 +206,18 @@ export default function LandingPage() {
 
         {/* ═══════ Hero ═══════ */}
         <section id="hero" className="hero">
-          <div className="hero-grid" aria-hidden>
-            {Array.from({ length: 400 }).map((_, i) => (
-              <div key={i} className="grid-dot" />
-            ))}
-          </div>
-
-          <h1 ref={heroTitle} className="hero-title" style={{ opacity: 0 }}>
+          <h1 className="hero-title">
             <span className="hero-line">Connect Instantly.</span>
             <span className="hero-line hero-line--accent">Chat Freely.</span>
           </h1>
 
-          <p ref={heroSub} className="hero-sub" style={{ opacity: 0 }}>
+          <p className="hero-sub">
             Chat with strangers, join live global rooms, and start anonymous
             conversations in seconds. ChatNexus is built for fast, modern,
             real-time social discovery across mobile and desktop.
           </p>
 
-          <div ref={heroCta} className="hero-cta-row" style={{ opacity: 0 }}>
+          <div className="hero-cta-row">
             <MagneticWrap>
               <Link href={dest}>
                 <button className="hero-btn-primary">
@@ -284,7 +233,7 @@ export default function LandingPage() {
             </MagneticWrap>
           </div>
 
-          <div ref={heroScroll} className="scroll-hint" style={{ opacity: 0 }}>
+          <div className="scroll-hint" aria-hidden="true">
             <ChevronDown className="w-5 h-5 bounce-y" />
           </div>
         </section>
@@ -335,7 +284,7 @@ export default function LandingPage() {
         </section>
 
         {/* ═══════ Connect ═══════ */}
-        <section id="support" className="about-section" style={{ paddingTop: "20px", paddingBottom: "44px" }}>
+        <section id="support" className="about-section about-section--support">
           <div ref={connectRef} className="reveal-item about-inner">
             <span className="section-tag">Connect</span>
             <h2 className="section-title">Ready to Meet Someone New?</h2>

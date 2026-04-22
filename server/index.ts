@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
+import { randomBytes } from "node:crypto";
 
 import type { NextFunction, Request, Response } from "express";
 import { setupVite, serveStatic, log } from "./vite";
@@ -57,6 +58,11 @@ function requestLoggingMiddleware(
 const app = express();
 const isDevelopment = app.get("env") === "development";
 
+app.use((_req, res, next) => {
+  res.locals.cspNonce = randomBytes(16).toString("base64");
+  next();
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: isDevelopment
@@ -71,13 +77,19 @@ app.use(
               "ws:",
               "wss:",
             ],
-            fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+            fontSrc: ["'self'", "data:"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
             imgSrc: ["'self'", "data:", "blob:", "https:"],
             manifestSrc: ["'self'"],
             mediaSrc: ["'self'", "blob:", "https:"],
             objectSrc: ["'none'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            scriptSrc: [
+              "'self'",
+              (_req, res) =>
+                `'nonce-${((res as Response).locals.cspNonce as string) ?? ""}'`,
+            ],
+            styleSrc: ["'self'", "'unsafe-inline'"],
             workerSrc: ["'self'", "blob:"],
           },
         },

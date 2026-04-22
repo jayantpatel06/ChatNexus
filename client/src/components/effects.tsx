@@ -167,8 +167,28 @@ export function MagneticWrap({
 export function CustomCursor() {
   const cursorGlow = useRef<HTMLDivElement>(null);
   const cursorDot = useRef<HTMLDivElement>(null);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
+    const pointerMedia = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const updateEnabled = () => setEnabled(pointerMedia.matches);
+
+    updateEnabled();
+
+    if (typeof pointerMedia.addEventListener === "function") {
+      pointerMedia.addEventListener("change", updateEnabled);
+      return () => pointerMedia.removeEventListener("change", updateEnabled);
+    }
+
+    pointerMedia.addListener(updateEnabled);
+    return () => pointerMedia.removeListener(updateEnabled);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const onMove = (e: globalThis.MouseEvent) => {
       if (cursorGlow.current) {
         gsap.to(cursorGlow.current, {
@@ -189,7 +209,11 @@ export function CustomCursor() {
     };
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) {
+    return null;
+  }
 
   return (
     <>

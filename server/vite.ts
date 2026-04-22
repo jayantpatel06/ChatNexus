@@ -50,7 +50,12 @@ function sendSeoDocument(
   siteUrl: string,
 ) {
   const seoPage = resolveSeoPage(pathname);
-  const html = applySeoToHtml(template, seoPage, siteUrl);
+  const html = applySeoToHtml(
+    template,
+    seoPage,
+    siteUrl,
+    res.locals.cspNonce ?? "",
+  );
 
   setRobotsHeader(res, seoPage.robots);
 

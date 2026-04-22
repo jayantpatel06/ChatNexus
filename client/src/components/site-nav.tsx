@@ -1,7 +1,6 @@
 import "./site-nav.css";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { MagneticWrap } from "@/components/effects";
@@ -19,6 +18,9 @@ type ThemeAnimationStart =
   | "top-down"
   | "left-right"
   | "right-left";
+
+const LANDING_SECTION_IDS = ["hero", "features", "about", "faq", "support"] as const;
+const NAV_LOGO_SRC = "/assets/images/logo-48.png";
 
 function createThemeTransitionCss(
   start: ThemeAnimationStart = "bottom-up",
@@ -219,36 +221,64 @@ export default function SiteNav() {
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!isLanding) return;
+    if (!isLanding || !navRef.current) return;
 
-    const sections = ["hero", "features", "about", "faq", "support"];
-    const handle = () => {
-      if (!navRef.current) return;
-      const cur = window.scrollY;
-      if (cur > 80) {
-        navRef.current.classList.add("nav-scrolled");
-      } else {
-        navRef.current.classList.remove("nav-scrolled");
+    const navNode = navRef.current;
+    const navLinks = Array.from(
+      navNode.querySelectorAll<HTMLAnchorElement>(".nav-pill-link"),
+    );
+    const sectionOffsets = new Map<string, number>();
+    let frameId: number | null = null;
+
+    const measureSections = () => {
+      for (const id of LANDING_SECTION_IDS) {
+        sectionOffsets.set(
+          id,
+          document.getElementById(id)?.offsetTop ?? Number.POSITIVE_INFINITY,
+        );
       }
-      const sectionTop = (id: string) => {
-        const el = document.getElementById(id);
-        if (!el) return Number.POSITIVE_INFINITY;
-        return el.getBoundingClientRect().top + window.scrollY;
-      };
-      let activeId = sections[0];
-      for (const id of sections) {
-        if (sectionTop(id) - 120 <= cur) activeId = id;
-      }
-      navRef.current.querySelectorAll(".nav-pill-link").forEach((a) => {
-        a.classList.toggle("active", a.getAttribute("href") === `#${activeId}`);
-      });
     };
-    window.addEventListener("scroll", handle, { passive: true });
-    window.addEventListener("hashchange", handle);
-    handle(); 
+
+    const updateNav = () => {
+      frameId = null;
+      const currentY = window.scrollY;
+      navNode.classList.toggle("nav-scrolled", currentY > 80);
+
+      let activeId: string = LANDING_SECTION_IDS[0];
+      for (const id of LANDING_SECTION_IDS) {
+        if ((sectionOffsets.get(id) ?? Number.POSITIVE_INFINITY) - 120 <= currentY) {
+          activeId = id;
+        }
+      }
+
+      for (const link of navLinks) {
+        link.classList.toggle("active", link.getAttribute("href") === `#${activeId}`);
+      }
+    };
+
+    const queueNavUpdate = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateNav);
+    };
+
+    const refreshSections = () => {
+      measureSections();
+      queueNavUpdate();
+    };
+
+    window.addEventListener("scroll", queueNavUpdate, { passive: true });
+    window.addEventListener("resize", refreshSections);
+    window.addEventListener("hashchange", queueNavUpdate);
+    window.addEventListener("load", refreshSections);
+    refreshSections();
     return () => {
-      window.removeEventListener("scroll", handle);
-      window.removeEventListener("hashchange", handle);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      window.removeEventListener("scroll", queueNavUpdate);
+      window.removeEventListener("resize", refreshSections);
+      window.removeEventListener("hashchange", queueNavUpdate);
+      window.removeEventListener("load", refreshSections);
     };
   }, [isLanding]);
 
@@ -257,7 +287,6 @@ export default function SiteNav() {
   const handleLandingSectionClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
       event.preventDefault();
-      const navHeight = navRef.current?.offsetHeight ?? 0;
       const sectionOffset = hash === "hero" ? 0 : -10;
       scrollToSectionId(hash, { offset: sectionOffset });
     },
@@ -290,9 +319,12 @@ export default function SiteNav() {
           <div className="nav-brand">
             <div className="nav-logo">
               <img
-                src="/assets/images/image.png"
-                alt="ChatNexus Logo"
+                src={NAV_LOGO_SRC}
+                alt=""
                 className="nav-logo-img"
+                width="48"
+                height="48"
+                decoding="async"
               />
             </div>
             <span className="nav-name">ChatNexus</span>
@@ -302,14 +334,17 @@ export default function SiteNav() {
         <Link href="/" className="nav-mobile-logo-link" aria-label="ChatNexus home">
           <div className="nav-logo">
             <img
-              src="/assets/images/image.png"
-              alt="ChatNexus Logo"
+              src={NAV_LOGO_SRC}
+              alt=""
               className="nav-logo-img"
+              width="48"
+              height="48"
+              decoding="async"
             />
           </div>
         </Link>
 
-        <Link href="/" className="nav-mobile-name-link">
+        <Link href="/" className="nav-mobile-name-link" aria-label="ChatNexus home">
           <span className="nav-name nav-name--mobile">ChatNexus</span>
         </Link>
 
@@ -324,13 +359,15 @@ export default function SiteNav() {
         <div className="nav-actions">
           <ThemeToggleButton2 />
           <MagneticWrap>
-            <Link href={dest}>
-              <Button className="nav-cta">
-                <span className="nav-cta-label">
-                  {user ? "Dashboard" : "Get Started"}
-                </span>
-                <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
-              </Button>
+            <Link
+              href={dest}
+              className="nav-cta"
+              aria-label={user ? "Open dashboard" : "Get started"}
+            >
+              <span className="nav-cta-label">
+                {user ? "Dashboard" : "Get Started"}
+              </span>
+              <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
             </Link>
           </MagneticWrap>
         </div>

@@ -49,6 +49,7 @@
 }
 
 .nav-logo {
+  width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
@@ -57,8 +58,8 @@
 }
 
 .nav-logo-img {
+  width: 36px;
   height: 36px;
-  width: auto;
   object-fit: contain;
 }
 
@@ -96,6 +97,7 @@
   display: inline-flex !important;
   align-items: center !important;
   gap: 4px !important;
+  text-decoration: none !important;
   box-shadow: 0 0 20px var(--ln-glow-primary, rgba(8, 178, 227, 0.25));
   transition: box-shadow 0.3s, transform 0.3s !important;
 }
@@ -257,6 +259,7 @@
 
   .nav-logo,
   .nav-logo-img {
+    width: 30px;
     height: 30px;
   }
 
