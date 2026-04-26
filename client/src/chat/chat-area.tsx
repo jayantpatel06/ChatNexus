@@ -348,11 +348,7 @@ export function ChatArea({
 
   const friendshipStatusQuery = useQuery({
     queryKey: ["friendship-status", selectedUser?.userId],
-    enabled:
-      !!selectedUser?.userId &&
-      !!user &&
-      !selectedUser.isGuest &&
-      !user.isGuest,
+    enabled: !!selectedUser?.userId && !!user,
     queryFn: async () => {
       const res = await apiRequest(
         "GET",
@@ -623,7 +619,9 @@ export function ChatArea({
       setEditTarget(null);
       toast({
         title: "User blocked",
-        description: `You blocked ${selectedUser.username}.`,
+        description: data.friendshipStatus.blockedByUser
+          ? `You blocked ${selectedUser.username}. ${selectedUser.username} has also blocked you.`
+          : `You blocked ${selectedUser.username}.`,
       });
     },
     onError: (error: Error) => {
@@ -662,7 +660,9 @@ export function ChatArea({
       void refreshOnlineUsers();
       toast({
         title: "User unblocked",
-        description: `You unblocked ${selectedUser.username}.`,
+        description: data.friendshipStatus.blockedByUser
+          ? `You unblocked ${selectedUser.username}, but ${selectedUser.username} still has you blocked.`
+          : `You unblocked ${selectedUser.username}.`,
       });
     },
     onError: (error: Error) => {
@@ -906,7 +906,11 @@ export function ChatArea({
       );
       void refreshOnlineUsers();
 
-      if (data.reason === "block_user" && nextStatus.blockedByUser) {
+      if (
+        data.reason === "block_user" &&
+        nextStatus.blockedByUser &&
+        !nextStatus.blockedByMe
+      ) {
         toast({
           title: "You were blocked",
           description: `You can no longer message ${selectedUser.username}.`,
@@ -1384,14 +1388,47 @@ export function ChatArea({
     [forceReconnect, toast],
   );
 
+  const handleBlockedSendAttempt = useCallback(() => {
+    const blockedByMe = friendshipStatusQuery.data?.blockedByMe ?? false;
+    const blockedByUser = friendshipStatusQuery.data?.blockedByUser ?? false;
+    const description = blockedByMe
+      ? blockedByUser
+        ? `You and ${selectedUser?.username ?? "this user"} have blocked each other.`
+        : "Unblock this user to send messages."
+      : `${selectedUser?.username ?? "This user"} has blocked you.`;
+
+    toast({
+      title: "Message not sent",
+      description,
+      variant: "destructive",
+    });
+  }, [
+    friendshipStatusQuery.data?.blockedByMe,
+    friendshipStatusQuery.data?.blockedByUser,
+    selectedUser,
+    toast,
+  ]);
+
   const canSendPrivateMessage = useCallback(() => {
+    if (friendshipStatusQuery.data?.isBlocked) {
+      handleBlockedSendAttempt();
+      return false;
+    }
+
     if (socket?.connected && isConnected && user) {
       return true;
     }
 
     handleSendUnavailable("Reconnect and try again.");
     return false;
-  }, [socket, isConnected, user, handleSendUnavailable]);
+  }, [
+    friendshipStatusQuery.data?.isBlocked,
+    socket,
+    isConnected,
+    user,
+    handleBlockedSendAttempt,
+    handleSendUnavailable,
+  ]);
 
   // Generate unique client-side ID for optimistic updates
   const generateClientMessageId = useCallback(() => {
@@ -1861,7 +1898,9 @@ export function ChatArea({
       toast({
         title: "Action unavailable",
         description: isBlockedByMe
-          ? "Unblock this user first."
+          ? isBlockedByUser
+            ? "You and this user have blocked each other. Unblock them first."
+            : "Unblock this user first."
           : "This user has blocked you.",
         variant: "destructive",
       });
@@ -1964,6 +2003,7 @@ export function ChatArea({
   const isChatBlocked = friendshipStatusQuery.data?.isBlocked ?? false;
   const isBlockedByMe = friendshipStatusQuery.data?.blockedByMe ?? false;
   const isBlockedByUser = friendshipStatusQuery.data?.blockedByUser ?? false;
+  const isMutualBlock = isBlockedByMe && isBlockedByUser;
   const selectedUsername = selectedUser?.username ?? "this user";
   const friendshipActionLabel = removeFriendMutation.isPending
     ? "Removing Friend..."
@@ -1983,11 +2023,42 @@ export function ChatArea({
     isChatBlocked ||
     pendingDirection === "incoming" ||
     pendingDirection === "outgoing";
-  const blockedNotice = isBlockedByMe
-    ? `You blocked ${selectedUsername}.`
-    : isBlockedByUser
-      ? `${selectedUsername} has blocked you.`
-      : "";
+  const blockedNotice = isMutualBlock
+    ? `You blocked ${selectedUsername}. ${selectedUsername} has also blocked you.`
+    : isBlockedByMe
+      ? `You blocked ${selectedUsername}.`
+      : isBlockedByUser
+        ? `${selectedUsername} has blocked you.`
+        : "";
+  const confirmDialogTitle =
+    confirmDialogAction === "chat"
+      ? "Clear chat"
+      : confirmDialogAction === "attachments"
+        ? "Clear attachments"
+        : confirmDialogAction === "removeFriend"
+          ? "Remove friend"
+          : confirmDialogAction === "blockUser"
+            ? "Block user"
+            : confirmDialogAction === "unblockUser"
+              ? "Unblock user"
+              : "";
+  const confirmDialogDescription =
+    confirmDialogAction === "chat"
+      ? `This will permanently delete the entire chat with ${selectedUsername} for both users.`
+      : confirmDialogAction === "attachments"
+        ? `This will permanently delete all attachments exchanged with ${selectedUsername} for both users.`
+        : confirmDialogAction === "removeFriend"
+          ? `This will remove ${selectedUsername} from your friends list.`
+          : confirmDialogAction === "blockUser"
+            ? isBlockedByUser
+              ? `This will also block ${selectedUsername}. You and ${selectedUsername} will no longer be able to message each other.`
+              : `This will block ${selectedUsername}, remove any friendship, and stop future direct messages.`
+            : confirmDialogAction === "unblockUser"
+              ? isBlockedByUser
+                ? `This will unblock ${selectedUsername}, but ${selectedUsername} still has you blocked. Direct messages will remain unavailable until they unblock you.`
+                : `This will unblock ${selectedUsername} and allow direct messages again.`
+              : "";
+  const blockMenuLabel = isBlockedByMe ? "Unblock user" : "Block user";
 
   const handleClearAttachments = () => {
     if (!selectedUser) return;
@@ -2153,28 +2224,8 @@ export function ChatArea({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmDialogAction === "chat"
-                ? "Clear chat"
-                : confirmDialogAction === "attachments"
-                  ? "Clear attachments"
-                  : confirmDialogAction === "removeFriend"
-                    ? "Remove friend"
-                    : confirmDialogAction === "blockUser"
-                      ? "Block user"
-                      : "Unblock user"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDialogAction === "chat"
-                ? `This will permanently delete the entire chat with ${selectedUser.username} for both users.`
-                : confirmDialogAction === "attachments"
-                  ? `This will permanently delete all attachments exchanged with ${selectedUser.username} for both users.`
-                  : confirmDialogAction === "removeFriend"
-                    ? `This will remove ${selectedUser.username} from your friends list.`
-                    : confirmDialogAction === "blockUser"
-                      ? `This will block ${selectedUser.username}, remove any friendship, and stop future direct messages.`
-                      : `This will unblock ${selectedUser.username} and allow direct messages again.`}
-            </AlertDialogDescription>
+            <AlertDialogTitle>{confirmDialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialogDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isConfirmDialogPending}>
@@ -2259,8 +2310,10 @@ export function ChatArea({
                   <span className="text-foreground font-medium">
                     {isChatBlocked
                       ? isBlockedByMe
-                        ? "Blocked"
-                        : "Restricted"
+                        ? isBlockedByUser
+                          ? "Blocked"
+                          : "Blocked"
+                        : "Blocked you"
                       : onlineUsers.some(
                             (u) => u.userId === selectedUser.userId,
                           )
@@ -2342,10 +2395,10 @@ export function ChatArea({
                     {isBlockedByMe
                       ? unblockUserMutation.isPending
                         ? "Unblocking user..."
-                        : "Unblock user"
+                        : blockMenuLabel
                       : blockUserMutation.isPending
                         ? "Blocking user..."
-                        : "Block user"}
+                        : blockMenuLabel}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={handleClearAttachments}

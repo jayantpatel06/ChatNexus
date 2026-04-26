@@ -53,9 +53,19 @@ const CacheTTL = {
 const BLOCK_LOOKUP_TTL_MS = 60_000;
 
 let cacheClient: RedisClientType | null = null;
+type BlockPairState = {
+  rows: UserBlock[];
+};
+
+type DirectionalBlockState = {
+  latestBlock: UserBlock | undefined;
+  blockByUser1: UserBlock | undefined;
+  blockByUser2: UserBlock | undefined;
+};
+
 const blockLookupCache = new Map<
   string,
-  { expiresAt: number; value: UserBlock | null }
+  { expiresAt: number; value: BlockPairState }
 >();
 
 function getBlockLookupCacheKey(user1Id: number, user2Id: number): string {
@@ -67,7 +77,7 @@ function getBlockLookupCacheKey(user1Id: number, user2Id: number): string {
 function readBlockLookupCache(
   user1Id: number,
   user2Id: number,
-): UserBlock | null | undefined {
+): BlockPairState | undefined {
   const cacheEntry = blockLookupCache.get(
     getBlockLookupCacheKey(user1Id, user2Id),
   );
@@ -86,12 +96,48 @@ function readBlockLookupCache(
 function writeBlockLookupCache(
   user1Id: number,
   user2Id: number,
-  value: UserBlock | null,
+  value: BlockPairState,
 ): void {
   blockLookupCache.set(getBlockLookupCacheKey(user1Id, user2Id), {
     expiresAt: Date.now() + BLOCK_LOOKUP_TTL_MS,
     value,
   });
+}
+
+function getLatestBlockFromPairState(
+  pairState: BlockPairState,
+): UserBlock | undefined {
+  return pairState.rows[0];
+}
+
+function getDirectionalBlockFromPairState(
+  pairState: BlockPairState,
+  blockerId: number,
+  blockedId: number,
+): UserBlock | undefined {
+  return pairState.rows.find(
+    (row) => row.blockerId === blockerId && row.blockedId === blockedId,
+  );
+}
+
+function getDirectionalBlockStateFromPairState(
+  pairState: BlockPairState,
+  user1Id: number,
+  user2Id: number,
+): DirectionalBlockState {
+  return {
+    latestBlock: getLatestBlockFromPairState(pairState),
+    blockByUser1: getDirectionalBlockFromPairState(
+      pairState,
+      user1Id,
+      user2Id,
+    ),
+    blockByUser2: getDirectionalBlockFromPairState(
+      pairState,
+      user2Id,
+      user1Id,
+    ),
+  };
 }
 
 async function initializeCache(): Promise<void> {
@@ -589,11 +635,13 @@ const friendRequestRepository = {
 };
 
 const blockRepository = {
-  async getBetweenUsers(
+  async getPairState(
     userA: number,
     userB: number,
-  ): Promise<UserBlock | undefined> {
-    if (!prisma) return undefined;
+  ): Promise<BlockPairState> {
+    if (!prisma) {
+      return { rows: [] };
+    }
 
     const rows = await prisma.$queryRaw<UserBlock[]>(Prisma.sql`
       SELECT
@@ -607,10 +655,25 @@ const blockRepository = {
         OR
         (blocker_id = ${userB} AND blocked_id = ${userA})
       ORDER BY created_at DESC, id DESC
-      LIMIT 1
     `);
 
-    return rows[0];
+    return { rows };
+  },
+
+  async getBetweenUsers(
+    userA: number,
+    userB: number,
+  ): Promise<UserBlock | undefined> {
+    const pairState = await this.getPairState(userA, userB);
+    return getLatestBlockFromPairState(pairState);
+  },
+
+  async getDirectional(
+    blockerId: number,
+    blockedId: number,
+  ): Promise<UserBlock | undefined> {
+    const pairState = await this.getPairState(blockerId, blockedId);
+    return getDirectionalBlockFromPairState(pairState, blockerId, blockedId);
   },
 
   async create(
@@ -786,6 +849,18 @@ export interface IStorage {
     status: Exclude<FriendRequestStatus, "pending">,
   ): Promise<FriendRequest | undefined>;
   clearPendingFriendRequestsBetweenUsers(user1Id: number, user2Id: number): Promise<number>;
+  getBlockStateBetweenUsers(
+    user1Id: number,
+    user2Id: number,
+  ): Promise<{
+    latestBlock: UserBlock | undefined;
+    blockByUser1: UserBlock | undefined;
+    blockByUser2: UserBlock | undefined;
+  }>;
+  getDirectionalBlock(
+    blockerId: number,
+    blockedId: number,
+  ): Promise<UserBlock | undefined>;
   getBlockBetweenUsers(user1Id: number, user2Id: number): Promise<UserBlock | undefined>;
   blockUser(blockerId: number, blockedId: number): Promise<UserBlock | undefined>;
   unblockUser(blockerId: number, blockedId: number): Promise<boolean>;
@@ -1640,14 +1715,37 @@ class DatabaseStorage implements IStorage {
     user1Id: number,
     user2Id: number,
   ): Promise<UserBlock | undefined> {
-    const cachedBlock = readBlockLookupCache(user1Id, user2Id);
-    if (cachedBlock !== undefined) {
-      return cachedBlock ?? undefined;
+    const blockState = await this.getBlockStateBetweenUsers(user1Id, user2Id);
+    return blockState.latestBlock;
+  }
+
+  async getBlockStateBetweenUsers(
+    user1Id: number,
+    user2Id: number,
+  ): Promise<DirectionalBlockState> {
+    const cachedPairState = readBlockLookupCache(user1Id, user2Id);
+    if (cachedPairState !== undefined) {
+      return getDirectionalBlockStateFromPairState(
+        cachedPairState,
+        user1Id,
+        user2Id,
+      );
     }
 
-    const block = await blockRepository.getBetweenUsers(user1Id, user2Id);
-    writeBlockLookupCache(user1Id, user2Id, block ?? null);
-    return block;
+    const pairState = await blockRepository.getPairState(user1Id, user2Id);
+    writeBlockLookupCache(user1Id, user2Id, pairState);
+    return getDirectionalBlockStateFromPairState(pairState, user1Id, user2Id);
+  }
+
+  async getDirectionalBlock(
+    blockerId: number,
+    blockedId: number,
+  ): Promise<UserBlock | undefined> {
+    const blockState = await this.getBlockStateBetweenUsers(
+      blockerId,
+      blockedId,
+    );
+    return blockState.blockByUser1;
   }
 
   async blockUser(
@@ -1655,13 +1753,18 @@ class DatabaseStorage implements IStorage {
     blockedId: number,
   ): Promise<UserBlock | undefined> {
     const block = await blockRepository.create(blockerId, blockedId);
-    writeBlockLookupCache(blockerId, blockedId, block ?? null);
+    const pairState = await blockRepository.getPairState(blockerId, blockedId);
+    writeBlockLookupCache(blockerId, blockedId, pairState);
     return block;
   }
 
   async unblockUser(blockerId: number, blockedId: number): Promise<boolean> {
     const removed = await blockRepository.delete(blockerId, blockedId);
-    writeBlockLookupCache(blockerId, blockedId, null);
+    const pairState = await blockRepository.getPairState(
+      blockerId,
+      blockedId,
+    );
+    writeBlockLookupCache(blockerId, blockedId, pairState);
     return removed;
   }
 

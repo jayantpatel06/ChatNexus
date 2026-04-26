@@ -720,13 +720,17 @@ async function persistAndDeliverMessage(
   clientMessageId: string | undefined,
 ): Promise<void> {
   try {
-    // Check block status
-    const relationshipBlock = await storage.getBlockBetweenUsers(
+    // Check both block directions directly so message delivery does not depend
+    // on pair-cache state when reciprocal blocks exist.
+    const {
+      blockByUser1: blockBySender,
+      blockByUser2: blockByReceiver,
+    } = await storage.getBlockStateBetweenUsers(
       socket.userId,
       data.receiverId,
     );
-    if (relationshipBlock) {
-      const errorMsg = relationshipBlock.blockerId === socket.userId
+    if (blockBySender || blockByReceiver) {
+      const errorMsg = blockBySender
         ? "You blocked this user"
         : "This user has blocked you";
       socket.emit("message_save_error", {

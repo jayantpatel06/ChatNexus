@@ -107,19 +107,23 @@ function parseWebPushSubscriptionPayload(body: unknown): WebPushSubscriptionInpu
 function buildFriendshipStatus(
   userId: number,
   friendship: Awaited<ReturnType<typeof storage.getFriendship>>,
-  block?: Awaited<ReturnType<typeof storage.getBlockBetweenUsers>>,
+  blockByMe?: Awaited<ReturnType<typeof storage.getDirectionalBlock>>,
+  blockByUser?: Awaited<ReturnType<typeof storage.getDirectionalBlock>>,
   pendingRequest?: Awaited<ReturnType<typeof storage.getPendingFriendRequestBetweenUsers>>,
 ) {
+  const isBlocked = !!blockByMe || !!blockByUser;
+  const block = blockByMe ?? blockByUser ?? null;
+
   return {
     isFriend: !!friendship,
     friendship,
-    isBlocked: !!block,
-    block: block ?? null,
-    blockedByMe: block?.blockerId === userId,
-    blockedByUser: block?.blockedId === userId,
-    pendingRequest: block ? null : (pendingRequest ?? null),
+    isBlocked,
+    block,
+    blockedByMe: !!blockByMe,
+    blockedByUser: !!blockByUser,
+    pendingRequest: isBlocked ? null : (pendingRequest ?? null),
     pendingDirection:
-      block || !pendingRequest
+      isBlocked || !pendingRequest
         ? null
         : pendingRequest.senderId === userId
           ? ("outgoing" as const)
@@ -129,17 +133,24 @@ function buildFriendshipStatus(
 
 
 async function getRelationshipStatus(userId: number, otherUserId: number) {
-  const [friendship, block] = await Promise.all([
+  const [friendship, blockState] = await Promise.all([
     storage.getFriendship(userId, otherUserId),
-    storage.getBlockBetweenUsers(userId, otherUserId),
+    storage.getBlockStateBetweenUsers(userId, otherUserId),
   ]);
+  const { blockByUser1: blockByMe, blockByUser2: blockByUser } = blockState;
 
   const pendingRequest =
-    friendship || block
+    friendship || blockByMe || blockByUser
       ? undefined
       : await storage.getPendingFriendRequestBetweenUsers(userId, otherUserId);
 
-  return buildFriendshipStatus(userId, friendship, block, pendingRequest);
+  return buildFriendshipStatus(
+    userId,
+    friendship,
+    blockByMe,
+    blockByUser,
+    pendingRequest,
+  );
 }
 
 async function emitRelationshipStatusUpdate(
@@ -308,6 +319,7 @@ async function sendFriendRequest(userId: number, otherUserId: number) {
       userId,
       undefined,
       undefined,
+      undefined,
       existingPendingRequest,
     );
   }
@@ -320,7 +332,13 @@ async function sendFriendRequest(userId: number, otherUserId: number) {
     };
   }
 
-  return buildFriendshipStatus(userId, undefined, undefined, pendingRequest);
+  return buildFriendshipStatus(
+    userId,
+    undefined,
+    undefined,
+    undefined,
+    pendingRequest,
+  );
 }
 
 async function respondToFriendRequest(
@@ -462,7 +480,7 @@ async function unblockUser(userId: number, otherUserId: number) {
   const [currentUser, otherUser, block] = await Promise.all([
     storage.getUser(userId),
     storage.getUser(otherUserId),
-    storage.getBlockBetweenUsers(userId, otherUserId),
+    storage.getDirectionalBlock(userId, otherUserId),
   ]);
   if (!currentUser || !otherUser) {
     return { error: "User not found" as const, status: 404 as const };
