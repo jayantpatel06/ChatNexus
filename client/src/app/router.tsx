@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { PageLoader } from "@/components/page-loader";
 import { getAppLenis } from "@/lib/lenis";
-import { ProtectedRoute } from "./protected-route";
 
 const LandingPage = lazy(() => import("@/pages/landing-page"));
 const ChatDashboard = lazy(() => import("@/pages/chat-dashboard-page"));
@@ -18,6 +17,16 @@ const ContactPage = lazy(() => import("@/pages/contact-page"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms-of-service-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
+const ProtectedRouteBoundary = lazy(() =>
+  import("./protected-route").then((module) => ({
+    default: module.ProtectedRoute,
+  })),
+);
+const AuthRouteBoundary = lazy(() =>
+  import("./auth-route").then((module) => ({
+    default: module.AuthRoute,
+  })),
+);
 
 function RouteScrollRestoration() {
   const [location] = useLocation();
@@ -82,12 +91,24 @@ export function AppRouter() {
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={LandingPage} />
-          <ProtectedRoute path="/dashboard" component={ChatDashboard} />
-          <ProtectedRoute path="/global-chat/room" component={GlobalChatRoom} />
-          <ProtectedRoute path="/global-chat" component={GlobalChat} />
-          <ProtectedRoute path="/random-chat" component={RandomChatPage} />
-          <ProtectedRoute path="/settings" component={SettingsPage} />
-          <Route path="/auth" component={AuthPage} />
+          <Route path="/dashboard">
+            <ProtectedRouteBoundary component={ChatDashboard} />
+          </Route>
+          <Route path="/global-chat/room">
+            <ProtectedRouteBoundary component={GlobalChatRoom} />
+          </Route>
+          <Route path="/global-chat">
+            <ProtectedRouteBoundary component={GlobalChat} />
+          </Route>
+          <Route path="/random-chat">
+            <ProtectedRouteBoundary component={RandomChatPage} />
+          </Route>
+          <Route path="/settings">
+            <ProtectedRouteBoundary component={SettingsPage} />
+          </Route>
+          <Route path="/auth">
+            <AuthRouteBoundary component={AuthPage} />
+          </Route>
           <Route path="/help-center" component={HelpCenterPage} />
           <Route path="/features" component={FeaturesPage} />
           <Route path="/about" component={AboutPage} />

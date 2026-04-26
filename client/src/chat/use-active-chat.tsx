@@ -3,11 +3,11 @@ import {
   useContext,
   useEffect,
   useState,
-  ReactNode,
   useRef,
   useCallback,
+  type ReactNode,
 } from "react";
-import { Message, type MessageReactionWithUser } from "@shared/schema";
+import type { Message, MessageReactionWithUser } from "@shared/schema";
 import { stripConversationAttachments } from "@/chat/chat-message-utils";
 import { useAuth } from "@/providers/auth-provider";
 import { queryClient } from "@/lib/queryClient";

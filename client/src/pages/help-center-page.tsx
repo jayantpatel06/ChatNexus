@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { fetchWithTimeout } from "@/lib/queryClient";
+import { fetchWithTimeout } from "@/lib/api-client";
 
 const DEFAULT_ISSUE_TYPE = "account_deletion";
 const HELP_CENTER_API_PATH = "/api/help-center";

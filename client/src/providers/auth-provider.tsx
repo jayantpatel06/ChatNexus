@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type {
   GuestLogin,
   LoginUser,
@@ -17,17 +18,18 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import {
   apiRequest,
-  decodeStoredToken,
   fetchWithTimeout,
+} from "@/lib/api-client";
+import {
+  decodeStoredToken,
   getStoredToken,
   getStoredUser,
-  queryClient,
   removeStoredToken,
   removeStoredUser,
   setStoredToken,
   setStoredUser,
-} from "@/lib/queryClient";
-import { unsubscribeFromPushNotifications } from "@/lib/push-notifications";
+} from "@/lib/auth-storage";
+import { queryClient } from "@/lib/queryClient";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -163,6 +165,7 @@ async function guestLogin(payload: GuestLogin) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<SelectUser | null>(() => getStoredUser());
   const [isLoading, setIsLoading] = useState(true);
@@ -404,18 +407,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      const currentToken = getStoredToken();
+
+      const { unsubscribeFromPushNotifications } = await import(
+        "@/lib/push-notifications"
+      );
       await unsubscribeFromPushNotifications().catch(() => undefined);
-      await apiRequest("POST", "/api/logout");
+      await fetchWithTimeout("/api/logout", {
+        method: "POST",
+        headers: currentToken
+          ? {
+              Authorization: `Bearer ${currentToken}`,
+            }
+          : undefined,
+      }).catch(() => undefined);
+    },
+    onMutate: () => {
+      clearSession();
+      setLocation("/auth", { replace: true });
     },
     onSuccess: () => {
-      clearSession();
       toast({
         title: "Logged out",
         description: "See you next time!",
       });
     },
     onError: () => {
-      clearSession();
       toast({
         title: "Logged out",
         description: "See you next time!",

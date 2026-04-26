@@ -6,7 +6,7 @@ import { UsersSidebar } from "@/chat/users-sidebar";
 import { Seo } from "@/components/seo";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { publicUserSchema, type User } from "@shared/schema";
+import type { User } from "@shared/schema";
 
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
@@ -18,6 +18,45 @@ type PrivateChatPageShellProps = {
   path: string;
   testId: string;
 };
+
+function parsePublicUser(value: unknown): User | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const { userId, username, age, gender, isOnline, isGuest } = value as Record<
+    string,
+    unknown
+  >;
+  const hasValidAge =
+    age === null ||
+    (Number.isInteger(age) && (age as number) >= 18 && (age as number) <= 120);
+  const hasValidGender =
+    gender === null || (typeof gender === "string" && gender.length <= 10);
+
+  if (
+    !Number.isInteger(userId) ||
+    (userId as number) <= 0 ||
+    typeof username !== "string" ||
+    username.length < 1 ||
+    username.length > 50 ||
+    !hasValidAge ||
+    !hasValidGender ||
+    typeof isOnline !== "boolean" ||
+    typeof isGuest !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    userId,
+    username,
+    age,
+    gender,
+    isOnline,
+    isGuest,
+  } as User;
+}
 
 export function PrivateChatPageShell({
   title,
@@ -89,7 +128,10 @@ function PrivateChatPageShellContent({
     }
 
     try {
-      onUserSelect(publicUserSchema.parse(JSON.parse(pendingPrivateChat)));
+      const user = parsePublicUser(JSON.parse(pendingPrivateChat));
+      if (user) {
+        onUserSelect(user);
+      }
     } catch {
       // Ignore malformed storage values.
     } finally {
@@ -113,10 +155,15 @@ function PrivateChatPageShellContent({
 
     if (isNaN(userId) || selectedUser?.userId === userId) return;
 
-    import("@/lib/queryClient").then(({ apiRequest, readJsonResponse }) => {
+    import("@/lib/api-client").then(({ apiRequest, readJsonResponse }) => {
       apiRequest("GET", `/api/users/${userId}`)
         .then(readJsonResponse)
-        .then((user) => onUserSelect(publicUserSchema.parse(user)))
+        .then((user) => {
+          const parsedUser = parsePublicUser(user);
+          if (parsedUser) {
+            onUserSelect(parsedUser);
+          }
+        })
         .catch(console.error);
     });
   }, [mode, onUserSelect, search, selectedUser?.userId]);

@@ -1,3 +1,4 @@
+import "@/styles/effects.css";
 import { MessageCircle } from "lucide-react";
 import {
   useEffect,
@@ -7,7 +8,6 @@ import {
   type ReactNode,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import gsap from "gsap";
 
 /* ───────────────────────── hooks ───────────────────────── */
 
@@ -73,12 +73,7 @@ export function TiltCard({
     const midY = rect.height / 2;
     const rotY = ((x - midX) / midX) * 8;
     const rotX = ((midY - y) / midY) * 8;
-    gsap.to(el, {
-      rotateX: rotX,
-      rotateY: rotY,
-      duration: 0.4,
-      ease: "power2.out",
-    });
+    el.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
     if (glare.current) {
       glare.current.style.background = `radial-gradient(circle at ${x}px ${y}px, var(--ln-glare-color) 0%, transparent 70%)`;
     }
@@ -87,12 +82,7 @@ export function TiltCard({
   const handleLeave = useCallback(() => {
     const el = card.current;
     if (!el) return;
-    gsap.to(el, {
-      rotateX: 0,
-      rotateY: 0,
-      duration: 0.6,
-      ease: "elastic.out(1,0.4)",
-    });
+    el.style.transform = "rotateX(0deg) rotateY(0deg)";
     if (glare.current) glare.current.style.background = "transparent";
   }, []);
 
@@ -132,22 +122,12 @@ export function MagneticWrap({
     const rect = el.getBoundingClientRect();
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
-    gsap.to(el, {
-      x: dx * 0.08,
-      y: dy * 0.08,
-      duration: 0.18,
-      ease: "power3.out",
-      overwrite: "auto",
-    });
+    el.style.transform = `translate3d(${dx * 0.08}px, ${dy * 0.08}px, 0)`;
   }, []);
   const handleLeave = useCallback(() => {
-    gsap.to(wrap.current, {
-      x: 0,
-      y: 0,
-      duration: 0.22,
-      ease: "power2.out",
-      overwrite: "auto",
-    });
+    if (wrap.current) {
+      wrap.current.style.transform = "translate3d(0, 0, 0)";
+    }
   }, []);
   return (
     <div
@@ -155,7 +135,11 @@ export function MagneticWrap({
       className={className}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
-      style={{ display: "inline-block" }}
+      style={{
+        display: "inline-block",
+        transition: "transform 180ms ease-out",
+        willChange: "transform",
+      }}
     >
       {children}
     </div>
@@ -191,20 +175,10 @@ export function CustomCursor() {
 
     const onMove = (e: globalThis.MouseEvent) => {
       if (cursorGlow.current) {
-        gsap.to(cursorGlow.current, {
-          x: e.clientX,
-          y: e.clientY,
-          duration: 0.6,
-          ease: "power2.out",
-        });
+        cursorGlow.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
       }
       if (cursorDot.current) {
-        gsap.to(cursorDot.current, {
-          x: e.clientX,
-          y: e.clientY,
-          duration: 0.15,
-          ease: "power2.out",
-        });
+        cursorDot.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
       }
     };
     window.addEventListener("mousemove", onMove);
@@ -345,14 +319,21 @@ export function PagePreloader({
         return;
       }
 
-      gsap.killTweensOf(preloaderRef.current);
-      gsap.to(preloaderRef.current, {
-        opacity: 0,
-        duration: 0.35,
-        ease: "power2.out",
-        pointerEvents: "none",
-        onComplete: finish,
-      });
+      const preloader = preloaderRef.current;
+      let finished = false;
+      const completeFade = () => {
+        if (finished) {
+          return;
+        }
+        finished = true;
+        preloader.removeEventListener("transitionend", completeFade);
+        finish();
+      };
+
+      preloader.addEventListener("transitionend", completeFade);
+      preloader.style.opacity = "0";
+      preloader.style.pointerEvents = "none";
+      window.setTimeout(completeFade, 450);
     };
 
     void waitForReady();
@@ -360,17 +341,15 @@ export function PagePreloader({
     return () => {
       isActive = false;
       abortController.abort();
-      if (preloaderRef.current) {
-        gsap.killTweensOf(preloaderRef.current);
-      }
     };
   }, [ready, watchSelector]);
 
   return (
-    <div ref={preloaderRef} className="preloader">
-      <div className="preloader-ring">
+    <div ref={preloaderRef} className="preloader" role="status" aria-live="polite">
+      <div className="preloader-ring" aria-hidden="true">
         <MessageCircle className="w-8 h-8 text-brand-primary" />
       </div>
+      <span className="sr-only">Loading page...</span>
     </div>
   );
 }

@@ -1,28 +1,47 @@
 import type { ComponentType } from "react";
+import { AuthenticatedSocketBoundary, AuthProviders } from "@/app/auth-boundary";
 import { useAuth } from "@/providers/auth-provider";
 import { Loader2 } from "lucide-react";
-import { Redirect, Route } from "wouter";
+import { Redirect } from "wouter";
+
+function ProtectedRouteLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader2 className="h-8 w-8 animate-spin text-border" />
+    </div>
+  );
+}
 
 export function ProtectedRoute({
-  path,
   component: Component,
 }: {
-  path: string;
+  component: ComponentType;
+}) {
+  return (
+    <AuthProviders>
+      <ProtectedRouteContent component={Component} />
+    </AuthProviders>
+  );
+}
+
+function ProtectedRouteContent({
+  component: Component,
+}: {
   component: ComponentType;
 }) {
   const { user, isLoading } = useAuth();
 
+  if (isLoading) {
+    return <ProtectedRouteLoader />;
+  }
+
+  if (!user) {
+    return <Redirect to="/auth" />;
+  }
+
   return (
-    <Route path={path}>
-      {isLoading ? (
-        <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-border" />
-        </div>
-      ) : !user ? (
-        <Redirect to="/auth" />
-      ) : (
-        <Component />
-      )}
-    </Route>
+    <AuthenticatedSocketBoundary>
+      <Component />
+    </AuthenticatedSocketBoundary>
   );
 }

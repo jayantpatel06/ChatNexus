@@ -233,8 +233,11 @@ function InlineImagePreview({
       <img
         src={url}
         alt="Shared image preview"
+        width="176"
+        height="128"
         className="h-28 w-full object-cover sm:h-32"
         loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setHasError(true)}
       />
@@ -332,8 +335,11 @@ function AttachmentThumbnail({
             <img
               src={attachment.url}
               alt={attachment.filename || "Shared attachment preview"}
+              width="128"
+              height="128"
               className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
               loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
               onError={() => setHasError(true)}
             />
@@ -678,7 +684,10 @@ export const MessageBubble = memo(function MessageBubble({
                       <img
                         src={pendingAttachment.previewUrl}
                         alt={pendingAttachment.file.name}
+                        width="128"
+                        height="128"
                         className="h-28 w-28 object-cover opacity-60 sm:h-32 sm:w-32"
+                        decoding="async"
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                         <div className="flex flex-col items-center gap-2 text-white">
@@ -764,6 +773,7 @@ export const MessageBubble = memo(function MessageBubble({
                           download={attachment.filename}
                           className="rounded p-1 hover:bg-black/10"
                           title="Download"
+                          aria-label={`Download ${attachment.filename || "attachment"}`}
                         >
                           <Download className="h-4 w-4" />
                         </a>

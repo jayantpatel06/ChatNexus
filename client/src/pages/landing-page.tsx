@@ -1,5 +1,5 @@
 import "./landing-page.css";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useLocation } from "wouter";
 import { Seo, getSiteUrl } from "@/components/seo";
 import {
@@ -22,7 +22,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useAuth } from "@/providers/auth-provider";
 import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
 import {
@@ -30,6 +29,7 @@ import {
   MagneticWrap,
   CustomCursor,
 } from "@/components/effects";
+import { hasValidStoredAuthSession } from "@/lib/auth-storage";
 
 const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
 const HOME_SEO_DESCRIPTION =
@@ -125,8 +125,8 @@ const ABOUT_STACK_ITEMS: readonly AboutStackItem[] = [
 /* ───────────────────────── constants ───────────────────────── */
 
 export default function LandingPage() {
-  const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const [hasSession, setHasSession] = useState(hasValidStoredAuthSession);
   const siteUrl = getSiteUrl();
   const seoStructuredData = [
     {
@@ -175,16 +175,29 @@ export default function LandingPage() {
   const faqRef = useReveal(0.12);
   const footerRef = useReveal(0.15);
 
-  const dest = user ? "/dashboard" : "/auth";
-  const guestDest = user ? "/dashboard" : "/auth?mode=guest";
+  const dest = hasSession ? "/dashboard" : "/auth";
+  const guestDest = hasSession ? "/dashboard" : "/auth?mode=guest";
 
   useEffect(() => {
-    if (!isLoading && user) {
+    const syncStoredSession = () => {
+      setHasSession(hasValidStoredAuthSession());
+    };
+
+    window.addEventListener("storage", syncStoredSession);
+    window.addEventListener("focus", syncStoredSession);
+    return () => {
+      window.removeEventListener("storage", syncStoredSession);
+      window.removeEventListener("focus", syncStoredSession);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (hasSession) {
       setLocation("/dashboard");
     }
-  }, [isLoading, user, setLocation]);
+  }, [hasSession, setLocation]);
 
-  if (!isLoading && user) {
+  if (hasSession) {
     return null;
   }
 
@@ -202,7 +215,7 @@ export default function LandingPage() {
         <CustomCursor />
 
         {/* ═══════ Floating Nav ═══════ */}
-        <SiteNav />
+        <SiteNav isAuthenticated={hasSession} />
 
         {/* ═══════ Hero ═══════ */}
         <section id="hero" className="hero">
@@ -219,11 +232,9 @@ export default function LandingPage() {
 
           <div className="hero-cta-row">
             <MagneticWrap>
-              <Link href={dest}>
-                <button className="hero-btn-primary">
-                  <span>{user ? "Open Dashboard" : "Start Chatting Now"}</span>
-                  <ArrowRight className="w-5 h-5" />
-                </button>
+              <Link href={dest} className="hero-btn-primary">
+                <span>{hasSession ? "Open Dashboard" : "Start Chatting Now"}</span>
+                <ArrowRight className="w-5 h-5" />
               </Link>
             </MagneticWrap>
             <MagneticWrap>
@@ -296,11 +307,9 @@ export default function LandingPage() {
             </p>
             <div className="hero-cta-row">
               <MagneticWrap>
-                <Link href={dest}>
-                  <button className="hero-btn-primary">
-                    <span>{user ? "Open Dashboard" : "Start Chatting Now"}</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
+                <Link href={dest} className="hero-btn-primary">
+                  <span>{hasSession ? "Open Dashboard" : "Start Chatting Now"}</span>
+                  <ArrowRight className="w-5 h-5" />
                 </Link>
               </MagneticWrap>
               <MagneticWrap>

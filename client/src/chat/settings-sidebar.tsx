@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/providers/auth-provider";
-import { apiRequest, queryClient, readJsonResponse } from "@/lib/queryClient";
+import { apiRequest, readJsonResponse } from "@/lib/api-client";
+import { queryClient } from "@/lib/queryClient";
 import {
   getPushSubscriptionStatus,
   isPushNotificationsSupported,

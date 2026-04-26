@@ -1,118 +1,3 @@
-/* ═══════════════════════════════════════════════════════════
-   ChatNexus Premium Design Tokens & Shared Effects
-   Glassmorphism · 3D Motion · Micro-interactions
-   ═══════════════════════════════════════════════════════════ */
-
-/* ──── Design Tokens (Centralized Theme) ──── */
-html {
-  --bg-light-1: #ffffff;
-  --bg-light-2: #fafcff;
-  --bg-light-3: #f4f8fb;
-  --bg-light-accent: #f8fbff;
-  --bg-dark-1: #0f171b;
-  --bg-dark-2: #14232a;
-  --bg-dark-3: #1b3138;
-}
-
-:root {
-  /* 🎨 PRIMARY THEME COLORS 
-     Change these hex codes to instantly update the whole app! */
-  --brand-bg: var(--bg-light-1);
-  --brand-sidebar: var(--bg-light-2);
-  --brand-card: var(--bg-light-3);
-  --brand-card-glass: rgba(255, 255, 255, 0.82);
-  --brand-primary: #08b2e3;
-  --brand-primary-hover: #0698c4;
-  --brand-accent: #08b2e3;
-  --brand-text: #1a1817;
-  --brand-muted: #4b5563;
-  /* Balanced so cards and inputs stay legible on a white base */
-  --brand-border: rgba(8, 178, 227, 0.18);
-  --brand-footer: var(--brand-bg);
-
-  /* 💬 MESSAGING & CHAT */
-  --brand-msg-sent: #08b2e3;
-  --brand-msg-sent-text: #ffffff;
-  --brand-msg-received: var(--bg-light-accent);
-  --brand-msg-received-text: #161514;
-
-  /* ✨ GRADIENTS & GLOWS */
-  --brand-grad-start: #08b2e3;
-  --brand-grad-end: #52d9ff;
-  --brand-glow-primary: rgba(8, 178, 227, 0.2);
-  --brand-glow-accent: rgba(82, 217, 255, 0.15);
-
-  /* 👤 AVATAR GRADIENTS */
-  --avatar-0: linear-gradient(135deg, #08b2e3 0%, #0698c4 100%);
-  --avatar-1: linear-gradient(135deg, #08b2e3 0%, #33535d 100%);
-  --avatar-2: linear-gradient(135deg, #f2fcff 0%, #08b2e3 100%);
-  --avatar-3: linear-gradient(135deg, #8fa8ae 0%, #27414a 100%);
-  --avatar-4: linear-gradient(135deg, #52d9ff 0%, #08b2e3 100%);
-  --avatar-5: linear-gradient(135deg, #2d4851 0%, #08b2e3 100%);
-
-  /* Internal Mappings */
-  --ln-bg: var(--bg-light-1);
-  --ln-card: var(--brand-card);
-  --ln-card-glass: var(--brand-card-glass);
-  --ln-primary: var(--brand-primary);
-  --ln-accent: var(--brand-accent);
-  --ln-text: var(--brand-text);
-  --ln-muted: var(--brand-muted);
-  --ln-border: var(--brand-border);
-  --ln-glass-fill: rgba(255, 255, 255, 0.94);
-  --ln-glass-fill-soft: rgba(255, 255, 255, 0.9);
-  --ln-glass-border-strong: rgba(15, 23, 42, 0.1);
-  --ln-glass-shadow:
-    0 18px 42px rgba(15, 23, 42, 0.08),
-    0 6px 18px rgba(8, 178, 227, 0.06);
-  --ln-glare-color: rgba(8, 178, 227, 0.16);
-  --ln-cursor-glow-color: rgba(8, 178, 227, 0.2);
-  --ln-cursor-glow-secondary: rgba(82, 217, 255, 0.14);
-  --ln-cursor-glow-blend: multiply;
-  --ln-glow-purple: var(--brand-glow-primary);
-  --ln-glow-cyan: var(--brand-glow-accent);
-}
-
-.dark {
-  --brand-bg: var(--bg-dark-1);
-  --brand-sidebar: var(--bg-dark-2);
-  --brand-card: var(--bg-dark-3);
-  --brand-card-glass: rgba(20, 34, 41, 0.76);
-  --brand-primary: #45b1eb;
-  --brand-primary-hover: #6ec4f3;
-  --brand-accent: #65a7ca;
-  --brand-text: #f6fbfb;
-  --brand-muted: #e1ebe4;
-  --brand-border: rgba(143, 215, 255, 0.2);
-  --brand-footer: #0f171b;
-  --brand-msg-sent: #0a2940;
-  --brand-msg-sent-text: #dedada;
-  --brand-msg-received: #16262d;
-  --brand-msg-received-text: #f6fbfb;
-  --brand-grad-start: #8fd7ff;
-  --brand-grad-end: #56bfff;
-  --brand-glow-primary: rgba(143, 215, 255, 0.22);
-  --brand-glow-accent: rgba(86, 191, 255, 0.16);
-  --avatar-0: linear-gradient(135deg, #8fd7ff 0%, #6ec4f3 100%);
-  --avatar-1: linear-gradient(135deg, #8fd7ff 0%, #24444d 100%);
-  --avatar-2: linear-gradient(135deg, #eff8ff 0%, #8fd7ff 100%);
-  --avatar-3: linear-gradient(135deg, #94b5b1 0%, #0f171b 100%);
-  --avatar-4: linear-gradient(135deg, #56bfff 0%, #8fd7ff 100%);
-  --avatar-5: linear-gradient(135deg, #18333b 0%, #8fd7ff 100%);
-  --ln-glass-fill: rgba(20, 34, 41, 0.82);
-  --ln-glass-fill-soft: rgba(22, 38, 45, 0.76);
-  --ln-glass-border-strong: rgba(143, 215, 255, 0.2);
-  --ln-glass-shadow:
-    0 20px 46px rgba(0, 0, 0, 0.28),
-    0 6px 18px rgba(143, 215, 255, 0.08);
-  --ln-glare-color: rgba(143, 215, 255, 0.18);
-  --ln-cursor-glow-color: rgba(143, 215, 255, 0.22);
-  --ln-cursor-glow-secondary: rgba(86, 191, 255, 0.16);
-  --ln-cursor-glow-blend: screen;
-  --ln-bg: var(--brand-bg);
-}
-
-/* ──── Root Reset ──── */
 .landing-root {
   position: relative;
   min-height: 100vh;
@@ -123,11 +8,10 @@ html {
     system-ui,
     -apple-system,
     sans-serif;
-  overflow-x: hidden;
+  overflow-x: clip;
   cursor: none;
 }
 
-/* Hide default cursor on all interactive elements too */
 .landing-root *,
 .landing-root a,
 .landing-root button,
@@ -137,30 +21,43 @@ html {
   cursor: none;
 }
 
-/* Hide scrollbar but keep scrolling */
-.landing-root {
-  .landing-root input,
-  .landing-root textarea,
-  .landing-root select {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  .landing-root input:focus,
-  .landing-root textarea:focus,
-  .landing-root select:focus {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-  -ms-overflow-style: none;
+.landing-root input,
+.landing-root textarea,
+.landing-root select {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
-html:has(.landing-root)::-webkit-scrollbar {
+
+.landing-root input:focus,
+.landing-root textarea:focus,
+.landing-root select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.landing-root,
+.auth-shell {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html:has(.landing-root),
+body:has(.landing-root),
+html:has(.auth-shell),
+body:has(.auth-shell) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html:has(.landing-root)::-webkit-scrollbar,
+body:has(.landing-root)::-webkit-scrollbar,
+html:has(.auth-shell)::-webkit-scrollbar,
+body:has(.auth-shell)::-webkit-scrollbar {
   display: none;
 }
 
-/* ═══════ Custom Cursor ═══════ */
 .cursor-glow,
 .cursor-dot {
   position: fixed;
@@ -169,8 +66,10 @@ html:has(.landing-root)::-webkit-scrollbar {
   pointer-events: none;
   z-index: 9999;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
+  will-change: transform;
 }
+
 .cursor-glow {
   width: 340px;
   height: 340px;
@@ -182,19 +81,23 @@ html:has(.landing-root)::-webkit-scrollbar {
   );
   mix-blend-mode: var(--ln-cursor-glow-blend);
   opacity: 0.95;
+  transition: transform 0.18s ease-out;
 }
+
 .cursor-dot {
   width: 8px;
   height: 8px;
   background: var(--ln-accent);
   box-shadow: 0 0 12px 3px var(--ln-glow-cyan);
+  transition: transform 0.04s linear;
 }
-/* hide custom cursor on touch / small screens — restore default */
+
 @media (hover: none), (max-width: 768px) {
   .cursor-glow,
   .cursor-dot {
     display: none;
   }
+
   .landing-root,
   .landing-root *,
   .landing-root a,
@@ -206,50 +109,6 @@ html:has(.landing-root)::-webkit-scrollbar {
   }
 }
 
-/* ═══════ Preloader ═══════ */
-.preloader {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  background: var(--ln-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.preloader-ring {
-  width: 72px;
-  height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: var(--ln-primary);
-  border-right-color: var(--ln-accent);
-  animation:
-    spin 1s linear infinite,
-    pulse-glow 1.6s ease-in-out infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes pulse-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 0 18px var(--ln-glow-purple),
-      0 0 40px var(--ln-glow-cyan);
-  }
-  50% {
-    box-shadow:
-      0 0 30px var(--ln-glow-purple),
-      0 0 60px var(--ln-glow-cyan);
-  }
-}
-
-/* ═══════ Ambient Parallax Orbs ═══════ */
 .ambient-orbs {
   position: fixed;
   inset: 0;
@@ -257,12 +116,14 @@ html:has(.landing-root)::-webkit-scrollbar {
   z-index: 0;
   overflow: hidden;
 }
+
 .orb {
   position: absolute;
   border-radius: 50%;
   filter: blur(110px);
   will-change: transform;
 }
+
 .orb-purple {
   width: 520px;
   height: 520px;
@@ -271,6 +132,7 @@ html:has(.landing-root)::-webkit-scrollbar {
   left: 20%;
   opacity: 0.5;
 }
+
 .orb-cyan {
   width: 400px;
   height: 400px;
@@ -279,6 +141,7 @@ html:has(.landing-root)::-webkit-scrollbar {
   left: 70%;
   opacity: 0.35;
 }
+
 .orb-small {
   width: 200px;
   height: 200px;
@@ -288,7 +151,6 @@ html:has(.landing-root)::-webkit-scrollbar {
   opacity: 0.45;
 }
 
-/* ──── Glassmorphic Tilt Card ──── */
 .tilt-card {
   position: relative;
   border-radius: 20px;
@@ -301,15 +163,18 @@ html:has(.landing-root)::-webkit-scrollbar {
   transition:
     background 0.4s ease,
     box-shadow 0.4s ease,
-    border-color 0.4s ease;
+    border-color 0.4s ease,
+    transform 0.35s ease;
   will-change: transform;
 }
+
 .tilt-card:hover {
   box-shadow:
     0 12px 42px color-mix(in srgb, var(--ln-accent) 18%, transparent),
     0 0 0 1px color-mix(in srgb, var(--ln-accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--ln-accent) 22%, var(--ln-border));
 }
+
 .tilt-card-glare {
   position: absolute;
   inset: 0;
@@ -319,7 +184,6 @@ html:has(.landing-root)::-webkit-scrollbar {
   transition: background 0.3s;
 }
 
-/* ═══════ Scroll Reveal System ═══════ */
 .reveal-item {
   opacity: 0;
   transform: translateY(40px);
@@ -327,12 +191,12 @@ html:has(.landing-root)::-webkit-scrollbar {
     opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .reveal-item.revealed {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* ═══════ Auth Page Overrides ═══════ */
 .auth-input {
   background: color-mix(in srgb, var(--ln-card) 72%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--ln-text) 10%, var(--ln-border)) !important;
@@ -342,11 +206,13 @@ html:has(.landing-root)::-webkit-scrollbar {
     box-shadow 0.3s,
     background 0.3s !important;
 }
+
 .auth-input:focus {
   border-color: var(--ln-accent) !important;
   background: color-mix(in srgb, var(--ln-card) 82%, var(--ln-accent) 8%) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ln-accent) 20%, transparent) !important;
 }
+
 .auth-label {
   color: var(--ln-muted);
 }

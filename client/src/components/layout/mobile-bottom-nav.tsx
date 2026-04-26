@@ -45,23 +45,23 @@ export function MobileBottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
-            <Link key={item.id} href={item.href}>
-              <a
-                className={cn(
-                  "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
-                  item.isActive
-                    ? "bg-primary/14 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon
-                  className="h-[22px] w-[22px]"
-                  strokeWidth={item.isActive ? 2.4 : 2}
-                />
-                <span className="whitespace-nowrap text-[12px] font-medium leading-none tracking-tight">
-                  {item.label}
-                </span>
-              </a>
+            <Link
+              key={item.id}
+              href={item.href}
+              className={cn(
+                "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
+                item.isActive
+                  ? "bg-primary/14 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon
+                className="h-[22px] w-[22px]"
+                strokeWidth={item.isActive ? 2.4 : 2}
+              />
+              <span className="whitespace-nowrap text-[12px] font-medium leading-none tracking-tight">
+                {item.label}
+              </span>
             </Link>
           );
         })}

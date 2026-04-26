@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLocation, Link } from "wouter";
 import { useForm, type FieldErrors } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import gsap from "gsap";
-import { z } from "zod";
 import { Eye, EyeOff, Loader2, X } from "lucide-react";
-import {
-  guestLoginSchema,
-  loginUserSchema,
-  registerUserSchema,
-} from "@shared/schema";
+import type { GuestLogin, LoginUser, RegisterUser } from "@shared/schema";
 import { Seo } from "@/components/seo";
-import { PagePreloader } from "@/components/effects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,9 +56,16 @@ const AUTH_HEADER_GLOW_STYLE = {
   background:
     "linear-gradient(180deg, color-mix(in srgb, var(--brand-glow-accent) 55%, transparent), transparent)",
 } satisfies CSSProperties;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type AuthMode = "guest" | "login" | "register";
-type GenderOption = z.infer<typeof registerUserSchema>["gender"];
+type GenderOption = "Male" | "Female" | "Other";
+type RegisterFormData = Omit<RegisterUser, "gender"> & {
+  gender?: GenderOption;
+};
+type GuestFormData = Omit<GuestLogin, "gender"> & {
+  gender?: GenderOption;
+};
 
 const MODE_COPY: Record<
   AuthMode,
@@ -145,16 +144,14 @@ export default function AuthPage() {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const loginForm = useForm<z.infer<typeof loginUserSchema>>({
-    resolver: zodResolver(loginUserSchema),
+  const loginForm = useForm<LoginUser>({
     defaultValues: {
       gmail: "",
       password: "",
     },
   });
 
-  const registerForm = useForm<z.infer<typeof registerUserSchema>>({
-    resolver: zodResolver(registerUserSchema),
+  const registerForm = useForm<RegisterFormData>({
     defaultValues: {
       gmail: "",
       password: "",
@@ -164,12 +161,11 @@ export default function AuthPage() {
     },
   });
 
-  const guestForm = useForm<z.infer<typeof guestLoginSchema>>({
-    resolver: zodResolver(guestLoginSchema),
+  const guestForm = useForm<GuestFormData>({
     defaultValues: {
       username: "",
       age: 18,
-      gender: undefined,
+      gender: "Male",
     },
   });
 
@@ -180,21 +176,32 @@ export default function AuthPage() {
   }, [user, setLocation]);
 
   useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => setLoaded(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading]);
+
+  useEffect(() => {
     if (!loaded || !containerRef.current) {
       return;
     }
 
-    gsap.fromTo(
-      containerRef.current,
-      { y: 24, opacity: 0, scale: 0.98 },
+    const animation = containerRef.current.animate(
+      [
+        { opacity: 0, transform: "translateY(24px) scale(0.98)" },
+        { opacity: 1, transform: "translateY(0) scale(1)" },
+      ],
       {
-        y: 0,
-        opacity: 1,
-        scale: 1,
-        duration: 0.65,
-        ease: "power3.out",
+        duration: 650,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
       },
     );
+
+    return () => animation.cancel();
   }, [loaded]);
 
   if (user) {
@@ -226,16 +233,34 @@ export default function AuthPage() {
     registerMutation.isPending ||
     guestLoginMutation.isPending;
 
-  const handleLogin = (data: z.infer<typeof loginUserSchema>) => {
+  const handleLogin = (data: LoginUser) => {
     loginMutation.mutate(data);
   };
 
-  const handleRegister = (data: z.infer<typeof registerUserSchema>) => {
-    registerMutation.mutate(data);
+  const handleRegister = (data: RegisterFormData) => {
+    if (!data.gender) {
+      toast({
+        title: "Check the form",
+        description: "Please select your gender.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    registerMutation.mutate({ ...data, gender: data.gender });
   };
 
-  const handleGuestLogin = (data: z.infer<typeof guestLoginSchema>) => {
-    guestLoginMutation.mutate(data);
+  const handleGuestLogin = (data: GuestFormData) => {
+    if (!data.gender) {
+      toast({
+        title: "Check the form",
+        description: "Please select your gender.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    guestLoginMutation.mutate({ ...data, gender: data.gender });
   };
 
   const handleValidationError = (errors: FieldErrors) => {
@@ -270,7 +295,13 @@ export default function AuthPage() {
               autoComplete="email"
               placeholder="Enter your email address"
               className={FIELD_CLASS_NAME}
-              {...loginForm.register("gmail")}
+              {...loginForm.register("gmail", {
+                required: "Email is required.",
+                pattern: {
+                  value: EMAIL_PATTERN,
+                  message: "Please enter a valid email address.",
+                },
+              })}
               data-testid="input-login-email"
             />
           </div>
@@ -286,7 +317,9 @@ export default function AuthPage() {
                 autoComplete="current-password"
                 placeholder="Password"
                 className={cn(FIELD_CLASS_NAME, "pr-12")}
-                {...loginForm.register("password")}
+                {...loginForm.register("password", {
+                  required: "Password is required.",
+                })}
                 data-testid="input-login-password"
               />
               <button
@@ -336,7 +369,17 @@ export default function AuthPage() {
                 autoComplete="username"
                 placeholder="Username"
                 className={FIELD_CLASS_NAME}
-                {...registerForm.register("username")}
+                {...registerForm.register("username", {
+                  required: "Username is required.",
+                  minLength: {
+                    value: 1,
+                    message: "Username is required.",
+                  },
+                  maxLength: {
+                    value: 50,
+                    message: "Username must be 50 characters or fewer.",
+                  },
+                })}
                 data-testid="input-register-username"
               />
             </div>
@@ -353,7 +396,18 @@ export default function AuthPage() {
                 inputMode="numeric"
                 placeholder="Age"
                 className={FIELD_CLASS_NAME}
-                {...registerForm.register("age", { valueAsNumber: true })}
+                {...registerForm.register("age", {
+                  required: "Age is required.",
+                  valueAsNumber: true,
+                  min: {
+                    value: 18,
+                    message: "You must be at least 18 years old.",
+                  },
+                  max: {
+                    value: 120,
+                    message: "Please enter a valid age.",
+                  },
+                })}
                 data-testid="input-register-age"
               />
             </div>
@@ -369,7 +423,13 @@ export default function AuthPage() {
               autoComplete="email"
               placeholder="Enter your email address"
               className={FIELD_CLASS_NAME}
-              {...registerForm.register("gmail")}
+              {...registerForm.register("gmail", {
+                required: "Email is required.",
+                pattern: {
+                  value: EMAIL_PATTERN,
+                  message: "Please enter a valid email address.",
+                },
+              })}
               data-testid="input-register-email"
             />
           </div>
@@ -386,7 +446,13 @@ export default function AuthPage() {
                   autoComplete="new-password"
                   placeholder="Password"
                   className={cn(FIELD_CLASS_NAME, "pr-12")}
-                  {...registerForm.register("password")}
+                  {...registerForm.register("password", {
+                    required: "Password is required.",
+                    minLength: {
+                      value: 6,
+                      message: "Password must be at least 6 characters.",
+                    },
+                  })}
                   data-testid="input-register-password"
                 />
                 <button
@@ -495,7 +561,17 @@ export default function AuthPage() {
             placeholder="Choose a guest username"
             className={FIELD_CLASS_NAME}
             data-testid="input-guest-username"
-            {...guestForm.register("username")}
+            {...guestForm.register("username", {
+              required: "Guest username is required.",
+              minLength: {
+                value: 2,
+                message: "Guest username must be at least 2 characters.",
+              },
+              maxLength: {
+                value: 20,
+                message: "Guest username must be 20 characters or fewer.",
+              },
+            })}
           />
         </div>
 
@@ -507,13 +583,24 @@ export default function AuthPage() {
             <Input
               id="guest-age"
               type="number"
-              min={13}
+              min={18}
               max={120}
               inputMode="numeric"
               placeholder="Age"
               className={FIELD_CLASS_NAME}
               data-testid="input-guest-age"
-              {...guestForm.register("age", { valueAsNumber: true })}
+              {...guestForm.register("age", {
+                required: "Age is required.",
+                valueAsNumber: true,
+                min: {
+                  value: 18,
+                  message: "You must be at least 18 years old.",
+                },
+                max: {
+                  value: 120,
+                  message: "Please enter a valid age.",
+                },
+              })}
             />
           </div>
 
@@ -580,9 +667,7 @@ export default function AuthPage() {
         description={AUTH_SEO_DESCRIPTION}
         path="/auth"
       />
-      <PagePreloader ready={!isLoading} onComplete={() => setLoaded(true)} />
-
-      <div className="relative h-[100dvh] overflow-hidden bg-[#05080d] text-white">
+      <div className="auth-shell relative h-[100dvh] overflow-hidden bg-[#05080d] text-white">
         <div className="absolute inset-0" style={AUTH_BACKGROUND_STYLE} />
         <div
           className="absolute -top-28 right-[16%] h-[28rem] w-20 rotate-[28deg] blur-2xl opacity-60"
@@ -601,16 +686,17 @@ export default function AuthPage() {
               className="relative flex h-full max-h-[calc(100dvh-2rem)] w-full max-w-[24rem] flex-col rounded-[2rem] border p-5 backdrop-blur-2xl sm:max-h-[calc(100dvh-2.5rem)] sm:p-7 lg:max-h-[calc(100dvh-2rem)] lg:p-6"
               style={AUTH_CARD_STYLE}
             >
-              <Link href="/">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="absolute right-4 top-4 z-10 h-10 w-10 rounded-full border border-white/10 bg-white/[0.05] p-0 text-white/70 backdrop-blur-md hover:bg-white/[0.08] hover:text-white"
-                  data-testid="button-auth-close"
-                >
+              <Button
+                asChild
+                variant="ghost"
+                aria-label="Close auth page"
+                className="absolute right-4 top-4 z-10 h-10 w-10 rounded-full border border-white/10 bg-white/[0.05] p-0 text-white/70 backdrop-blur-md hover:bg-white/[0.08] hover:text-white"
+                data-testid="button-auth-close"
+              >
+                <Link href="/">
                   <X className="h-4 w-4" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
 
               <div className="flex h-full flex-col overflow-y-auto px-1 pt-10 scrollbar-none sm:pt-9">
                 <div className="mb-5 text-center">

@@ -15,13 +15,11 @@ import {
 } from "lucide-react";
 import {
   CustomCursor,
-  PagePreloader,
   AmbientOrbs,
   useParallax,
   useReveal,
   MagneticWrap,
 } from "@/components/effects";
-import gsap from "gsap";
 
 const VALUES = [
   {
@@ -96,18 +94,25 @@ export default function AboutPage() {
   const timelineRef = useReveal(0.12);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setLoaded(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     if (!loaded || !heroRef.current) return;
-    gsap.fromTo(
-      heroRef.current,
-      { y: 50, opacity: 0, filter: "blur(6px)" },
+    const animation = heroRef.current.animate(
+      [
+        { opacity: 0, transform: "translateY(50px)", filter: "blur(6px)" },
+        { opacity: 1, transform: "translateY(0)", filter: "blur(0)" },
+      ],
       {
-        y: 0,
-        opacity: 1,
-        filter: "blur(0px)",
-        duration: 0.9,
-        ease: "power3.out",
+        duration: 900,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
       },
     );
+
+    return () => animation.cancel();
   }, [loaded]);
 
   return (
@@ -118,8 +123,6 @@ export default function AboutPage() {
         path="/about"
         keywords="about ChatNexus, ChatNexus team, anonymous chat platform mission, stranger chat story"
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
-
       <div className="landing-root">
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />
@@ -229,11 +232,9 @@ export default function AboutPage() {
             Join ChatNexus today and start connecting with people worldwide.
           </p>
           <MagneticWrap>
-            <Link href="/auth">
-              <button className="hero-btn-primary">
-                <span>Join ChatNexus</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
+            <Link href="/auth" className="hero-btn-primary">
+              <span>Join ChatNexus</span>
+              <ArrowRight className="w-5 h-5" />
             </Link>
           </MagneticWrap>
         </section>

@@ -1,11 +1,27 @@
 import "./site-nav.css";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowRight } from "lucide-react";
-import { useAuth } from "@/providers/auth-provider";
+import {
+  ArrowRight,
+  LayoutDashboard,
+  LogIn,
+  Menu,
+  MoonStar,
+  SunMedium,
+  UserPlus,
+  UserRound,
+} from "lucide-react";
 import { MagneticWrap } from "@/components/effects";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { scrollToSectionId } from "@/lib/lenis";
+import { hasValidStoredAuthSession } from "@/lib/auth-storage";
 import {
   applyTheme,
   getStoredTheme,
@@ -21,6 +37,10 @@ type ThemeAnimationStart =
 
 const LANDING_SECTION_IDS = ["hero", "features", "about", "faq", "support"] as const;
 const NAV_LOGO_SRC = "/assets/images/logo-48.png";
+
+type SiteNavProps = {
+  isAuthenticated?: boolean;
+};
 
 function createThemeTransitionCss(
   start: ThemeAnimationStart = "bottom-up",
@@ -90,11 +110,7 @@ function createThemeTransitionCss(
   `;
 }
 
-export const ThemeToggleButton2 = ({
-  className = "",
-}: {
-  className?: string;
-}) => {
+function useThemeToggleState() {
   const [isDark, setIsDark] = useState(() =>
     typeof window !== "undefined"
       ? (getStoredTheme() ??
@@ -141,6 +157,16 @@ export const ThemeToggleButton2 = ({
 
     viewTransitionDocument.startViewTransition(switchTheme);
   }, [isDark]);
+
+  return { clipPathId, isDark, toggleTheme };
+}
+
+export const ThemeToggleButton2 = ({
+  className = "",
+}: {
+  className?: string;
+}) => {
+  const { clipPathId, isDark, toggleTheme } = useThemeToggleState();
 
   return (
     <button
@@ -214,11 +240,43 @@ export const ThemeToggleButton2 = ({
   );
 };
 
-export default function SiteNav() {
-  const { user } = useAuth();
-  const [location] = useLocation();
+function ThemeToggleMenuItem() {
+  const { isDark, toggleTheme } = useThemeToggleState();
+  const Icon = isDark ? SunMedium : MoonStar;
+
+  return (
+    <DropdownMenuItem onSelect={() => toggleTheme()} className="nav-mobile-menu__item">
+      <Icon className="h-4 w-4" />
+      <span>{isDark ? "Light mode" : "Dark mode"}</span>
+    </DropdownMenuItem>
+  );
+}
+
+export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
+  const [location, setLocation] = useLocation();
   const isLanding = location === "/";
   const navRef = useRef<HTMLElement>(null);
+  const [hasSession, setHasSession] = useState(
+    () => isAuthenticated ?? hasValidStoredAuthSession(),
+  );
+
+  useEffect(() => {
+    if (isAuthenticated !== undefined) {
+      setHasSession(isAuthenticated);
+      return;
+    }
+
+    const syncStoredSession = () => {
+      setHasSession(hasValidStoredAuthSession());
+    };
+
+    window.addEventListener("storage", syncStoredSession);
+    window.addEventListener("focus", syncStoredSession);
+    return () => {
+      window.removeEventListener("storage", syncStoredSession);
+      window.removeEventListener("focus", syncStoredSession);
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isLanding || !navRef.current) return;
@@ -282,7 +340,14 @@ export default function SiteNav() {
     };
   }, [isLanding]);
 
-  const dest = user ? "/dashboard" : "/auth";
+  const dest = hasSession ? "/dashboard" : "/auth";
+  const mobileMenuItems = hasSession
+    ? [{ label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard }]
+    : [
+        { label: "Login", href: "/auth?mode=login", Icon: LogIn },
+        { label: "Sign Up", href: "/auth?mode=register", Icon: UserPlus },
+        { label: "Login as Guest", href: "/auth?mode=guest", Icon: UserRound },
+      ];
 
   const handleLandingSectionClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
@@ -357,15 +422,46 @@ export default function SiteNav() {
         </div>
 
         <div className="nav-actions">
-          <ThemeToggleButton2 />
+          <ThemeToggleButton2 className="nav-theme-toggle" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="landing-theme-toggle nav-mobile-menu-trigger"
+                aria-label="Open account menu"
+                title="Open account menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={10}
+              className="nav-mobile-menu w-46 rounded-2xl p-2"
+            >
+              {mobileMenuItems.map(({ label, href, Icon }) => (
+                <DropdownMenuItem
+                  key={href}
+                  onSelect={() => setLocation(href)}
+                  className="nav-mobile-menu__item"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="nav-mobile-menu__separator" />
+              <ThemeToggleMenuItem />
+            </DropdownMenuContent>
+          </DropdownMenu>
           <MagneticWrap>
             <Link
               href={dest}
               className="nav-cta"
-              aria-label={user ? "Open dashboard" : "Get started"}
+              aria-label={hasSession ? "Open dashboard" : "Get started"}
+              title={hasSession ? "Open dashboard" : "Get started"}
             >
               <span className="nav-cta-label">
-                {user ? "Dashboard" : "Get Started"}
+                {hasSession ? "Dashboard" : "Get Started"}
               </span>
               <ArrowRight className="w-4 h-4 ml-1 cta-arrow" />
             </Link>

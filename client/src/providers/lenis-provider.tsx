@@ -1,5 +1,5 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
-import Lenis from "lenis";
+import type Lenis from "lenis";
 import { setAppLenis } from "@/lib/lenis";
 
 export function LenisProvider({ children }: PropsWithChildren) {
@@ -83,23 +83,33 @@ export function LenisProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const lenis = new Lenis({
-      autoRaf: true,
-      smoothWheel: true,
-      syncTouch: true,
-      allowNestedScroll: true,
-      lerp: 0.09,
-      duration: 1,
-      syncTouchLerp: 0.075,
-      touchMultiplier: 1,
-      touchInertiaExponent: 1.7,
+    let cancelled = false;
+    let lenis: Lenis | null = null;
+
+    void import("lenis").then(({ default: LenisConstructor }) => {
+      if (cancelled) {
+        return;
+      }
+
+      lenis = new LenisConstructor({
+        autoRaf: true,
+        smoothWheel: true,
+        syncTouch: true,
+        allowNestedScroll: true,
+        lerp: 0.09,
+        duration: 1,
+        syncTouchLerp: 0.075,
+        touchMultiplier: 1,
+        touchInertiaExponent: 1.7,
+      });
+
+      setAppLenis(lenis);
     });
 
-    setAppLenis(lenis);
-
     return () => {
+      cancelled = true;
       setAppLenis(null);
-      lenis.destroy();
+      lenis?.destroy();
     };
   }, [isPhoneViewport, prefersReducedMotion]);
 

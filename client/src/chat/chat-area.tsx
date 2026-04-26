@@ -1,14 +1,14 @@
 import { Fragment, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { getStoredToken } from "@/lib/queryClient";
+import { getStoredToken } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
+import type {
   User,
   Message,
   FriendRequest,
-  type MessageReactionWithUser,
+  MessageReactionWithUser,
 } from "@shared/schema";
 import {
   Ban,
@@ -58,9 +58,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   apiRequest,
   fetchWithTimeout,
-  queryClient,
   readJsonResponse,
-} from "@/lib/queryClient";
+} from "@/lib/api-client";
+import { queryClient } from "@/lib/queryClient";
 import { getStoredTheme } from "@/lib/theme";
 import EmojiPicker, {
   EmojiClickData,

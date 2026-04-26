@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, TrendingUp, X } from "lucide-react";
-import { fetchWithTimeout } from "@/lib/queryClient";
+import { fetchWithTimeout } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const TENOR_API_KEY = import.meta.env.VITE_TENOR_API_KEY?.trim() ?? "";

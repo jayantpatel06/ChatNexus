@@ -1,19 +1,14 @@
 import "./legal-pages.css";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
 import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
 import { Seo } from "@/components/seo";
-import { ArrowRight } from "lucide-react";
 import {
   CustomCursor,
-  PagePreloader,
   AmbientOrbs,
   useParallax,
   useReveal,
-  MagneticWrap,
 } from "@/components/effects";
-import gsap from "gsap";
 
 const SECTIONS = [
   {
@@ -123,12 +118,25 @@ export default function PrivacyPolicyPage() {
   const contentRef = useReveal(0.1);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setLoaded(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     if (!loaded || !heroRef.current) return;
-    gsap.fromTo(
-      heroRef.current,
-      { y: 40, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" },
+    const animation = heroRef.current.animate(
+      [
+        { opacity: 0, transform: "translateY(40px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      {
+        duration: 800,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
+      },
     );
+
+    return () => animation.cancel();
   }, [loaded]);
 
   return (
@@ -139,8 +147,6 @@ export default function PrivacyPolicyPage() {
         path="/privacy"
         robots="index, follow"
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
-
       <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />

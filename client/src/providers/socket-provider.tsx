@@ -12,7 +12,7 @@ import type { Socket } from "socket.io-client";
 import { io } from "socket.io-client";
 import type { Message, User } from "@shared/schema";
 import { useAuth } from "@/providers/auth-provider";
-import { apiRequest, readJsonResponse } from "@/lib/queryClient";
+import { apiRequest, readJsonResponse } from "@/lib/api-client";
 
 const SOCKET_TRANSPORTS = ["websocket"];
 const SOCKET_RECONNECTION_DELAY_MS = 1000;

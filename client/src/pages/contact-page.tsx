@@ -14,15 +14,13 @@ import {
 } from "lucide-react";
 import {
   CustomCursor,
-  PagePreloader,
   AmbientOrbs,
   useParallax,
   useReveal,
   MagneticWrap,
 } from "@/components/effects";
 import { useToast } from "@/hooks/use-toast";
-import { fetchWithTimeout } from "@/lib/queryClient";
-import gsap from "gsap";
+import { fetchWithTimeout } from "@/lib/api-client";
 
 export default function ContactPage() {
   const scrollY = useParallax();
@@ -40,18 +38,25 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setLoaded(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     if (!loaded || !heroRef.current) return;
-    gsap.fromTo(
-      heroRef.current,
-      { y: 50, opacity: 0, filter: "blur(6px)" },
+    const animation = heroRef.current.animate(
+      [
+        { opacity: 0, transform: "translateY(50px)", filter: "blur(6px)" },
+        { opacity: 1, transform: "translateY(0)", filter: "blur(0)" },
+      ],
       {
-        y: 0,
-        opacity: 1,
-        filter: "blur(0px)",
-        duration: 0.9,
-        ease: "power3.out",
+        duration: 900,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
       },
     );
+
+    return () => animation.cancel();
   }, [loaded]);
 
   const handleChange = (
@@ -118,8 +123,6 @@ export default function ContactPage() {
         path="/contact"
         keywords="contact ChatNexus, ChatNexus support, reach ChatNexus team"
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
-
       <div className="landing-root">
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />

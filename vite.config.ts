@@ -63,6 +63,9 @@ export default defineConfig(({ mode }) => {
     },
     root: path.resolve(process.cwd(), "client"),
     build: {
+      modulePreload: {
+        polyfill: false,
+      },
       outDir: path.resolve(process.cwd(), "dist/public"),
       emptyOutDir: true,
     },

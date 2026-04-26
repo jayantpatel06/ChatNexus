@@ -17,13 +17,11 @@ import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
 import {
   CustomCursor,
-  PagePreloader,
   AmbientOrbs,
   useParallax,
   useReveal,
   MagneticWrap,
 } from "@/components/effects";
-import gsap from "gsap";
 
 const FEATURES = [
   {
@@ -129,12 +127,25 @@ export default function FeaturesPage() {
   const compareRef = useReveal(0.12);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setLoaded(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     if (!loaded || !heroRef.current) return;
-    gsap.fromTo(
-      heroRef.current,
-      { y: 50, opacity: 0, filter: "blur(6px)" },
-      { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.9, ease: "power3.out" },
+    const animation = heroRef.current.animate(
+      [
+        { opacity: 0, transform: "translateY(50px)", filter: "blur(6px)" },
+        { opacity: 1, transform: "translateY(0)", filter: "blur(0)" },
+      ],
+      {
+        duration: 900,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "forwards",
+      },
     );
+
+    return () => animation.cancel();
   }, [loaded]);
 
   return (
@@ -145,8 +156,6 @@ export default function FeaturesPage() {
         path="/features"
         keywords="ChatNexus features, anonymous chat features, real-time messaging, global chat rooms, guest access, PWA chat app"
       />
-      <PagePreloader onComplete={() => setLoaded(true)} />
-
       <div className="landing-root">
         <CustomCursor />
         <AmbientOrbs scrollY={scrollY} />
@@ -257,11 +266,9 @@ export default function FeaturesPage() {
             Join thousands of users already connecting on ChatNexus.
           </p>
           <MagneticWrap>
-            <Link href="/auth">
-              <button className="hero-btn-primary">
-                <span>Get Started Free</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
+            <Link href="/auth" className="hero-btn-primary">
+              <span>Get Started Free</span>
+              <ArrowRight className="w-5 h-5" />
             </Link>
           </MagneticWrap>
         </section>

@@ -1,4 +1,4 @@
-import { apiRequest, readJsonResponse } from "@/lib/queryClient";
+import { apiRequest, readJsonResponse } from "@/lib/api-client";
 
 type WebPushServerKeyResponse = {
   publicKey: string;

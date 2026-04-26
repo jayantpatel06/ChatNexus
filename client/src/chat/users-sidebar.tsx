@@ -14,7 +14,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import type { User } from "@shared/schema";
-import { apiRequest, readJsonResponse } from "@/lib/queryClient";
+import { apiRequest, readJsonResponse } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
