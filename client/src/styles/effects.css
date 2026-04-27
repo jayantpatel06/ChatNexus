@@ -2,6 +2,7 @@
   position: relative;
   min-height: 100vh;
   background: var(--ln-bg);
+  --ln-muted: var(--brand-text);
   color: var(--ln-text);
   font-family:
     "Inter",
@@ -71,13 +72,13 @@ body:has(.auth-shell)::-webkit-scrollbar {
 }
 
 .cursor-glow {
-  width: 340px;
-  height: 340px;
+  width: 240px;
+  height: 240px;
   background: radial-gradient(
     circle,
     var(--ln-cursor-glow-color) 0%,
-    var(--ln-cursor-glow-secondary) 42%,
-    transparent 72%
+    var(--ln-cursor-glow-secondary) 36%,
+    transparent 62%
   );
   mix-blend-mode: var(--ln-cursor-glow-blend);
   opacity: 0.95;

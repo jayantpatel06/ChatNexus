@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Globe, Loader2, Search } from "lucide-react";
 import type { GlobalMessageWithSender, User } from "@shared/schema";
 import { useLocation } from "wouter";
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { GlobalChatRoomPanel } from "@/chat/global-chat-room-panel";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { Seo } from "@/components/seo";
@@ -107,17 +108,17 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "chat" && location !== "/dashboard") {
-      setLocation("/dashboard");
+      navigateWithinAppShell(location, "/dashboard", setLocation);
       return;
     }
 
     if (item === "random" && location !== "/random-chat") {
-      setLocation("/random-chat");
+      navigateWithinAppShell(location, "/random-chat", setLocation);
       return;
     }
 
     if (item === "settings" && location !== "/settings") {
-      setLocation("/settings");
+      navigateWithinAppShell(location, "/settings", setLocation);
       return;
     }
 
@@ -127,7 +128,7 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
     }
 
     if (location !== "/global-chat") {
-      setLocation("/global-chat");
+      navigateWithinAppShell(location, "/global-chat", setLocation);
     }
   };
 
@@ -136,7 +137,7 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
       PENDING_PRIVATE_CHAT_KEY,
       JSON.stringify(selectedUser),
     );
-    setLocation("/dashboard");
+    navigateWithinAppShell(location, "/dashboard", setLocation);
   };
 
   return (

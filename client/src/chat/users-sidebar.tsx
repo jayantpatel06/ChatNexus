@@ -20,6 +20,7 @@ import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { MoreVertical, Search } from "lucide-react";
 import { useLocation } from "wouter";
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useSocket } from "@/providers/socket-provider";
 import {
   ChatNavigationMenu,
@@ -529,14 +530,14 @@ export function UsersSidebar({
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random") {
       if (location !== "/random-chat") {
-        setLocation("/random-chat");
+        navigateWithinAppShell(location, "/random-chat", setLocation);
       }
       return;
     }
 
     if (item === "settings") {
       if (location !== "/settings") {
-        setLocation("/settings");
+        navigateWithinAppShell(location, "/settings", setLocation);
       }
       return;
     }
@@ -548,13 +549,13 @@ export function UsersSidebar({
 
     if (item === "global") {
       if (location !== "/global-chat") {
-        setLocation("/global-chat");
+        navigateWithinAppShell(location, "/global-chat", setLocation);
       }
       return;
     }
 
     if (location !== "/dashboard") {
-      setLocation("/dashboard");
+      navigateWithinAppShell(location, "/dashboard", setLocation);
     }
   };
 
@@ -605,7 +606,7 @@ export function UsersSidebar({
                     <MoreVertical className="h-5 w-5 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-36">
                   <DropdownMenuLabel>Filters</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioGroup

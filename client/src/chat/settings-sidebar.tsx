@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { apiRequest, readJsonResponse } from "@/lib/api-client";
 import { queryClient } from "@/lib/queryClient";
@@ -266,16 +267,16 @@ export function SettingsSidebar() {
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random" && location !== "/random-chat") {
-      setLocation("/random-chat");
+      navigateWithinAppShell(location, "/random-chat", setLocation);
     }
     if (item === "global" && location !== "/global-chat") {
-      setLocation("/global-chat");
+      navigateWithinAppShell(location, "/global-chat", setLocation);
     }
     if (item === "chat" && location !== "/dashboard") {
-      setLocation("/dashboard");
+      navigateWithinAppShell(location, "/dashboard", setLocation);
     }
     if (item === "settings" && location !== "/settings") {
-      setLocation("/settings");
+      navigateWithinAppShell(location, "/settings", setLocation);
     }
     if (item === "logout") {
       logoutMutation.mutate();

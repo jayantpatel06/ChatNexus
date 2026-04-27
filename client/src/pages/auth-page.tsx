@@ -108,6 +108,45 @@ const getInitialAuthMode = (): AuthMode => {
   return "login";
 };
 
+const DEFAULT_POST_AUTH_PATH = "/dashboard";
+const ALLOWED_POST_AUTH_PATHS = new Set([
+  "/dashboard",
+  "/global-chat",
+  "/random-chat",
+  "/settings",
+]);
+
+function getPostAuthRedirectPath() {
+  if (typeof window === "undefined") {
+    return DEFAULT_POST_AUTH_PATH;
+  }
+
+  const rawRedirect = new URLSearchParams(window.location.search).get(
+    "redirect",
+  );
+
+  if (!rawRedirect) {
+    return DEFAULT_POST_AUTH_PATH;
+  }
+
+  if (!rawRedirect.startsWith("/") || rawRedirect.startsWith("//")) {
+    return DEFAULT_POST_AUTH_PATH;
+  }
+
+  try {
+    const redirectUrl = new URL(rawRedirect, window.location.origin);
+    const redirectPath = redirectUrl.pathname;
+
+    if (!ALLOWED_POST_AUTH_PATHS.has(redirectPath)) {
+      return DEFAULT_POST_AUTH_PATH;
+    }
+
+    return redirectPath;
+  } catch {
+    return DEFAULT_POST_AUTH_PATH;
+  }
+}
+
 const getFirstErrorMessage = (errors: FieldErrors): string | undefined => {
   for (const value of Object.values(errors)) {
     if (!value) {
@@ -143,6 +182,7 @@ export default function AuthPage() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const postAuthRedirectPathRef = useRef<string>(getPostAuthRedirectPath());
 
   const loginForm = useForm<LoginUser>({
     defaultValues: {
@@ -171,7 +211,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      setLocation("/dashboard");
+      setLocation(postAuthRedirectPathRef.current, { replace: true });
     }
   }, [user, setLocation]);
 

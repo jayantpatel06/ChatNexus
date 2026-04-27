@@ -2458,13 +2458,12 @@ export function ChatArea({
 
             {showEmptyConversationState && (
               <div className="flex min-h-full items-center justify-center py-6">
-                <div className="relative w-full max-w-[21rem] overflow-hidden rounded-[2rem] border border-white/5 bg-muted px-6 py-6 text-center shadow-[0_30px_80px_rgba(2,6,23,0.32)]">
-                  <div className="absolute inset-x-10 top-0 h-24 rounded-full bg-white/8 blur-3xl" />
+                <div className="relative w-full max-w-[21rem] overflow-hidden rounded-[2rem] border border-border/60 bg-card px-6 py-6 text-center">
                   <div className="relative">
-                    <h3 className="text-[1rem] font-semibold tracking-tight text-white">
+                    <h3 className="text-[1rem] font-semibold tracking-tight text-foreground">
                       No messages here yet
                     </h3>
-                    <p className="mt-3 text-[.8rem] text-white/90">
+                    <p className="mt-3 text-[.8rem] text-muted-foreground">
                       Send a message and Start the conversation with {selectedUser.username}!
                     </p>
                   </div>

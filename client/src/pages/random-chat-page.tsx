@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -499,21 +500,21 @@ export default function RandomChatPage() {
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "settings") {
       if (location !== "/settings") {
-        setLocation("/settings");
+        navigateWithinAppShell(location, "/settings", setLocation);
       }
       return;
     }
 
     if (item === "chat") {
       if (location !== "/dashboard") {
-        setLocation("/dashboard");
+        navigateWithinAppShell(location, "/dashboard", setLocation);
       }
       return;
     }
 
     if (item === "global") {
       if (location !== "/global-chat") {
-        setLocation("/global-chat");
+        navigateWithinAppShell(location, "/global-chat", setLocation);
       }
       return;
     }
@@ -524,7 +525,7 @@ export default function RandomChatPage() {
     }
 
     if (location !== "/random-chat") {
-      setLocation("/random-chat");
+      navigateWithinAppShell(location, "/random-chat", setLocation);
     }
   };
 

@@ -1,9 +1,10 @@
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { cn } from "@/lib/utils";
 import { MessageCircle, Globe, Shuffle, Settings } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 export function MobileBottomNav() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const navItems = [
     {
@@ -45,15 +46,19 @@ export function MobileBottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
-            <Link
+            <button
               key={item.id}
-              href={item.href}
+              type="button"
+              onClick={() =>
+                navigateWithinAppShell(location, item.href, setLocation)
+              }
               className={cn(
                 "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
                 item.isActive
                   ? "bg-primary/14 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
+              aria-current={item.isActive ? "page" : undefined}
             >
               <Icon
                 className="h-[22px] w-[22px]"
@@ -62,7 +67,7 @@ export function MobileBottomNav() {
               <span className="whitespace-nowrap text-[12px] font-medium leading-none tracking-tight">
                 {item.label}
               </span>
-            </Link>
+            </button>
           );
         })}
       </nav>

@@ -57,10 +57,6 @@ self.addEventListener("push", (event) => {
         icon: "/assets/images/pwa-icon-192.png",
         badge: "/assets/images/logo-64.png",
         tag: payload.tag ?? "chatnexus-message",
-        actions: [
-          { action: "reply", title: "Reply" },
-          { action: "mark_read", title: "Mark as Read" },
-        ],
         data: {
           url: payload.url ?? "/dashboard",
           senderId: payload.senderId,
@@ -73,7 +69,6 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const action = event.action;
   const data = event.notification.data;
   const nextUrl = toNotificationUrl(data?.url);
 
@@ -83,20 +78,6 @@ self.addEventListener("notificationclick", (event) => {
         type: "window",
         includeUncontrolled: true,
       })) as WindowClient[];
-
-      if (action === "mark_read") {
-        const senderId = data?.senderId;
-        if (senderId) {
-          // Tell all open clients to dispatch the mark_read event via their socket
-          for (const client of clientList) {
-            client.postMessage({
-              type: "chatnexus:mark-read",
-              senderId: senderId,
-            });
-          }
-        }
-        return; // Complete silently without opening/focusing the app window
-      }
 
       const visibleClient = clientList.find(
         (client) =>

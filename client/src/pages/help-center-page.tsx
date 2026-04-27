@@ -151,7 +151,7 @@ export default function HelpCenterPage() {
           {/* ── FAQ Section ── */}
           <section className="mb-8 rounded-2xl border border-brand-border bg-brand-card/90 p-6 shadow-sm ring-1 ring-border/40 backdrop-blur-sm sm:p-8">
             <h1 className="text-3xl font-bold tracking-tight">Help Center</h1>
-            <p className="mt-2 text-sm text-brand-muted">
+            <p className="mt-2 text-sm text-brand-text">
               Find quick answers to common questions below, or scroll down to
               submit a support request.
             </p>
@@ -171,13 +171,13 @@ export default function HelpCenterPage() {
                   >
                     <span className="pr-4">{faq.question}</span>
                     <ChevronDown
-                      className={`w-4 h-4 flex-shrink-0 text-brand-muted transition-transform duration-200 ${
+                      className={`w-4 h-4 flex-shrink-0 text-brand-text transition-transform duration-200 ${
                         openFaq === i ? "rotate-180" : ""
                       }`}
                     />
                   </button>
                   {openFaq === i && (
-                    <div className="px-5 pb-4 text-sm text-brand-muted leading-relaxed border-t border-brand-border pt-3">
+                    <div className="px-5 pb-4 text-sm text-brand-text leading-relaxed border-t border-brand-border pt-3">
                       {faq.answer}
                     </div>
                   )}
@@ -189,7 +189,7 @@ export default function HelpCenterPage() {
           {/* ── Support Form ── */}
           <section className="rounded-2xl border border-brand-border bg-brand-card/90 p-6 shadow-sm ring-1 ring-border/40 backdrop-blur-sm sm:p-8">
             <h2 className="text-2xl font-bold tracking-tight">Submit a Request</h2>
-            <p className="mt-2 text-sm text-brand-muted">
+            <p className="mt-2 text-sm text-brand-text">
               Can't find what you're looking for? Use this form for account
               deletion or any account support issue.
             </p>

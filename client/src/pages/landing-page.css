@@ -27,17 +27,24 @@
     rgba(255, 255, 255, 0.18)
   );
   --ln-glass-shadow: 0 12px 34px rgba(0, 0, 0, 0.16);
-  --about-stack-surface: #18181b;
-  --about-stack-border: rgba(255, 255, 255, 0.1);
-  --about-stack-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
-  --about-stack-grad-base-1: #0f1015;
-  --about-stack-grad-base-2: #111318;
-  --about-stack-grad-base-3: #1b1e27;
-  --about-stack-overlay-start: rgba(0, 0, 0, 0.96);
-  --about-stack-overlay-mid: rgba(0, 0, 0, 0.82);
-  --about-stack-overlay-end: rgba(0, 0, 0, 0.38);
-  --about-stack-chip-bg: rgba(0, 0, 0, 0.4);
-  --about-stack-icon-bg: rgba(0, 0, 0, 0.34);
+  --about-stack-surface: color-mix(in srgb, var(--ln-card) 86%, white);
+  --about-stack-border: color-mix(in srgb, var(--ln-border) 72%, white);
+  --about-stack-shadow: none;
+  --about-stack-grad-base-1: #f7fbfd;
+  --about-stack-grad-base-2: #eef7fb;
+  --about-stack-grad-base-3: #e7f3f9;
+  --about-stack-overlay-start: rgba(255, 255, 255, 0.84);
+  --about-stack-overlay-mid: rgba(255, 255, 255, 0.64);
+  --about-stack-overlay-end: rgba(255, 255, 255, 0.22);
+  --about-stack-chip-bg: rgba(255, 255, 255, 0.72);
+  --about-stack-icon-bg: rgba(255, 255, 255, 0.58);
+  --about-stack-title: var(--brand-text);
+  --about-stack-body: var(--brand-text);
+  --about-stack-pill-text: var(--brand-text);
+  --about-stack-pill-border: color-mix(in srgb, var(--ln-border) 72%, white);
+  --about-stack-pill-bg: rgba(255, 255, 255, 0.66);
+  --about-stack-chip-text: var(--brand-text);
+  --about-stack-kicker: var(--brand-text);
   --landing-section-title-size: clamp(1.88rem, 3.6vw, 2.9rem);
   --landing-section-copy-size: clamp(1rem, 1.1vw, 1.08rem);
   --landing-card-title-size: clamp(1.12rem, 1.55vw, 1.3rem);
@@ -55,7 +62,7 @@
   --ln-glass-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
   --about-stack-surface: #10161b;
   --about-stack-border: rgba(143, 215, 255, 0.12);
-  --about-stack-shadow: 0 28px 72px rgba(0, 0, 0, 0.34);
+  --about-stack-shadow: none;
   --about-stack-grad-base-1: #0b1115;
   --about-stack-grad-base-2: #10181d;
   --about-stack-grad-base-3: #18232b;
@@ -64,6 +71,13 @@
   --about-stack-overlay-end: rgba(8, 18, 24, 0.34);
   --about-stack-chip-bg: rgba(3, 8, 11, 0.38);
   --about-stack-icon-bg: rgba(8, 18, 24, 0.34);
+  --about-stack-title: var(--brand-text);
+  --about-stack-body: var(--brand-text);
+  --about-stack-pill-text: var(--brand-text);
+  --about-stack-pill-border: rgba(255, 255, 255, 0.1);
+  --about-stack-pill-bg: rgba(255, 255, 255, 0.08);
+  --about-stack-chip-text: var(--brand-text);
+  --about-stack-kicker: var(--brand-text);
 }
 
 /* ──── Root Reset ──── */
@@ -409,11 +423,12 @@
 
 .about-stack-card {
   position: sticky;
-  top: calc(70px + var(--i) * 20px);
+  top: calc(60px + var(--i) * 10px);
   width: min(1040px, 100%);
   min-height: 420px;
   height: min(66vh, 560px);
   margin: 0 auto;
+  margin-bottom: 4rem;
   border-radius: 32px;
   overflow: hidden;
   border: 1px solid var(--about-stack-border);
@@ -471,11 +486,6 @@
       color-mix(in srgb, var(--about-card-accent) 42%, transparent),
       transparent 28%
     ),
-    radial-gradient(
-      circle at 82% 18%,
-      color-mix(in srgb, var(--about-card-accent) 18%, white),
-      transparent 32%
-    ),
     linear-gradient(
       135deg,
       color-mix(
@@ -530,7 +540,7 @@
   background: var(--about-stack-chip-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--about-stack-chip-text);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -539,9 +549,27 @@
 
 .about-stack-card-icon {
   background: var(--about-stack-icon-bg);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: color-mix(
+    in srgb,
+    var(--about-card-accent) 48%,
+    var(--brand-text) 52%
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--about-card-accent) 24%, var(--brand-text) 20%),
+    0 10px 24px color-mix(in srgb, var(--about-card-accent) 16%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .about-stack-card-icon {
+  border-color: color-mix(
+    in srgb,
+    var(--about-card-accent) 55%,
+    rgba(255, 255, 255, 0.14)
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--about-card-accent) 18%, transparent),
+    0 10px 24px color-mix(in srgb, var(--about-card-accent) 16%, transparent);
 }
 
 .about-stack-card-copy {
@@ -552,7 +580,7 @@
 .about-stack-card-kicker {
   display: block;
   margin-bottom: 12px;
-  color: var(--about-card-accent);
+  color: var(--about-stack-kicker);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -562,7 +590,7 @@
 .about-stack-card-title {
   margin: 0 0 14px;
   font-family: var(--landing-font-display);
-  color: #fff;
+  color: var(--about-stack-title);
   font-size: clamp(2.2rem, 4.6vw, 4.1rem);
   font-weight: 700;
   line-height: 1.02;
@@ -572,13 +600,13 @@
 }
 
 .about-stack-card:hover .about-stack-card-title {
-  color: var(--about-card-accent);
+  color: var(--about-stack-title);
 }
 
 .about-stack-card-text {
   margin: 0;
   max-width: 62ch;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--about-stack-body);
   font-size: clamp(0.98rem, 1vw, 1.05rem);
   line-height: 1.72;
 }
@@ -593,11 +621,11 @@
 .about-stack-card-pill {
   padding: 0.62rem 0.98rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--about-stack-pill-border);
+  background: var(--about-stack-pill-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--about-stack-pill-text);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.14em;

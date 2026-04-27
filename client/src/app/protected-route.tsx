@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { AuthenticatedSocketBoundary, AuthProviders } from "@/app/auth-boundary";
 import { useAuth } from "@/providers/auth-provider";
 import { Loader2 } from "lucide-react";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 
 function ProtectedRouteLoader() {
   return (
@@ -30,13 +30,18 @@ function ProtectedRouteContent({
   component: ComponentType;
 }) {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return <ProtectedRouteLoader />;
   }
 
   if (!user) {
-    return <Redirect to="/auth" />;
+    const redirectTarget =
+      typeof window !== "undefined"
+        ? `${location}${window.location.search}${window.location.hash}`
+        : location;
+    return <Redirect to={`/auth?redirect=${encodeURIComponent(redirectTarget)}`} />;
   }
 
   return (
