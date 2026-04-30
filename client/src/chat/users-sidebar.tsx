@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -6,19 +6,25 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
+  DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
+import { ChatPageHeader } from "@/chat/chat-page-header";
 import type { User } from "@shared/schema";
 import { apiRequest, readJsonResponse } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
-import { MoreVertical, Search } from "lucide-react";
+import {
+  ChevronDown,
+  History,
+  MessageCircle,
+  Search,
+  UserRoundCheck,
+  Venus,
+  VenusAndMars,
+  Mars,
+} from "lucide-react";
 import { useLocation } from "wouter";
 import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useSocket } from "@/providers/socket-provider";
@@ -147,7 +153,7 @@ export function UsersSidebar({
   const { user, logoutMutation } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { sidebarUsers, isConnected } = useSocket();
+  const { sidebarUsers } = useSocket();
   const [searchTerm, setSearchTerm] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<SidebarFilters>(
     () => readStoredSidebarFilters(),
@@ -455,7 +461,6 @@ export function UsersSidebar({
       return leftUser.username.localeCompare(rightUser.username);
     });
 
-  const onlineCount = displayUsers.filter((u) => u.isOnline).length;
   const hasActiveFilters =
     appliedFilters.friendsOnly ||
     appliedFilters.gender !== "all" ||
@@ -508,23 +513,23 @@ export function UsersSidebar({
     }));
   };
 
-  const handleFriendsFilterToggle = () => {
-    if (!user || user.isGuest) {
-      toast({
-        title: "Friends filter unavailable",
-        description: "Register or log in to filter your friends here.",
-      });
+  const handleDashboardViewChange = (view: "chat" | "friends" | "history") => {
+    if (view === "friends") {
+      if (!user || user.isGuest) {
+        toast({
+          title: "Friends view unavailable",
+          description: "Register or log in to filter your friends here.",
+        });
+        return;
+      }
+
+      onModeChange?.("chat");
+      setAppliedFilters((prev) => ({ ...prev, friendsOnly: true }));
       return;
     }
 
-    setAppliedFilters((prev) => ({
-      ...prev,
-      friendsOnly: !prev.friendsOnly,
-    }));
-  };
-
-  const handleHistoryFilterToggle = () => {
-    onModeChange?.(mode === "history" ? "chat" : "history");
+    setAppliedFilters((prev) => ({ ...prev, friendsOnly: false }));
+    onModeChange?.(view === "history" ? "history" : "chat");
   };
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
@@ -559,8 +564,103 @@ export function UsersSidebar({
     }
   };
 
+  const activeDashboardView: "chat" | "friends" | "history" =
+    mode === "history"
+      ? "history"
+      : appliedFilters.friendsOnly
+        ? "friends"
+        : "chat";
+  const dashboardViewConfig: Record<
+    "chat" | "friends" | "history",
+    { icon: typeof MessageCircle; title: string }
+  > = {
+    chat: { icon: MessageCircle, title: "Chats" },
+    friends: { icon: UserRoundCheck, title: "Friends" },
+    history: { icon: History, title: "History" },
+  };
+  const activeDashboardViewConfig = dashboardViewConfig[activeDashboardView];
+  const ActiveDashboardViewIcon = activeDashboardViewConfig.icon;
+  const dashboardTitleContent = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-1.5 rounded-full text-left text-[1.55rem] font-semibold tracking-tight text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Choose chat dashboard view"
+        >
+          <span className="truncate">{activeDashboardViewConfig.title}</span>
+          <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-40 rounded-[1rem] border border-border/70 bg-popover p-1.5"
+      >
+        {([
+          ["chat", MessageCircle, "Chats"],
+          ["friends", UserRoundCheck, "Friends"],
+          ["history", History, "History"],
+        ] as const).map(([value, Icon, label]) => (
+          <DropdownMenuItem
+            key={value}
+            className="rounded-[0.85rem] px-3 py-2"
+            onSelect={() => handleDashboardViewChange(value)}
+          >
+            <Icon className="mr-2 h-4 w-4" />
+            {label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  const genderFilterAction = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-10 w-10 rounded-full border-0 bg-transparent text-muted-foreground shadow-none ring-0 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0",
+            appliedFilters.gender !== "all" && "text-primary hover:text-primary",
+          )}
+          title="Gender filter"
+          aria-label="Gender filter"
+        >
+          <VenusAndMars className="h-4.5 w-4.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-38 rounded-[1rem] border border-border/70 bg-popover p-1.5"
+      >
+        {([
+          ["all", VenusAndMars, "All"],
+          ["male", Mars, "Male"],
+          ["female", Venus, "Female"],
+        ] as const).map(([value, Icon, label]) => {
+          const isSelected = appliedFilters.gender === value;
+
+          return (
+            <DropdownMenuItem
+              key={value}
+              onSelect={() => handleGenderFilterChange(value)}
+              className={cn(
+                "rounded-[0.85rem] px-3 py-2",
+                isSelected && "bg-accent text-accent-foreground",
+              )}
+            >
+              <Icon className="mr-2 h-4 w-4" />
+              {label}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
-    <div className="h-full w-full overflow-hidden bg-background md:w-[28rem] md:shrink-0 md:border-r md:border-border">
+    <div className="h-full w-full overflow-hidden bg-background md:w-[26rem] md:shrink-0 md:border-r md:border-border">
       <div className="flex h-full w-full overflow-hidden bg-background">
         <div className="hidden md:flex md:shrink-0">
           <ChatNavigationMenu
@@ -572,68 +672,15 @@ export function UsersSidebar({
         </div>
 
         <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
-          <div className="px-3 pb-2 pt-2 md:px-3 md:pb-2 md:pt-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex items-center gap-2">
-                <h3 className="truncate px-2 text-2xl font-semibold leading-none tracking-tight text-foreground">
-                  ChatNexus
-                </h3>
-                <div
-                  className="text-xs font-medium text-muted-foreground flex items-center"
-                  data-testid="text-online-count"
-                >
-                  <span className="relative flex h-2.5 w-2.5 mr-1.5">
-                    <span
-                      className={cn(
-                        "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
-                        isConnected ? "bg-emerald-500" : "bg-rose-500",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "relative inline-flex h-2.5 w-2.5 rounded-full",
-                        isConnected ? "bg-emerald-500" : "bg-rose-500",
-                      )}
-                    />
-                  </span>
-                  <span>{onlineCount} online</span>
-                </div>
-              </div>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                    <MoreVertical className="h-5 w-5 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
-                  <DropdownMenuLabel>Filters</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuRadioGroup
-                    value={appliedFilters.gender}
-                    onValueChange={(val) => handleGenderFilterChange(val)}
-                  >
-                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="male">Male</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="female">Female</DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuCheckboxItem
-                    checked={appliedFilters.friendsOnly}
-                    onCheckedChange={handleFriendsFilterToggle}
-                    disabled={!user || user.isGuest}
-                  >
-                    Friends
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={mode === "history"}
-                    onCheckedChange={handleHistoryFilterToggle}
-                  >
-                    History
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+          <div className="px-4 pb-3 pt-4 md:px-4 md:pb-3 md:pt-4">
+            <ChatPageHeader
+              icon={ActiveDashboardViewIcon}
+              title={activeDashboardViewConfig.title}
+              titleContent={dashboardTitleContent}
+              onLogout={handleLogout}
+              logoutPending={logoutMutation.isPending}
+              headerAction={genderFilterAction}
+            />
 
             <div className="mt-3 flex items-center gap-3 md:mt-2">
               <div className="relative min-w-0 flex-1">

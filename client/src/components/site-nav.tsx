@@ -1,5 +1,12 @@
 import "./site-nav.css";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
@@ -40,6 +47,12 @@ const NAV_LOGO_SRC = "/assets/images/logo-48.png";
 
 type SiteNavProps = {
   isAuthenticated?: boolean;
+};
+
+const NAV_BACKDROP_FILTER = "blur(20px) saturate(1.35)";
+const NAV_GLASS_BLUR_STYLE: CSSProperties = {
+  backdropFilter: NAV_BACKDROP_FILTER,
+  WebkitBackdropFilter: NAV_BACKDROP_FILTER,
 };
 
 function createThemeTransitionCss(
@@ -110,7 +123,7 @@ function createThemeTransitionCss(
   `;
 }
 
-function useThemeToggleState() {
+export function useThemeToggleState() {
   const [isDark, setIsDark] = useState(() =>
     typeof window !== "undefined"
       ? (getStoredTheme() ??
@@ -175,6 +188,7 @@ export const ThemeToggleButton2 = ({
         "landing-theme-toggle rounded-full transition-all duration-300 active:scale-95",
         className,
       )}
+      style={NAV_GLASS_BLUR_STYLE}
       onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-pressed={isDark}
@@ -378,7 +392,7 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
   };
 
   return (
-    <nav ref={navRef} className="site-nav">
+    <nav ref={navRef} className="site-nav" style={NAV_GLASS_BLUR_STYLE}>
       <div className="nav-inner">
         <Link href="/" className="nav-brand-link nav-brand-link--desktop">
           <div className="nav-brand">
@@ -438,6 +452,7 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
               align="end"
               sideOffset={10}
               className="nav-mobile-menu w-46 rounded-2xl p-2"
+              style={NAV_GLASS_BLUR_STYLE}
             >
               {mobileMenuItems.map(({ label, href, Icon }) => (
                 <DropdownMenuItem

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Globe, Loader2, Search } from "lucide-react";
+import { format } from "date-fns";
 import type { GlobalMessageWithSender, User } from "@shared/schema";
 import { useLocation } from "wouter";
 import { navigateWithinAppShell } from "@/app/app-shell-navigation";
@@ -16,6 +17,8 @@ import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/chat/chat-navigation-menu";
+import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
+import { ChatPageHeader } from "@/chat/chat-page-header";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 
 const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages?limit=200"] as const;
@@ -33,7 +36,7 @@ type GlobalChatSidebarProps = {
 
 export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
   const { user, logoutMutation } = useAuth();
-  const { onlineUsers, isConnected } = useSocket();
+  const { onlineUsers } = useSocket();
   const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const {
@@ -96,15 +99,9 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
       (participant) =>
         participant.user.userId !== user?.userId &&
         (!normalizedSearchTerm ||
-          participant.user.username
-            .toLowerCase()
-            .includes(normalizedSearchTerm)),
+          participant.user.username.toLowerCase().includes(normalizedSearchTerm)),
     );
   }, [participants, searchTerm, user?.userId]);
-
-  const onlineParticipantCount = participants.filter(
-    (participant) => participant.isOnline,
-  ).length;
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "chat" && location !== "/dashboard") {
@@ -141,7 +138,7 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
   };
 
   return (
-    <div className="h-full w-full overflow-hidden bg-background md:w-[28rem] md:shrink-0 md:border-r md:border-border">
+    <div className="h-full w-full overflow-hidden bg-background md:w-[26rem] md:shrink-0 md:border-r md:border-border">
       <div className="flex h-full w-full overflow-hidden bg-background">
         <div className="hidden md:flex md:shrink-0">
           <ChatNavigationMenu
@@ -153,14 +150,13 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
         </div>
 
         <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
-          <div className="px-3 pb-2 pt-4 md:px-3 md:pb-2 md:pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex items-center gap-2">
-                <h1 className="truncate px-2 text-2xl font-semibold leading-none tracking-tight text-foreground">
-                  Global Chat
-                </h1>
-              </div>
-            </div>
+          <div className="px-4 pb-3 pt-4 md:px-4 md:pb-3 md:pt-4">
+            <ChatPageHeader
+              icon={Globe}
+              title="Global Chat"
+              onLogout={() => logoutMutation.mutate()}
+              logoutPending={logoutMutation.isPending}
+            />
 
             <div className="mt-3 flex items-center gap-3 md:mt-2">
               <div className="relative min-w-0 flex-1">
@@ -169,46 +165,33 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
                   type="text"
                   placeholder="Search global users"
                   aria-label="Search global users"
-                  className="h-11 rounded-full border-border bg-card pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 md:bg-muted"
+                  className="h-11 rounded-full border-border bg-card pl-10 text-sm text-foreground md:bg-muted placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                 />
               </div>
             </div>
-
-            <div className="mt-4 flex items-center justify-between gap-3 px-1">
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 shrink-0 rounded-full px-4"
-                onClick={onEnterRoom}
-              >
-                Go to Chat
-                <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Users online now ({onlineParticipantCount})
-                </h2>
-              </div>
-            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[100px] pt-1 scrollbar-none md:px-3 md:pb-4">
-            <div className="space-y-[2px]" role="list" aria-label="Global chat participants">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-1 scrollbar-none md:pb-5">
+            <div
+              className="overflow-hidden rounded-[1.6rem]"
+              role="list"
+              aria-label="Global chat participants"
+            >
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-[1.5rem] px-4 py-10 text-center">
+                <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     Loading global participants...
                   </p>
                 </div>
               ) : isError ? (
-                <div className="rounded-[1.5rem] px-4 py-10 text-center text-sm text-destructive">
+                <div className="px-4 py-10 text-center text-sm text-destructive">
                   Failed to load global users
                 </div>
               ) : filteredParticipants.length === 0 ? (
-                <div className="rounded-[1.5rem] px-4 py-10 text-center text-sm text-muted-foreground">
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {searchTerm.trim()
                     ? "No users found"
                     : "No users with global messages yet"}
@@ -224,6 +207,16 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
               )}
             </div>
           </div>
+
+          <Button
+            type="button"
+            size="icon"
+            className="absolute bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-6 z-20 h-12 w-12 rounded-full shadow-[0_18px_45px_-20px_rgba(59,130,246,0.9)] md:bottom-5"
+            onClick={onEnterRoom}
+            title="Open global chat room"
+          >
+            <ArrowRight className="h-4.5 w-4.5" />
+          </Button>
         </div>
       </div>
     </div>
@@ -237,16 +230,20 @@ function GlobalParticipantRow({
   participant: GlobalParticipant;
   onSelect: (user: User) => void;
 }) {
+  const activityTime = formatParticipantTimestamp(
+    participant.lastMessage.timestamp,
+  );
+
   return (
     <button
       type="button"
       onClick={() => onSelect(participant.user)}
-      className="flex w-full items-center gap-3 rounded-[1.2rem] px-3 py-2.5 text-left transition-colors hover:bg-accent/30"
+      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent/20"
     >
       <div
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-black",
-          !participant.isOnline && "opacity-70",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-black",
+          !participant.isOnline && "opacity-80",
         )}
         style={{
           background: participant.user.isGuest
@@ -258,11 +255,54 @@ function GlobalParticipantRow({
           ? "G"
           : getUserInitials(participant.user.username)}
       </div>
-      <span className="truncate text-sm font-medium text-card-foreground">
-        {participant.user.username}
-      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <p className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold text-card-foreground">
+            {participant.user.username}
+          </p>
+          {activityTime ? (
+            <span className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">
+              {activityTime}
+            </span>
+          ) : null}
+        </div>
+      </div>
     </button>
   );
+}
+
+function formatParticipantTimestamp(timestamp: unknown): string {
+  if (!timestamp) {
+    return "";
+  }
+
+  const parsed = new Date(timestamp as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const elapsedMs = Date.now() - parsed.getTime();
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  const elapsedHours = Math.floor(elapsedMs / 3600000);
+  const elapsedDays = Math.floor(elapsedMs / 86400000);
+
+  if (elapsedMinutes <= 0) {
+    return "now";
+  }
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`;
+  }
+
+  if (elapsedDays < 7) {
+    return `${elapsedDays}d ago`;
+  }
+
+  return format(parsed, "MMM d");
 }
 
 export default function GlobalChatPage() {
@@ -318,16 +358,10 @@ export default function GlobalChatPage() {
         {showDesktopRoom ? (
           <GlobalChatRoomPanel isMobile={false} onBack={closeDesktopRoom} />
         ) : (
-          <div className="hidden min-w-0 flex-1 items-center justify-center px-6 md:flex">
-            <div className="w-full max-w-xl rounded-[1.8rem] p-8 text-center shadow-sm">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] text-black">
-                <Globe className="h-7 w-7" />
-              </div>
-              <h6 className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
-                Click on Go to Chat button to join the global chat room.
-              </h6>
-            </div>
-          </div>
+          <ChatDesktopShellPlaceholder
+            icon={Globe}
+            title="Use the floating button to open the public room."
+          />
         )}
       </div>
     </>

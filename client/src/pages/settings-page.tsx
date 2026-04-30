@@ -1,7 +1,9 @@
 import { SettingsSidebar } from "@/chat/settings-sidebar";
+import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { Seo } from "@/components/seo";
+import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
   const isMobile = useIsMobile();
@@ -35,11 +37,10 @@ export default function SettingsPage() {
       />
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <SettingsSidebar />
-        <div className="flex flex-1 flex-col items-center justify-center bg-muted/30 px-6">
-          <div className="rounded-full border border-border bg-card/90 px-4 py-2 text-sm text-muted-foreground">
-            Settings are managed from the left panel.
-          </div>
-        </div>
+        <ChatDesktopShellPlaceholder
+          icon={Settings2}
+          title="Manage your settings and preferences here"
+        />
       </div>
     </>
   );

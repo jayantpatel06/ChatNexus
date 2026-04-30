@@ -55,7 +55,7 @@ export function MobileBottomNav() {
               className={cn(
                 "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
                 item.isActive
-                  ? "bg-primary/14 text-primary"
+                  ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
               aria-current={item.isActive ? "page" : undefined}

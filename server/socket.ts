@@ -46,6 +46,9 @@ interface GlobalMessagePayload {
 interface RandomChatRequestPayload {
   interests?: unknown;
   interestsMatchingEnabled?: unknown;
+  maxWaitDurationSeconds?: unknown;
+  preserveQueuePosition?: unknown;
+  searchMessage?: unknown;
 }
 
 interface RandomChatMessagePayload {
@@ -75,6 +78,7 @@ interface ReactionSyncPayload {
 type RandomChatPreferences = {
   interests: string[];
   interestsMatchingEnabled: boolean;
+  maxWaitDurationSeconds: number;
 };
 
 type RandomChatQueueEntry = RandomChatPreferences & {
@@ -133,10 +137,40 @@ function sanitizeRandomChatPreferences(
     ),
   ).slice(0, 10);
 
+  const rawMaxWaitDurationSeconds =
+    typeof resolvedPayload.maxWaitDurationSeconds === "number"
+      ? resolvedPayload.maxWaitDurationSeconds
+      : typeof resolvedPayload.maxWaitDurationSeconds === "string"
+        ? Number(resolvedPayload.maxWaitDurationSeconds)
+        : Number.NaN;
+  const maxWaitDurationSeconds = !Number.isFinite(rawMaxWaitDurationSeconds)
+    ? 15
+    : rawMaxWaitDurationSeconds === 0
+      ? 0
+      : Math.min(120, Math.max(5, Math.round(rawMaxWaitDurationSeconds)));
+
   return {
     interests,
     interestsMatchingEnabled: resolvedPayload.interestsMatchingEnabled !== false,
+    maxWaitDurationSeconds,
   };
+}
+
+function shouldPreserveRandomChatQueuePosition(
+  payload?: RandomChatRequestPayload | null,
+): boolean {
+  return payload?.preserveQueuePosition === true;
+}
+
+function getRandomChatSearchMessage(
+  payload?: RandomChatRequestPayload | null,
+): string | null {
+  if (typeof payload?.searchMessage !== "string") {
+    return null;
+  }
+
+  const message = payload.searchMessage.trim();
+  return message ? message.slice(0, 140) : null;
 }
 
 function getRandomChatPartnerId(userId: number): number | null {
@@ -164,19 +198,21 @@ function getRandomChatSharedInterests(
 function queueRandomChatUser(
   userId: number,
   preferences?: RandomChatPreferences,
+  queuedAt = Date.now(),
 ): RandomChatQueueEntry {
   const resolvedPreferences =
     preferences ??
     randomChatPreferencesByUser.get(userId) ?? {
       interests: [],
       interestsMatchingEnabled: true,
+      maxWaitDurationSeconds: 15,
     };
 
   randomChatPreferencesByUser.set(userId, resolvedPreferences);
 
   const queueEntry: RandomChatQueueEntry = {
     userId,
-    queuedAt: Date.now(),
+    queuedAt,
     ...resolvedPreferences,
   };
 
@@ -365,12 +401,28 @@ async function findBestRandomChatCandidate(
     }
 
     const sharedInterests = getRandomChatSharedInterests(sourceEntry, otherEntry);
-    const score =
-      (sourceEntry.interestsMatchingEnabled ||
-      otherEntry.interestsMatchingEnabled
-        ? sharedInterests.length
-        : 0) * 1000 -
-      otherEntry.queuedAt;
+    const now = Date.now();
+    const sourceRequiresInterestMatch =
+      sourceEntry.interestsMatchingEnabled &&
+      sourceEntry.interests.length > 0 &&
+      (sourceEntry.maxWaitDurationSeconds === 0 ||
+        now - sourceEntry.queuedAt <
+          sourceEntry.maxWaitDurationSeconds * 1000);
+    const otherRequiresInterestMatch =
+      otherEntry.interestsMatchingEnabled &&
+      otherEntry.interests.length > 0 &&
+      (otherEntry.maxWaitDurationSeconds === 0 ||
+        now - otherEntry.queuedAt <
+          otherEntry.maxWaitDurationSeconds * 1000);
+
+    if (
+      (sourceRequiresInterestMatch || otherRequiresInterestMatch) &&
+      sharedInterests.length === 0
+    ) {
+      continue;
+    }
+
+    const score = sharedInterests.length * 1000 - otherEntry.queuedAt;
 
     if (
       !bestCandidate ||
@@ -868,7 +920,11 @@ async function handleRandomChatRequestMatch(
   });
 
   queueRandomChatUser(socket.userId, preferences);
-  emitRandomChatSearching(io, socket.userId);
+  emitRandomChatSearching(
+    io,
+    socket.userId,
+    getRandomChatSearchMessage(payload) ?? "Looking for a new conversation...",
+  );
   await processRandomChatQueue(io);
 }
 
@@ -885,8 +941,15 @@ async function handleRandomChatUpdatePreferences(
   randomChatPreferencesByUser.set(socket.userId, preferences);
 
   if (randomChatQueueByUser.has(socket.userId)) {
-    queueRandomChatUser(socket.userId, preferences);
-    emitRandomChatSearching(io, socket.userId);
+    const queuedAt = shouldPreserveRandomChatQueuePosition(payload)
+      ? randomChatQueueByUser.get(socket.userId)?.queuedAt ?? Date.now()
+      : Date.now();
+    queueRandomChatUser(socket.userId, preferences, queuedAt);
+    emitRandomChatSearching(
+      io,
+      socket.userId,
+      getRandomChatSearchMessage(payload) ?? "Looking for a new conversation...",
+    );
     await processRandomChatQueue(io);
   }
 }

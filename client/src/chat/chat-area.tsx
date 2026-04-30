@@ -2204,7 +2204,7 @@ export function ChatArea({
             <motion.img
               src={lightboxSrc}
               alt="Preview"
-              className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl outline-none"
+              className="h-auto w-auto min-w-[min(82vw,28rem)] max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] rounded-2xl object-contain shadow-2xl outline-none"
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
               referrerPolicy="no-referrer"
@@ -2258,7 +2258,7 @@ export function ChatArea({
           )}
         >
           {/* Chat Header */}
-          <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
+          <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-2.5">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               {/* Back button for mobile */}
               {(showBackButton || isMobile) && onBack && (

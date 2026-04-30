@@ -190,8 +190,16 @@ export function GlobalChatRoomPanel({
       };
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-brand-bg">
-      <div className="z-40 flex flex-shrink-0 items-center justify-between border-b border-border bg-card p-2.5">
+    <div
+      className={cn(
+        "relative flex-1",
+        isMobile
+          ? "flex h-full flex-col overflow-hidden"
+          : "flex min-w-0 overflow-hidden",
+      )}
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -354,6 +362,7 @@ export function GlobalChatRoomPanel({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

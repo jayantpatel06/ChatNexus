@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -16,17 +17,18 @@ import EmojiPicker, {
 } from "emoji-picker-react";
 import {
   ArrowLeft,
+  ChevronRight,
   Compass,
   Loader2,
-  Lock,
-  LogOut,
+  Mars,
   MessageCircleMore,
-  Plus,
   Search,
   Send,
+  Shuffle,
   Smile,
   SkipForward,
-  VenetianMask,
+  UserRound,
+  Venus,
   VenusAndMars,
   X,
 } from "lucide-react";
@@ -34,6 +36,12 @@ import { useLocation } from "wouter";
 import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Seo } from "@/components/seo";
 import { Switch } from "@/components/ui/switch";
@@ -45,10 +53,12 @@ import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/chat/chat-navigation-menu";
+import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
+import { ChatPageHeader } from "@/chat/chat-page-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import type { User } from "@shared/schema";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 type RandomChatPartner = Pick<
   User,
@@ -65,15 +75,60 @@ type RandomChatSocketMessage = {
 type RandomChatPreferences = {
   interests: string[];
   interestsMatchingEnabled: boolean;
+  maxWaitDurationSeconds: number;
+  genderPreference: RandomGenderPreference;
 };
+
+type RandomChatMatchPreferences = Pick<
+  RandomChatPreferences,
+  "interests" | "interestsMatchingEnabled" | "maxWaitDurationSeconds"
+>;
 
 type RandomMatchState = "connecting" | "idle" | "matched" | "searching";
 type RandomFooterActionState = "confirm" | "skip" | "start";
+type RandomGenderPreference = "any" | "female" | "male";
 
 const RANDOM_CHAT_PREFERENCES_KEY = "chatnexus_random_chat_preferences";
 const IDLE_RANDOM_CHAT_STATUS = "Set your interests and press Start Chat.";
 const RANDOM_CHAT_CONFIRM_STATUS =
   "Press Confirm to end this chat.";
+const DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS = 15;
+const RANDOM_CHAT_SEARCHING_STATUS = "Searching for user...";
+const RANDOM_CHAT_MAX_WAIT_OPTIONS = [
+  { label: "5 sec", value: 5 },
+  { label: "10 sec", value: 10 },
+  { label: "30 sec", value: 30 },
+  { label: "Forever", value: 0 },
+] as const;
+
+function sanitizeRandomChatMaxWaitDurationSeconds(value: unknown): number {
+  const parsedValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(parsedValue)) {
+    return DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS;
+  }
+
+  if (parsedValue === 0) {
+    return 0;
+  }
+
+  return Math.min(120, Math.max(5, Math.round(parsedValue)));
+}
+
+function sanitizeRandomGenderPreference(
+  value: unknown,
+): RandomGenderPreference {
+  if (value === "male" || value === "female") {
+    return value;
+  }
+
+  return "any";
+}
 
 function sanitizeInterestList(interests: string[]): string[] {
   return Array.from(
@@ -88,6 +143,8 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
     return {
       interests: [],
       interestsMatchingEnabled: true,
+      maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+      genderPreference: "any",
     };
   }
 
@@ -97,6 +154,8 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
       return {
         interests: [],
         interestsMatchingEnabled: true,
+        maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+        genderPreference: "any",
       };
     }
 
@@ -106,18 +165,24 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
         Array.isArray(parsed.interests) ? parsed.interests : [],
       ),
       interestsMatchingEnabled: parsed.interestsMatchingEnabled !== false,
+      maxWaitDurationSeconds: sanitizeRandomChatMaxWaitDurationSeconds(
+        parsed.maxWaitDurationSeconds,
+      ),
+      genderPreference: sanitizeRandomGenderPreference(parsed.genderPreference),
     };
   } catch {
     return {
       interests: [],
       interestsMatchingEnabled: true,
+      maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+      genderPreference: "any",
     };
   }
 }
 
 export default function RandomChatPage() {
   const { user, logoutMutation } = useAuth();
-  const { socket, isConnected, onlineUsers } = useSocket();
+  const { socket, isConnected } = useSocket();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const isMobile = useIsMobile();
@@ -125,7 +190,6 @@ export default function RandomChatPage() {
     readStoredRandomChatPreferences(),
   );
   const [interestDraft, setInterestDraft] = useState("");
-  const [isManagingInterests, setIsManagingInterests] = useState(false);
   const [matchIntentActive, setMatchIntentActive] = useState(false);
   const [footerActionState, setFooterActionState] =
     useState<RandomFooterActionState>("start");
@@ -138,14 +202,21 @@ export default function RandomChatPage() {
   const [statusMessage, setStatusMessage] = useState(IDLE_RANDOM_CHAT_STATUS);
   const [sharedInterests, setSharedInterests] = useState<string[]>([]);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [isInterestsExpanded, setIsInterestsExpanded] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerPickerRef = useRef<HTMLDivElement>(null);
   const composerPickerTriggerRef = useRef<HTMLButtonElement>(null);
-  const matchPreferencesRef = useRef<RandomChatPreferences>(preferences);
-  const pendingMatchMessageRef = useRef("Looking for a new conversation...");
+  const matchPreferencesRef = useRef<RandomChatMatchPreferences>({
+    interests: preferences.interests,
+    interestsMatchingEnabled: preferences.interestsMatchingEnabled,
+    maxWaitDurationSeconds: preferences.maxWaitDurationSeconds,
+  });
+  const pendingMatchMessageRef = useRef(RANDOM_CHAT_SEARCHING_STATUS);
   const localTypingActiveRef = useRef(false);
   const localTypingTimeoutRef = useRef<number | null>(null);
   const partnerTypingTimeoutRef = useRef<number | null>(null);
+  const broadenSearchTimeoutRef = useRef<number | null>(null);
+  const hasBroadenedCurrentSearchRef = useRef(false);
   const socketRef = useRef(socket);
   const isDarkTheme =
     typeof document !== "undefined" &&
@@ -155,6 +226,8 @@ export default function RandomChatPage() {
   const hasDraftText = messageInput.trim().length > 0;
   const interests = preferences.interests;
   const interestMatchingEnabled = preferences.interestsMatchingEnabled;
+  const maxWaitDurationSeconds = preferences.maxWaitDurationSeconds;
+  const hasInterests = interests.length > 0;
   const isIdle = matchState === "idle";
   const isMatched = matchState === "matched";
   const isFindingMatch =
@@ -163,8 +236,9 @@ export default function RandomChatPage() {
     () => ({
       interests: sanitizeInterestList(interests),
       interestsMatchingEnabled: interestMatchingEnabled,
+      maxWaitDurationSeconds: maxWaitDurationSeconds,
     }),
-    [interestMatchingEnabled, interests],
+    [interestMatchingEnabled, interests, maxWaitDurationSeconds],
   );
 
   const stopLocalTyping = useCallback(() => {
@@ -194,6 +268,11 @@ export default function RandomChatPage() {
   const resetRandomChatState = useCallback(
     (nextState: RandomMatchState, nextStatus: string) => {
       stopLocalTyping();
+      if (broadenSearchTimeoutRef.current !== null) {
+        window.clearTimeout(broadenSearchTimeoutRef.current);
+        broadenSearchTimeoutRef.current = null;
+      }
+      hasBroadenedCurrentSearchRef.current = false;
       setShowEmojiPicker(false);
       setMessageInput("");
       setMessages([]);
@@ -207,8 +286,9 @@ export default function RandomChatPage() {
   );
 
   const requestMatch = useCallback(
-    (message = "Looking for a new conversation...") => {
+    (message = RANDOM_CHAT_SEARCHING_STATUS) => {
       pendingMatchMessageRef.current = message;
+      hasBroadenedCurrentSearchRef.current = false;
 
       if (!socket || !isConnected) {
         resetRandomChatState("connecting", "Connecting to random chat...");
@@ -222,7 +302,7 @@ export default function RandomChatPage() {
   );
 
   const beginMatchmaking = useCallback(
-    (message = "Looking for a new conversation...") => {
+    (message = RANDOM_CHAT_SEARCHING_STATUS) => {
       setMatchIntentActive(true);
       setFooterActionState("skip");
       requestMatch(message);
@@ -276,21 +356,82 @@ export default function RandomChatPage() {
   }, [isConnected, resetRandomChatState, socket, stopLocalTyping]);
 
   useEffect(() => {
-    matchPreferencesRef.current = matchPreferences;
-
     try {
       localStorage.setItem(
         RANDOM_CHAT_PREFERENCES_KEY,
-        JSON.stringify(matchPreferences),
+        JSON.stringify(preferences),
       );
     } catch {
       // Ignore storage errors.
     }
+  }, [preferences]);
+
+  useEffect(() => {
+    matchPreferencesRef.current = matchPreferences;
 
     if (socket && isConnected) {
       socket.emit("random_chat_update_preferences", matchPreferences);
     }
   }, [isConnected, matchPreferences, socket]);
+
+  useEffect(() => {
+    if (isFindingMatch) {
+      hasBroadenedCurrentSearchRef.current = false;
+    }
+  }, [isFindingMatch, matchPreferences]);
+
+  useEffect(() => {
+    if (
+      matchState !== "searching" ||
+      !matchIntentActive ||
+      !interestMatchingEnabled ||
+      !hasInterests ||
+      maxWaitDurationSeconds === 0 ||
+      hasBroadenedCurrentSearchRef.current
+    ) {
+      if (broadenSearchTimeoutRef.current !== null) {
+        window.clearTimeout(broadenSearchTimeoutRef.current);
+        broadenSearchTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    broadenSearchTimeoutRef.current = window.setTimeout(() => {
+      if (
+        hasBroadenedCurrentSearchRef.current ||
+        !socket ||
+        !isConnected ||
+        matchState !== "searching"
+      ) {
+        return;
+      }
+
+      hasBroadenedCurrentSearchRef.current = true;
+      const expandedSearchMessage =
+        "No interest match yet. Expanding search to everyone...";
+      setStatusMessage(expandedSearchMessage);
+      socket.emit("random_chat_update_preferences", {
+        ...matchPreferencesRef.current,
+        preserveQueuePosition: true,
+        searchMessage: expandedSearchMessage,
+      });
+    }, maxWaitDurationSeconds * 1000);
+
+    return () => {
+      if (broadenSearchTimeoutRef.current !== null) {
+        window.clearTimeout(broadenSearchTimeoutRef.current);
+        broadenSearchTimeoutRef.current = null;
+      }
+    };
+  }, [
+    interestMatchingEnabled,
+    hasInterests,
+    isConnected,
+    matchIntentActive,
+    matchState,
+    maxWaitDurationSeconds,
+    socket,
+  ]);
 
   useEffect(() => {
     socketRef.current = socket;
@@ -344,7 +485,7 @@ export default function RandomChatPage() {
       setSharedInterests([]);
       setMessages([]);
       clearPartnerTypingState();
-      setStatusMessage(data.message ?? "Looking for a new conversation...");
+      setStatusMessage(data.message ?? RANDOM_CHAT_SEARCHING_STATUS);
     };
 
     const handleMatched = (data: {
@@ -492,6 +633,10 @@ export default function RandomChatPage() {
         window.clearTimeout(partnerTypingTimeoutRef.current);
       }
 
+      if (broadenSearchTimeoutRef.current !== null) {
+        window.clearTimeout(broadenSearchTimeoutRef.current);
+      }
+
       localTypingActiveRef.current = false;
       socketRef.current?.emit("random_chat_leave");
     };
@@ -527,10 +672,6 @@ export default function RandomChatPage() {
     if (location !== "/random-chat") {
       navigateWithinAppShell(location, "/random-chat", setLocation);
     }
-  };
-
-  const handleLogout = () => {
-    logoutMutation.mutate();
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -570,13 +711,6 @@ export default function RandomChatPage() {
         (interest) => interest !== interestToRemove,
       ),
     }));
-  };
-
-  const handlePrototypeGenderClick = (target: string) => {
-    toast({
-      title: "Premium filter preview",
-      description: `${target} matching is visual only for now and will be wired later.`,
-    });
   };
 
   const handleSendMessage = () => {
@@ -628,19 +762,40 @@ export default function RandomChatPage() {
 
   const sidebarContent = (
     <RandomMatchControlsPanel
+      currentPartner={currentPartner}
+      genderPreference={preferences.genderPreference}
       interestMatchingEnabled={interestMatchingEnabled}
+      interestDraft={interestDraft}
       interests={interests}
-      isManagingInterests={isManagingInterests}
+      isInterestsExpanded={isInterestsExpanded}
+      isFindingMatch={isFindingMatch}
+      isMatched={isMatched}
+      onAddInterest={handleAddInterest}
+      onGenderPreferenceChange={(genderPreference) =>
+        setPreferences((prev) => ({
+          ...prev,
+          genderPreference,
+        }))
+      }
+      onInterestDraftChange={setInterestDraft}
       onInterestMatchingChange={(checked) =>
         setPreferences((prev) => ({
           ...prev,
           interestsMatchingEnabled: checked,
         }))
       }
-      onManageInterestsToggle={() => setIsManagingInterests((prev) => !prev)}
+      onInterestsExpandedChange={setIsInterestsExpanded}
+      onMaxWaitDurationChange={(value) =>
+        setPreferences((prev) => ({
+          ...prev,
+          maxWaitDurationSeconds: sanitizeRandomChatMaxWaitDurationSeconds(value),
+        }))
+      }
       onRemoveInterest={handleRemoveInterest}
-      onPrototypeGenderClick={handlePrototypeGenderClick}
-      onStartChat={() => beginMatchmaking("Looking for a new conversation...")}
+      onStartChat={() => beginMatchmaking(RANDOM_CHAT_SEARCHING_STATUS)}
+      onStopChat={leaveRandomChat}
+      onLogout={() => logoutMutation.mutate()}
+      logoutPending={logoutMutation.isPending}
       startChatDisabled={isFindingMatch}
       startChatLabel={
         currentPartner
@@ -649,8 +804,7 @@ export default function RandomChatPage() {
             ? "Searching..."
             : "Start Chat"
       }
-      statusMessage={statusMessage}
-      hidePrototypeNotes
+      maxWaitDurationSeconds={maxWaitDurationSeconds}
     />
   );
 
@@ -675,7 +829,7 @@ export default function RandomChatPage() {
       onInputKeyDown={handleKeyDown}
       onSendMessage={handleSendMessage}
       onSkip={handleSkipChat}
-      onStartChat={() => beginMatchmaking("Looking for a new conversation...")}
+      onStartChat={() => beginMatchmaking(RANDOM_CHAT_SEARCHING_STATUS)}
       setShowEmojiPicker={setShowEmojiPicker}
       sharedInterests={sharedInterests}
       statusMessage={statusMessage}
@@ -684,100 +838,27 @@ export default function RandomChatPage() {
       composerPickerTriggerRef={composerPickerTriggerRef}
     />
   );
+  const shouldShowDesktopConversation = matchIntentActive;
 
   const sharedSidebarPanel = (
-    <div className="relative flex min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
-      <div className="px-3 pb-2 pt-2 md:px-3 md:pb-2 md:pt-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate px-2 text-2xl font-semibold leading-none tracking-tight text-foreground">
-              ChatNexus
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium shadow-sm",
-                isConnected
-                  ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                  : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
-              )}
-            >
-              <span className="relative flex h-2.5 w-2.5">
-                <span
-                  className={cn(
-                    "absolute inline-flex h-full w-full animate-ping rounded-full opacity-35",
-                    isConnected ? "bg-emerald-500" : "bg-rose-500",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "relative inline-flex h-2.5 w-2.5 rounded-full",
-                    isConnected ? "bg-emerald-500" : "bg-rose-500",
-                  )}
-                />
-              </span>
-              <span>{onlineUsers.length} online</span>
-            </span>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              title="Logout"
-              data-testid="button-random-logout"
-              className="h-11 w-11 rounded-full text-muted-foreground shadow-[0_12px_28px_rgba(15,23,42,0.08)] hover:bg-accent hover:text-foreground"
-            >
-              {logoutMutation.isPending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <LogOut className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
+      <div
+        className={cn(
+          "min-h-0 flex-1 px-4 pb-0 pt-4 md:px-4 md:pb-4 md:pt-4",
+          isMobile
+            ? "overflow-visible"
+            : "overflow-hidden",
+        )}
+      >
+        <div className="mx-auto flex h-full w-full max-w-[26rem] flex-col">
+          {sidebarContent}
         </div>
-
-        <div className="mt-2 flex items-center gap-3 md:mt-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Add an interest"
-              className="h-11 rounded-full border-border bg-card pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 md:bg-muted"
-              value={interestDraft}
-              onChange={(event) => setInterestDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  handleAddInterest();
-                }
-              }}
-              data-testid="input-random-interest"
-            />
-          </div>
-
-          <Button
-            type="button"
-            onClick={handleAddInterest}
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-full"
-            title="Add interest"
-            data-testid="button-add-random-interest"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[120px] pt-10 scrollbar-none md:px-3 md:pb-4">
-        {sidebarContent}
       </div>
     </div>
   );
 
   if (isMobile) {
-    if (matchIntentActive) {
+    if (isMatched || isFindingMatch) {
       return (
         <>
           <Seo
@@ -829,7 +910,7 @@ export default function RandomChatPage() {
         className="flex h-screen overflow-hidden bg-background text-foreground"
         data-testid="random-chat-desktop-layout"
       >
-        <div className="h-full w-full overflow-hidden bg-background md:w-[28rem] md:shrink-0 md:border-r md:border-border">
+        <div className="h-full w-full overflow-hidden bg-background md:w-[26rem] md:shrink-0 md:border-r md:border-border">
           <div className="flex h-full w-full overflow-hidden bg-background">
             <div className="hidden md:flex md:shrink-0">
               <ChatNavigationMenu
@@ -845,158 +926,491 @@ export default function RandomChatPage() {
         </div>
 
         <div className="flex min-w-0 flex-1">
-          {conversationPanel}
+          {shouldShowDesktopConversation ? (
+            conversationPanel
+          ) : (
+            <ChatDesktopShellPlaceholder
+              icon={Compass}
+              title="Click Start Chat to find a random chat partner"
+            />
+          )}
         </div>
       </div>
     </>
   );
 }
 
+function RandomSearchOrbitalAnimation() {
+  const shouldReduceMotion = useReducedMotion();
+  const idPrefix = useId().replace(/:/g, "");
+  const glowId = `${idPrefix}-random-search-glow`;
+  const sweepId = `${idPrefix}-random-search-sweep`;
+
+  const rings = [
+    { radius: 43, opacity: 0.34, duration: 4.8, offset: 0 },
+    { radius: 68, opacity: 0.24, duration: 5.8, offset: 0.18 },
+    { radius: 91, opacity: 0.16, duration: 6.8, offset: 0.34 },
+  ];
+  const orbitDots = [
+    { radius: 43, size: 3.4, duration: 6.5, delay: 0 },
+    { radius: 68, size: 4, duration: 8.4, delay: 0.8 },
+    { radius: 91, size: 3.7, duration: 10.2, delay: 1.4 },
+  ];
+  const spinAnimation = shouldReduceMotion ? { rotate: 0 } : { rotate: 360 };
+  const centerSpinStyle = {
+    transformBox: "view-box",
+    transformOrigin: "center",
+  } as const;
+
+  return (
+    <div
+      className="relative mx-auto flex h-[16.5rem] w-full items-center justify-center overflow-visible text-primary md:h-[12.75rem]"
+      aria-hidden="true"
+    >
+      <motion.svg
+        viewBox="0 0 240 240"
+        className="absolute h-[17.5rem] w-[17.5rem] overflow-visible md:h-[13.5rem] md:w-[13.5rem]"
+        fill="none"
+        initial={false}
+      >
+        <defs>
+          <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+            <stop offset="58%" stopColor="currentColor" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={sweepId} x1="120" y1="28" x2="206" y2="96">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.84" />
+            <stop offset="58%" stopColor="currentColor" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        <motion.circle
+          cx="120"
+          cy="120"
+          r="106"
+          fill={`url(#${glowId})`}
+          animate={
+            shouldReduceMotion
+              ? { opacity: 0.7 }
+              : { opacity: [0.45, 0.82, 0.45], scale: [0.98, 1.04, 0.98] }
+          }
+          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
+          style={{ transformOrigin: "120px 120px" }}
+        />
+
+        {rings.map((ring) => (
+          <motion.circle
+            key={ring.radius}
+            cx="120"
+            cy="120"
+            r={ring.radius}
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="1.35"
+            initial={false}
+            animate={
+              shouldReduceMotion
+                ? { opacity: ring.opacity, pathLength: 0.82 }
+                : {
+                    opacity: [
+                      ring.opacity * 0.55,
+                      ring.opacity,
+                      ring.opacity * 0.55,
+                    ],
+                    pathLength: [0.28, 0.88, 0.28],
+                    pathOffset: [
+                      ring.offset,
+                      ring.offset + 0.18,
+                      ring.offset + 0.36,
+                    ],
+                  }
+            }
+            transition={{
+              duration: ring.duration,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
+
+        <motion.g
+          animate={spinAnimation}
+          transition={{ duration: 7.5, repeat: Infinity, ease: "linear" }}
+          style={centerSpinStyle}
+        >
+          <path
+            d="M120 120 L120 27 A93 93 0 0 1 205 82 Z"
+            fill={`url(#${sweepId})`}
+            opacity="0.2"
+          />
+          <path
+            d="M120 27 A93 93 0 0 1 205 82"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="1.6"
+            opacity="0.68"
+          />
+          <circle cx="120" cy="27" r="4.5" fill="currentColor" />
+        </motion.g>
+
+        {orbitDots.map((dot, index) => (
+          <motion.g
+            key={dot.radius}
+            animate={spinAnimation}
+            transition={{
+              duration: dot.duration,
+              repeat: Infinity,
+              ease: "linear",
+              delay: shouldReduceMotion ? 0 : dot.delay,
+            }}
+            style={centerSpinStyle}
+          >
+            <motion.circle
+              cx="120"
+              cy={120 - dot.radius}
+              r={dot.size}
+              fill="currentColor"
+              animate={
+                shouldReduceMotion
+                  ? { opacity: 0.78 }
+                  : {
+                      opacity: [0.35, 0.95, 0.35],
+                      scale: [0.85, 1.15, 0.85],
+                    }
+              }
+              transition={{
+                duration: 2.8 + index * 0.35,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              style={{ transformOrigin: `120px ${120 - dot.radius}px` }}
+            />
+          </motion.g>
+        ))}
+
+        <motion.g
+          animate={
+            shouldReduceMotion
+              ? { scale: 1 }
+              : { scale: [1, 1.04, 1], opacity: [0.9, 1, 0.9] }
+          }
+          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{ transformOrigin: "120px 120px" }}
+        >
+          <circle
+            cx="120"
+            cy="120"
+            r="35"
+            fill="var(--card)"
+            stroke="currentColor"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
+          <foreignObject x="100" y="100" width="40" height="40">
+            <div className="flex h-full w-full items-center justify-center text-primary">
+              <UserRound className="h-8 w-8" />
+            </div>
+          </foreignObject>
+        </motion.g>
+      </motion.svg>
+    </div>
+  );
+}
+
 function RandomMatchControlsPanel({
+  currentPartner,
+  genderPreference,
   interestMatchingEnabled,
+  interestDraft,
   interests,
-  isManagingInterests,
+  isInterestsExpanded,
+  isFindingMatch,
+  isMatched,
+  onAddInterest,
+  onGenderPreferenceChange,
+  onInterestDraftChange,
   onInterestMatchingChange,
-  onManageInterestsToggle,
+  onInterestsExpandedChange,
+  onMaxWaitDurationChange,
   onRemoveInterest,
-  onPrototypeGenderClick,
   onStartChat,
+  onStopChat,
+  onLogout,
+  logoutPending,
   startChatDisabled,
   startChatLabel,
-  statusMessage,
-  hidePrototypeNotes,
+  maxWaitDurationSeconds,
 }: {
+  currentPartner: RandomChatPartner | null;
+  genderPreference: RandomGenderPreference;
   interestMatchingEnabled: boolean;
+  interestDraft: string;
   interests: string[];
-  isManagingInterests: boolean;
+  isInterestsExpanded: boolean;
+  isFindingMatch: boolean;
+  isMatched: boolean;
+  onAddInterest: () => void;
+  onGenderPreferenceChange: (preference: RandomGenderPreference) => void;
+  onInterestDraftChange: Dispatch<SetStateAction<string>>;
   onInterestMatchingChange: (checked: boolean) => void;
-  onManageInterestsToggle: () => void;
+  onInterestsExpandedChange: (open: boolean) => void;
+  onMaxWaitDurationChange: (value: number | string) => void;
   onRemoveInterest: (interest: string) => void;
-  onPrototypeGenderClick: (target: string) => void;
   onStartChat: () => void;
+  onStopChat: () => void;
+  onLogout: () => void;
+  logoutPending?: boolean;
   startChatDisabled?: boolean;
   startChatLabel: string;
-  statusMessage: string;
-  hidePrototypeNotes?: boolean;
+  maxWaitDurationSeconds: number;
 }) {
+  const genderOptions: Array<{
+    icon: typeof VenusAndMars;
+    label: string;
+    value: RandomGenderPreference;
+  }> = [
+    { value: "any", label: "Any", icon: VenusAndMars },
+    { value: "male", label: "Male", icon: Mars },
+    { value: "female", label: "Female", icon: Venus },
+  ];
+  const selectedGenderOption =
+    genderOptions.find((option) => option.value === genderPreference) ??
+    genderOptions[0];
+  const primaryActionLabel = isFindingMatch ? "Stop Searching" : startChatLabel;
+  const primaryActionHandler = isFindingMatch ? onStopChat : onStartChat;
+  const primaryActionDisabled = isFindingMatch ? false : startChatDisabled;
+
   return (
-    <div className="space-y-4">
-      <section className="rounded-sm border border-border/70 bg-background p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-base font-semibold text-foreground">
-                Interest Matching
-              </h4>
-              <Switch
-                checked={interestMatchingEnabled}
-                onCheckedChange={onInterestMatchingChange}
-                aria-label="Toggle interest matching"
-              />
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <ChatPageHeader
+        icon={Shuffle}
+        title="Random Chat"
+        onLogout={onLogout}
+        logoutPending={logoutPending}
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col pb-[calc(5.4rem+env(safe-area-inset-bottom))] pt-0 md:pb-4">
+        <div className="mx-auto flex h-full w-full max-w-[24rem] flex-col">
+          <div className="flex min-h-0 flex-1 items-center justify-center pb-6 pt-8 md:pb-0 md:pt-0">
+            <div className="relative flex w-full flex-col items-center gap-3 text-center">
+              <RandomSearchOrbitalAnimation />
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="rounded-full"
-            onClick={onManageInterestsToggle}
-          >
-            {isManagingInterests ? "Done" : "Manage"}
-          </Button>
-        </div>
-
-        <div className="mt-3 rounded-[1.2rem] border border-dashed border-border/70 bg-muted/20 p-3">
-          <div className="flex flex-wrap gap-2">
-            {interests.length > 0 ? (
-              interests.map((interest) => (
-                <span
-                  key={interest}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
-                >
-                  {interest}
-                  {isManagingInterests && (
+          <div className="mt-auto w-full space-y-4 md:space-y-2">
+          <div className="relative w-full rounded-[1.5rem] border border-border/70 bg-card shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <DropdownMenu>
+              <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <VenusAndMars className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Gender Preference
+                    </p>
+                  </div>
+                </div>
+                <DropdownMenuTrigger asChild>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => onRemoveInterest(interest)}
-                      className="rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label={`Remove ${interest}`}
+                      className="flex items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
+                      aria-label="Open gender preference menu"
                     >
-                      <X className="h-3 w-3" />
+                      {selectedGenderOption.label}
+                      <ChevronRight className="h-4 w-4 -rotate-90 text-muted-foreground" />
                     </button>
-                  )}
-                </span>
-              ))
-            ) : (
-              <p className="flex justify-center text-xs text-muted-foreground">
-                You have no interests yet
-              </p>
-            )}
+                  </div>
+                </DropdownMenuTrigger>
+              </div>
+              <DropdownMenuContent
+                side="top"
+                align="end"
+                sideOffset={8}
+                className="w-38 rounded-2xl border border-border/70 bg-card p-2"
+              >
+                {genderOptions.map((option) => {
+                  const OptionIcon = option.icon;
+                  const isSelected = genderPreference === option.value;
+
+                  return (
+                    <DropdownMenuItem
+                      key={option.value}
+                      onSelect={() => onGenderPreferenceChange(option.value)}
+                      className={cn(
+                        "flex min-h-11 items-center justify-between rounded-xl px-3",
+                        isSelected && "bg-accent text-accent-foreground",
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary",
+                            isSelected && "bg-background/70 text-foreground",
+                          )}
+                        >
+                          <OptionIcon className="h-4 w-4" />
+                        </div>
+                        <span>{option.label}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="border-t border-border/60" />
+
+            <div className="relative px-4 py-3">
+              <AnimatePresence initial={false}>
+                {isInterestsExpanded ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute inset-x-0 bottom-full z-30"
+                  >
+                    <div className="rounded-[1.2rem] border border-border/70 bg-card p-2 shadow-[0_24px_48px_rgba(15,23,42,0.22)]">
+                      <div className="space-y-2">
+                        <div className="rounded-[1rem] border border-border/70 bg-background/65 px-3 py-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {interests.map((interest) => (
+                              <span
+                                key={interest}
+                                className="inline-flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground"
+                              >
+                                <span className="truncate">{interest}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onRemoveInterest(interest)}
+                                  className="rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                                  aria-label={`Remove ${interest}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+
+                            <Input
+                              type="text"
+                              placeholder="Add an interest..."
+                              className="h-9 min-w-[8rem] flex-1 border-0 bg-card px-3 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                              value={interestDraft}
+                              onChange={(event) =>
+                                onInterestDraftChange(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  onAddInterest();
+                                }
+                              }}
+                              data-testid="input-random-interest"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1rem] border border-border/70 bg-background/65 p-3">
+                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            Max Wait Duration
+                          </p>
+                          <div className="mt-2 grid grid-cols-4 gap-2">
+                            {RANDOM_CHAT_MAX_WAIT_OPTIONS.map((option) => {
+                              const isSelected =
+                                maxWaitDurationSeconds === option.value;
+
+                              return (
+                                <button
+                                  key={option.label}
+                                  type="button"
+                                  onClick={() => onMaxWaitDurationChange(option.value)}
+                                  className={cn(
+                                    "h-9 rounded-[0.8rem] border px-1 text-[11px] font-medium transition-colors",
+                                    isSelected
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-border/70 bg-background text-foreground hover:bg-muted/45",
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Search className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Interests
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <Switch
+                    checked={interestMatchingEnabled}
+                    onCheckedChange={onInterestMatchingChange}
+                    aria-label="Toggle interest matching"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onInterestsExpandedChange(!isInterestsExpanded)}
+                    className="flex items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
+                    aria-label={
+                      isInterestsExpanded
+                        ? "Collapse interests panel"
+                        : "Expand interests panel"
+                    }
+                  >
+                    <span>{interestMatchingEnabled ? "ON" : "OFF"}</span>
+                    <ChevronRight
+                      className={cn(
+                        "h-4 w-4 transition-transform duration-200",
+                        isInterestsExpanded ? "-rotate-90" : "rotate-90",
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="w-full">
+            <Button
+              type="button"
+              onClick={primaryActionHandler}
+              disabled={primaryActionDisabled}
+              className="h-12 w-full rounded-[1.1rem] text-sm font-semibold md:h-10 md:rounded-[1rem]"
+            >
+              {isFindingMatch ? (
+                <X className="mr-2 h-4 w-4" />
+              ) : primaryActionDisabled ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircleMore className="mr-2 h-4 w-4" />
+              )}
+              {primaryActionLabel}
+            </Button>
+          </div>
           </div>
         </div>
-      </section>
-
-      <section className="rounded-sm border border-border/70 bg-background p-3.5 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
-        <div className="flex items-center gap-2">
-          <h4 className="text-base font-semibold text-foreground">
-            Gender Filter
-          </h4>
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-2.5 py-1 text-[11px] font-semibold text-amber-600">
-            <Lock className="h-3 w-3" />
-            Paid
-          </span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2.5">
-          {[
-            { label: "Male", icon: VenetianMask },
-            { label: "Both", icon: VenusAndMars },
-            { label: "Female", icon: VenetianMask },
-          ].map((option, index) => {
-            const Icon = option.icon;
-            const isHighlighted = index === 1;
-
-            return (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => onPrototypeGenderClick(option.label)}
-                className={cn(
-                  "rounded-[1.1rem] border px-2.5 py-3 text-center transition-colors",
-                  isHighlighted
-                    ? "border-primary/50 bg-primary/8"
-                    : "border-border/70 bg-card hover:bg-muted/40",
-                )}
-              >
-                <div className="mx-auto mb-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5" />
-                </div>
-                <p className="text-xs font-semibold text-foreground">
-                  {option.label}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      
-        <div className="flex flex-col items-center gap-3 text-center">
-          <Button
-            type="button"
-            onClick={onStartChat}
-            disabled={startChatDisabled}
-            className="h-10 w-full rounded-full text-base font-semibold"
-          >
-            {startChatDisabled ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <MessageCircleMore className="mr-2 h-4 w-4" />
-            )}
-            {startChatLabel}
-          </Button>
-        </div>
+      </div>
     </div>
   );
 }
@@ -1109,11 +1523,14 @@ function RandomChatConversationPanel({
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col bg-background",
-        !isMobile && "overflow-hidden",
+        "relative flex-1",
+        isMobile
+          ? "flex h-full flex-col overflow-hidden"
+          : "flex min-w-0 overflow-hidden",
       )}
     >
-      <div className="z-40 flex flex-shrink-0 items-center justify-between border-b border-border/70 bg-card p-2.5">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
@@ -1127,7 +1544,7 @@ function RandomChatConversationPanel({
           <div
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] font-semibold text-black"
           >
-            <Compass className="h-5 w-5" />
+            <Shuffle className="h-5 w-5" />
           </div>
 
           <div className="min-w-0">
@@ -1371,6 +1788,7 @@ function RandomChatConversationPanel({
           </div>
         </div>
         </div>
+      </div>
       </div>
     </div>
   );

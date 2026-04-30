@@ -103,10 +103,10 @@ export function ChatNavigationMenu({
         ? "cursor-not-allowed text-muted-foreground/40 opacity-60"
         : isRail
           ? isActive
-            ? "text-primary-foreground"
+            ? "text-accent-foreground"
             : "text-muted-foreground hover:text-foreground active:text-foreground"
           : isActive
-            ? "bg-primary text-primary-foreground shadow-sm"
+            ? "bg-accent text-accent-foreground shadow-sm"
             : "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted active:text-foreground",
     );
   const getIconClasses = (isActive: boolean, disabled?: boolean) =>
@@ -117,7 +117,7 @@ export function ChatNavigationMenu({
         ? "border-transparent bg-muted/60 text-muted-foreground/50"
         : isRail
           ? isActive
-            ? "rounded-full border-transparent bg-primary text-primary-foreground shadow-sm"
+            ? "rounded-full border-border bg-accent text-accent-foreground shadow-sm"
             : "rounded-full border-transparent bg-transparent text-current group-hover:bg-muted group-active:bg-muted"
           : isActive
             ? "rounded-full border-transparent bg-transparent text-current"
