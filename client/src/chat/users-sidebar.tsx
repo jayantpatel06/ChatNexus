@@ -748,7 +748,7 @@ export function UsersSidebar({
                         <div className="relative shrink-0">
                           <div
                             className={cn(
-                              "flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-black",
+                              "flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-black",
                               !displayUser.isOnline && "opacity-65",
                             )}
                             style={{

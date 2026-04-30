@@ -77,7 +77,7 @@ const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
-const ATTACHMENT_INPUT_ACCEPT = "image/*,video/mp4,video/webm";
+const ATTACHMENT_INPUT_ACCEPT = "image/*,video/*,.mp4,.webm";
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const IS_DEV = import.meta.env.DEV;
 const EXACT_BOTTOM_THRESHOLD_PX = 24;
@@ -2819,8 +2819,8 @@ export function ChatArea({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                            title="Attach File"
-                            aria-label="Attach file"
+                            title="Attach media"
+                            aria-label="Attach media"
                             data-testid="button-attach-file"
                             onClick={() => {
                               closeComposerPicker();

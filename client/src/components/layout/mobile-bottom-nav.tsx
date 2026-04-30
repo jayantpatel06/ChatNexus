@@ -38,7 +38,7 @@ export function MobileBottomNav() {
   ];
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-1 md:hidden">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-1 md:hidden">
       <nav
         className="pointer-events-auto mx-auto flex w-fit max-w-full items-center justify-center gap-1 rounded-full border border-border/80 bg-card/90 p-1  backdrop-blur"
         aria-label="Mobile chat navigation"
@@ -53,7 +53,7 @@ export function MobileBottomNav() {
                 navigateWithinAppShell(location, item.href, setLocation)
               }
               className={cn(
-                "flex shrink-0 flex-col items-center gap-1 rounded-full px-5 py-1 text-center transition-colors",
+                "flex shrink-0 flex-col items-center gap-1.5 rounded-full px-5.5 py-1 text-center transition-colors",
                 item.isActive
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -61,10 +61,10 @@ export function MobileBottomNav() {
               aria-current={item.isActive ? "page" : undefined}
             >
               <Icon
-                className="h-[22px] w-[22px]"
+                className="h-6 w-6"
                 strokeWidth={item.isActive ? 2.4 : 2}
               />
-              <span className="whitespace-nowrap text-[12px] font-medium leading-none tracking-tight">
+              <span className="whitespace-nowrap text-[13px] font-medium leading-none tracking-tight">
                 {item.label}
               </span>
             </button>

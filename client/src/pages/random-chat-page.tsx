@@ -1199,8 +1199,8 @@ function RandomMatchControlsPanel({
             </div>
           </div>
 
-          <div className="mt-auto w-full space-y-4 md:space-y-2">
-          <div className="relative w-full rounded-[1.5rem] border border-border/70 bg-card shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <div className="mt-auto w-full space-y-3 md:space-y-2">
+          <div className="relative w-full rounded-[1.5rem] border border-border/100 bg-muted">
             <DropdownMenu>
               <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -1391,12 +1391,13 @@ function RandomMatchControlsPanel({
 
           </div>
 
-          <div className="w-full">
+          <div className="flex w-full justify-center">
             <Button
               type="button"
               onClick={primaryActionHandler}
               disabled={primaryActionDisabled}
-              className="h-12 w-full rounded-[1.1rem] text-sm font-semibold md:h-10 md:rounded-[1rem]"
+              variant="outline"
+              className="h-12 w-[68%] rounded-full border-primary/25 bg-card text-sm font-semibold text-primary shadow-none hover:bg-primary/10 hover:text-primary md:h-10 md:w-[70%] md:rounded-[1rem]"
             >
               {isFindingMatch ? (
                 <X className="mr-2 h-4 w-4" />

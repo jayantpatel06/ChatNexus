@@ -128,7 +128,7 @@ export function ChatNavigationMenu({
     <nav
       className={cn(
         isRail
-          ? "flex h-full w-[68px] shrink-0 flex-col justify-between border-r border-border bg-background px-1.5 py-2"
+          ? "flex h-full w-[54px] shrink-0 flex-col justify-between border-r border-border bg-background px-1 py-4"
           : "flex items-center justify-between gap-1 rounded-[1.35rem] border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur",
         className,
       )}
@@ -156,7 +156,7 @@ export function ChatNavigationMenu({
               data-testid={item.testId}
             >
               <span className={getIconClasses(isActive, item.disabled)}>
-                <Icon className={isRail ? "h-6 w-6" : "h-6 w-6"} />
+                <Icon className={isRail ? "h-5 w-5" : "h-6 w-6"} />
               </span>
               {!isRail && (
                 <span className="text-[0.68rem] font-medium leading-none tracking-tight">

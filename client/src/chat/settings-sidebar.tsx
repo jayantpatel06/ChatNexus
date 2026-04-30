@@ -75,15 +75,15 @@ const SETTINGS_LAYOUT = {
     "px-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] pt-1 md:px-4 md:pb-2 md:pt-1",
   stack: "space-y-3 md:space-y-2",
   profileCard:
-    "rounded-sm border border-border/70 bg-card px-6 py-3.5 md:px-5 md:py-3",
+    "rounded-sm border border-border/70 bg-muted/70 px-6 py-3 md:px-5 md:py-3",
   listCard:
-    "overflow-hidden rounded-sm border border-border/70 bg-card",
-  row: "flex w-full items-center justify-between gap-4 px-6 py-3.5 text-left transition-colors duration-200 hover:bg-accent/50 md:gap-3 md:px-5 md:py-3",
+    "overflow-hidden rounded-sm",
+  row: "flex w-full items-center justify-between gap-4 px-6 py-3.5 text-left transition-colors duration-200 hover:bg-accent/40 md:gap-3 md:px-5 md:py-3",
   detail: "px-3 pb-3.5 pt-3 md:px-2.5 md:pb-3 md:pt-2.5",
   iconTile:
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] md:h-8 md:w-8",
   detailCard:
-    "rounded-[1.15rem] border border-border/70 bg-background px-4 py-3.5 md:px-3 md:py-3",
+    "rounded-[1.15rem] border border-border/70 bg-muted/70 px-4 py-3.5 md:px-3 md:py-3",
   fieldInput:
     "h-11 rounded-[0.95rem] border border-border/70 bg-background/80 text-sm text-foreground shadow-none focus-visible:border-primary md:h-9 md:text-xs",
 } as const;
@@ -763,9 +763,9 @@ export function SettingsSidebar() {
             <div className={SETTINGS_LAYOUT.contentPadding}>
               <div className={SETTINGS_LAYOUT.stack}>
               <div className={SETTINGS_LAYOUT.profileCard}>
-                <div className="flex items-center gap-3.5 md:gap-3">
+                <div className="flex items-center gap-4 md:gap-3">
                   <div
-                    className="flex mt-1 h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white md:h-11 md:w-11 md:text-base"
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white md:h-11 md:w-11 md:text-base"
                     style={{
                       background: user?.isGuest
                         ? "var(--brand-muted)"
@@ -784,7 +784,7 @@ export function SettingsSidebar() {
                         {membershipLabel}
                       </span>
                     </div>
-                    <p className="mt-1 truncate text-sm text-muted-foreground md:text-xs">
+                    <p className="mt-1 mb-1 truncate text-sm text-muted-foreground md:text-xs">
                       {emailLabel}
                     </p>
                   </div>
@@ -860,19 +860,19 @@ export function SettingsSidebar() {
                   );
                 })}
               </div>
-              <div>
+              <div className="flex justify-center">
                 <Button
                   type="button"
                   onClick={() => logoutMutation.mutate()}
                   disabled={logoutMutation.isPending}
                   variant="ghost"
-                  className="h-14 w-full rounded-full border border-destructive/20 bg-destructive/10 text-base font-semibold text-destructive hover:bg-destructive/15 hover:text-destructive md:h-11 md:text-sm"
+                  className="h-11 w-[88%] rounded-full border border-destructive/20 bg-destructive/10 text-sm font-semibold text-destructive hover:bg-destructive/15 hover:text-destructive md:h-9 md:w-[70%] md:text-xs"
                 >
                   {logoutMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin md:h-3.5 md:w-3.5" />
+                    <Loader2 className="h-3 w-3 animate-spin md:h-3 md:w-3" />
                   ) : (
                     <>
-                      <LogOut className="mr-2 h-4 w-4 md:h-3.5 md:w-3.5" />
+                      <LogOut className="mr-2 h-3 w-3 md:h-3 md:w-3" />
                       Log Out
                     </>
                   )}
