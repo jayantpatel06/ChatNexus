@@ -26,6 +26,7 @@ body,
 
 :root {
   --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --background: var(--brand-bg);
   --foreground: var(--brand-text);
   --card: var(--brand-card);
@@ -178,6 +179,7 @@ body,
 
 @layer utilities {
   .safe-top-shell {
+    position: relative;
     padding-top: var(--safe-area-top);
   }
 

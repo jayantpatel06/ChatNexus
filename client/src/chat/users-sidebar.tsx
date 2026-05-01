@@ -42,7 +42,6 @@ interface CachedUser extends User {
 
 // Local storage key for caching users
 const CACHED_USERS_KEY = "chatnexus_cached_users";
-const LAST_READ_MESSAGES_KEY = "chatnexus_last_read_messages";
 const SIDEBAR_FILTERS_KEY = "chatnexus_sidebar_filters";
 const USER_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
@@ -173,17 +172,6 @@ export function UsersSidebar({
       return new Map();
     },
   );
-  const [lastReadMessageIds, setLastReadMessageIds] = useState<Record<number, number>>(
-    () => {
-      try {
-        const stored = localStorage.getItem(LAST_READ_MESSAGES_KEY);
-        return stored ? (JSON.parse(stored) as Record<number, number>) : {};
-      } catch {
-        return {};
-      }
-    },
-  );
-
   // Update cached users when the sidebar feed changes
   useEffect(() => {
     setCachedUsers((prev) => {
@@ -244,17 +232,6 @@ export function UsersSidebar({
       return newCache;
     });
   }, [sidebarUsers, user?.userId]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        LAST_READ_MESSAGES_KEY,
-        JSON.stringify(lastReadMessageIds),
-      );
-    } catch {
-      // Ignore storage errors
-    }
-  }, [lastReadMessageIds]);
 
   useEffect(() => {
     try {
@@ -417,23 +394,6 @@ export function UsersSidebar({
     enabled: candidateUsers.length > 0,
   });
 
-  const getHasUnread = (candidateUser: CachedUser) => {
-    const lastMessage = conversationStats?.[candidateUser.userId]?.lastMessage;
-    if (!lastMessage) {
-      return false;
-    }
-
-    if (selectedUser?.userId === candidateUser.userId) {
-      return false;
-    }
-
-    if (lastMessage.senderId === user?.userId) {
-      return false;
-    }
-
-    return lastReadMessageIds[candidateUser.userId] !== lastMessage.msgId;
-  };
-
   const displayUsers = candidateUsers
     .filter(
       (candidateUser) =>
@@ -455,7 +415,8 @@ export function UsersSidebar({
       if (onlineDelta !== 0) return onlineDelta;
 
       const unreadDelta =
-        Number(getHasUnread(rightUser)) - Number(getHasUnread(leftUser));
+        (conversationStats?.[rightUser.userId]?.unread ?? 0) -
+        (conversationStats?.[leftUser.userId]?.unread ?? 0);
       if (unreadDelta !== 0) return unreadDelta;
 
       return leftUser.username.localeCompare(rightUser.username);
@@ -476,28 +437,6 @@ export function UsersSidebar({
       : location === "/random-chat"
           ? "random"
           : "chat";
-
-  useEffect(() => {
-    if (!selectedUser) {
-      return;
-    }
-
-    const lastMessage = conversationStats?.[selectedUser.userId]?.lastMessage;
-    if (!lastMessage) {
-      return;
-    }
-
-    setLastReadMessageIds((prev) => {
-      if (prev[selectedUser.userId] === lastMessage.msgId) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [selectedUser.userId]: lastMessage.msgId,
-      };
-    });
-  }, [conversationStats, selectedUser]);
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -722,7 +661,6 @@ export function UsersSidebar({
                     conversationStats?.[displayUser.userId]?.lastMessage;
                   const unreadCount =
                     conversationStats?.[displayUser.userId]?.unread ?? 0;
-                  const hasUnread = getHasUnread(displayUser);
                   const preview = lastMessage
                     ? `${lastMessage.senderId === user?.userId ? "You: " : ""}${getSidebarMessagePreview(lastMessage.message)}`
                     : displayUser.isOnline
@@ -766,7 +704,7 @@ export function UsersSidebar({
                               "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background",
                               displayUser.isOnline
                                 ? "bg-emerald-500"
-                                : "bg-muted-foreground/35",
+                                : "bg-muted-foreground",
                             )}
                           />
                         </div>
@@ -792,17 +730,11 @@ export function UsersSidebar({
                               <span className="text-[11px] font-medium text-muted-foreground">
                                 {formatSidebarTimestamp(lastMessage?.timestamp)}
                               </span>
-                              {hasUnread ? (
-                                <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                                  {unreadCount > 9 ? "9+" : unreadCount || "1"}
+                              {unreadCount > 0 ? (
+                                <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-primary px-1.5  text-[10px] font-semibold text-primary-foreground">
+                                  {unreadCount}
                                 </span>
-                              ) : displayUser.isOnline ? (
-                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground/45">
-                                  -
-                                </span>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </div>

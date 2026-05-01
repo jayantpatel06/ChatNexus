@@ -32,6 +32,18 @@ interface ActiveChatContextType {
 const ActiveChatContext = createContext<ActiveChatContextType | null>(null);
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const HISTORY_USERS_QUERY_KEY = ["/api/users/history"] as const;
+type ConversationStatsResponse = Record<
+  number,
+  {
+    lastMessage: {
+      msgId: number;
+      senderId: number;
+      message: string;
+      timestamp: string;
+    } | null;
+    unread: number;
+  }
+>;
 
 // Helper to update React Query cache for a conversation
 function updateMessageCache(
@@ -106,6 +118,25 @@ function invalidateHistoryUsersQuery() {
   void queryClient.invalidateQueries({
     queryKey: HISTORY_USERS_QUERY_KEY,
   });
+}
+
+function clearUnreadCountForConversation(otherUserId: number) {
+  queryClient.setQueriesData<ConversationStatsResponse | undefined>(
+    { queryKey: CONVERSATION_STATS_QUERY_KEY },
+    (existingStats) => {
+      if (!existingStats?.[otherUserId] || existingStats[otherUserId].unread === 0) {
+        return existingStats;
+      }
+
+      return {
+        ...existingStats,
+        [otherUserId]: {
+          ...existingStats[otherUserId],
+          unread: 0,
+        },
+      };
+    },
+  );
 }
 
 function replaceMessageInActiveCache(otherUserId: number, message: Message) {
@@ -220,6 +251,17 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     setLiveMessages([]);
     optimisticMessagesRef.current.clear();
   }, [activeUserId]);
+
+  useEffect(() => {
+    if (!socket || !isConnected || !user || !activeUserId) {
+      return;
+    }
+
+    socket.emit("mark_conversation_read", { otherUserId: activeUserId });
+    clearUnreadCountForConversation(activeUserId);
+    invalidateConversationStatsQueries();
+    invalidateHistoryUsersQuery();
+  }, [activeUserId, isConnected, socket, user]);
 
   // Add optimistic message (called when user sends)
   const addOptimisticMessage = useCallback(
@@ -343,6 +385,11 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
           if (prev.some((m) => m.msgId === msg.msgId)) return prev;
           return [...prev, msg];
         });
+
+        if (msg.senderId === currentActiveId && msg.receiverId === user.userId) {
+          socket.emit("mark_conversation_read", { otherUserId: currentActiveId });
+          clearUnreadCountForConversation(currentActiveId);
+        }
       }
 
       const otherUserId =

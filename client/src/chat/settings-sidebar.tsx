@@ -632,11 +632,8 @@ export function SettingsSidebar() {
               className="flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground md:text-[13px]">
+                <p className="truncate text-sm font-semibold text-foreground md:text-[14px]">
                   {blockedUser.username}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground md:text-[11px]">
-                  Remove to allow chats again
                 </p>
               </div>
               <Button

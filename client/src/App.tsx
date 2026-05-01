@@ -13,6 +13,28 @@ const APP_BACKGROUND_STYLE = {
   backgroundColor: "var(--background)",
 } as const;
 
+const APP_SAFE_TOP_FILL_STYLE = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  height: "var(--safe-area-top)",
+  zIndex: 0,
+  pointerEvents: "none",
+  backgroundColor: "var(--background)",
+} as const;
+
+const APP_SAFE_BOTTOM_FILL_STYLE = {
+  position: "fixed",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: "var(--safe-area-bottom)",
+  zIndex: 0,
+  pointerEvents: "none",
+  backgroundColor: "var(--background)",
+} as const;
+
 function App() {
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -30,6 +52,8 @@ function App() {
       <TooltipProvider>
         <LazyToaster />
         <div style={APP_BACKGROUND_STYLE}></div>
+        <div aria-hidden="true" style={APP_SAFE_TOP_FILL_STYLE}></div>
+        <div aria-hidden="true" style={APP_SAFE_BOTTOM_FILL_STYLE}></div>
         <ErrorBoundary>
           <AppRouter />
         </ErrorBoundary>

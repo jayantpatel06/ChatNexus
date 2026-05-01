@@ -2,8 +2,8 @@
 
 export const THEME_STORAGE_KEY = "theme";
 export const DEFAULT_THEME: ThemePreference = "dark";
-const FALLBACK_DARK_THEME_COLOR = "#161a19";
-const FALLBACK_LIGHT_THEME_COLOR = "#f1f5f9";
+const FALLBACK_DARK_THEME_COLOR = "#0f171b";
+const FALLBACK_LIGHT_THEME_COLOR = "#ffffff";
 
 export type ThemePreference = "light" | "dark";
 

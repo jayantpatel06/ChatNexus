@@ -77,6 +77,7 @@ const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
 
 const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
+const ATTACHMENT_UPLOAD_TIMEOUT_MS = 180_000;
 const ATTACHMENT_INPUT_ACCEPT = "image/*,video/*,.mp4,.webm";
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const IS_DEV = import.meta.env.DEV;
@@ -1529,7 +1530,7 @@ export function ChatArea({
           method: "POST",
           body: formData,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        }, ATTACHMENT_UPLOAD_TIMEOUT_MS);
 
         if (!res.ok) {
           let message = "Upload failed";
@@ -2456,8 +2457,16 @@ export function ChatArea({
               </div>
             )}
 
+            {timelineItems.length === 0 && (
+              <div className="flex justify-center pt-4 pb-2">
+                <span className="inline-flex items-center rounded-full border border-border/60 bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+                  Today
+                </span>
+              </div>
+            )}
+
             {showEmptyConversationState && (
-              <div className="flex min-h-full items-center justify-center py-6">
+              <div className="flex min-h-[calc(100%-5rem)] items-center justify-center px-1 pb-8">
                 <div className="relative w-full max-w-[21rem] overflow-hidden rounded-[2rem] border border-border/60 bg-card px-6 py-6 text-center">
                   <div className="relative">
                     <h3 className="text-[1rem] font-semibold tracking-tight text-foreground">
