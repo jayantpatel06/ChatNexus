@@ -545,6 +545,7 @@ export default function GlobalChatRoomPage() {
       <div
         className={cn(
           "flex overflow-hidden",
+          isMobile && "safe-top-shell",
           isMobile ? "h-[100dvh]" : "h-screen",
         )}
       >

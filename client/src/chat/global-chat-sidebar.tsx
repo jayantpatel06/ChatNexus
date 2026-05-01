@@ -334,7 +334,7 @@ export default function GlobalChatPage() {
           path="/global-chat"
           robots="noindex, nofollow"
         />
-        <div className="flex h-[100dvh] flex-col bg-background text-foreground">
+        <div className="safe-top-shell flex h-[100dvh] flex-col bg-background text-foreground">
           <div className="min-h-0 flex-1 overflow-hidden">
             <GlobalChatSidebar onEnterRoom={openGlobalRoom} />
           </div>

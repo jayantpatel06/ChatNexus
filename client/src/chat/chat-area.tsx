@@ -76,7 +76,7 @@ import { FriendRequestCard, MessageBubble } from "./chat-message-components";
 const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
 
-const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
 const ATTACHMENT_INPUT_ACCEPT = "image/*,video/*,.mp4,.webm";
 const CONVERSATION_STATS_QUERY_KEY = ["conversations-stats"] as const;
 const IS_DEV = import.meta.env.DEV;
@@ -1467,7 +1467,7 @@ export function ChatArea({
       if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
         toast({
           title: "File too large",
-          description: "File size must be less than 5MB",
+          description: "File size must be less than 20MB",
           variant: "destructive",
         });
         return false;

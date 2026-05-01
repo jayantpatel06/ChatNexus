@@ -17,7 +17,7 @@ export default function SettingsPage() {
           path="/settings"
           robots="noindex, nofollow"
         />
-        <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
+        <div className="safe-top-shell flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
           <div className="flex-1 min-h-0">
             <SettingsSidebar />
           </div>

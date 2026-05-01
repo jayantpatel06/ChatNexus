@@ -868,7 +868,7 @@ export default function RandomChatPage() {
             robots="noindex, nofollow"
           />
           <div
-            className="flex h-[100dvh] flex-col bg-brand-bg"
+            className="safe-top-shell flex h-[100dvh] flex-col bg-brand-bg"
             data-testid="random-chat-mobile-layout"
           >
             {conversationPanel}
@@ -886,7 +886,7 @@ export default function RandomChatPage() {
           robots="noindex, nofollow"
         />
         <div
-          className="flex h-[100dvh] flex-col bg-brand-bg"
+          className="safe-top-shell flex h-[100dvh] flex-col bg-brand-bg"
           data-testid="random-chat-mobile-layout"
         >
           <div className="flex-1 min-h-0 overflow-hidden bg-background">

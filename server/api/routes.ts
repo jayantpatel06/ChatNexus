@@ -21,9 +21,11 @@ import { registerChatRoutes } from "./chat";
 import { jwtAuth } from "../middleware/jwt-auth";
 import { registerUserRoutes } from "./users";
 
-const MAX_UPLOAD_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const UPLOAD_COMPRESSION_THRESHOLD_BYTES = 5 * 1024 * 1024;
+const MAX_UPLOAD_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const NORMALIZED_VIDEO_MIME_TYPE = "video/mp4";
+const NORMALIZED_IMAGE_MIME_TYPE = "image/webp";
 
 const upload = multer({
   dest: "uploads/",
@@ -187,6 +189,40 @@ async function normalizeUploadedVideo(file: Express.Multer.File) {
   }
 }
 
+async function normalizeUploadedImage(file: Express.Multer.File) {
+  const inputPath = file.path;
+  const outputFilename = `${file.filename}.webp`;
+  const outputPath = path.join(path.dirname(inputPath), outputFilename);
+  const parsedOriginalName = path.parse(file.originalname);
+  const normalizedOriginalName = `${parsedOriginalName.name || "image"}.webp`;
+
+  try {
+    await runFfmpeg([
+      "-y",
+      "-i",
+      inputPath,
+      "-vf",
+      "scale='min(1920,iw)':-2:force_original_aspect_ratio=decrease",
+      "-quality",
+      "75",
+      "-compression_level",
+      "6",
+      outputPath,
+    ]);
+
+    await deleteUploadedFile(inputPath);
+
+    return {
+      url: `/uploads/${outputFilename}`,
+      filename: normalizedOriginalName,
+      fileType: NORMALIZED_IMAGE_MIME_TYPE,
+    };
+  } catch (error) {
+    await deleteUploadedFile(outputPath);
+    throw error;
+  }
+}
+
 function registerSystemRoutes(app: Express) {
   app.get("/favicon.ico", (_req, res) => {
     res.redirect(301, "/assets/images/logo-48.png");
@@ -276,7 +312,7 @@ function registerUploadRoutes(app: Express) {
         if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
           return res
             .status(400)
-            .json({ message: "File size must be less than 5MB" });
+            .json({ message: "File size must be less than 20MB" });
         }
 
         next(error);
@@ -290,16 +326,30 @@ function registerUploadRoutes(app: Express) {
       const uploadedFile = req.file;
 
       const respondWithUpload = async () => {
-        if (ALLOWED_UPLOAD_VIDEO_TYPES.has(uploadedFile.mimetype)) {
+        if (uploadedFile.size > UPLOAD_COMPRESSION_THRESHOLD_BYTES) {
+          if (ALLOWED_UPLOAD_VIDEO_TYPES.has(uploadedFile.mimetype)) {
+            try {
+              const normalizedVideo = await normalizeUploadedVideo(uploadedFile);
+              return res.json(normalizedVideo);
+            } catch (processingError) {
+              console.error("Video normalization failed:", processingError);
+              await deleteUploadedFile(uploadedFile.path);
+              return res.status(500).json({
+                message:
+                  "Video processing failed. Try a different video or upload from another device.",
+              });
+            }
+          }
+
           try {
-            const normalizedVideo = await normalizeUploadedVideo(uploadedFile);
-            return res.json(normalizedVideo);
+            const normalizedImage = await normalizeUploadedImage(uploadedFile);
+            return res.json(normalizedImage);
           } catch (processingError) {
-            console.error("Video normalization failed:", processingError);
+            console.error("Image normalization failed:", processingError);
             await deleteUploadedFile(uploadedFile.path);
             return res.status(500).json({
               message:
-                "Video processing failed. Try a different video or upload from another device.",
+                "Image processing failed. Try a different image or upload from another device.",
             });
           }
         }

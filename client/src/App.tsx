@@ -10,7 +10,7 @@ const APP_BACKGROUND_STYLE = {
   position: "fixed",
   inset: 0,
   zIndex: -1,
-  backgroundColor: "black",
+  backgroundColor: "var(--background)",
 } as const;
 
 function App() {

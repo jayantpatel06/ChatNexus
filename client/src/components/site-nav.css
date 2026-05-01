@@ -4,7 +4,7 @@
 
 .site-nav {
   position: fixed;
-  top: 16px;
+  top: calc(var(--safe-area-top, 0px) + 16px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
