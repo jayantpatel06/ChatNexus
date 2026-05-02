@@ -1,16 +1,8 @@
-import "./legal-pages.css";
-import { useEffect, useRef, useState } from "react";
-import PageFooter from "@/components/page-footer";
-import SiteNav from "@/components/site-nav";
-import { Seo } from "@/components/seo";
-import {
-  CustomCursor,
-  AmbientOrbs,
-  useParallax,
-  useReveal,
-} from "@/components/effects";
+import LegalDocumentPage, {
+  type LegalSection,
+} from "@/components/legal-document-page";
 
-const SECTIONS = [
+const SECTIONS: LegalSection[] = [
   {
     id: "acceptance",
     title: "Acceptance of Terms",
@@ -26,6 +18,7 @@ const SECTIONS = [
       "You must be at least 13 years of age to use ChatNexus. By creating an account or using guest access, you represent that you meet this age requirement.",
       "If you are between 13 and 18, you may use ChatNexus only with the involvement and consent of a parent or legal guardian.",
     ],
+    contentList: true,
   },
   {
     id: "accounts",
@@ -70,6 +63,7 @@ const SECTIONS = [
       "We do not claim ownership of your messages, images, or files. Private messages are processed in real-time and are not permanently stored on our servers after delivery.",
       "ChatNexus reserves the right to remove content that violates these terms without prior notice.",
     ],
+    contentList: true,
   },
   {
     id: "guest-access",
@@ -91,6 +85,7 @@ const SECTIONS = [
       "The ChatNexus platform, including its design, code, branding, logos, and documentation, is the intellectual property of ChatNexus and is protected by copyright and trademark laws.",
       "You may not copy, modify, distribute, or create derivative works based on the ChatNexus platform without explicit written permission.",
     ],
+    contentList: true,
   },
   {
     id: "disclaimers",
@@ -100,6 +95,7 @@ const SECTIONS = [
       "ChatNexus is not responsible for the content, accuracy, or behavior of its users. You interact with other users at your own risk.",
       "To the maximum extent permitted by law, ChatNexus shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the platform.",
     ],
+    contentList: true,
   },
   {
     id: "termination",
@@ -108,6 +104,7 @@ const SECTIONS = [
       "We reserve the right to suspend or terminate your access to ChatNexus at any time, with or without cause, and with or without notice. Reasons for termination may include, but are not limited to, violation of these terms, abusive behavior, or extended inactivity.",
       "Upon termination, your right to use ChatNexus will immediately cease. Data associated with terminated accounts may be deleted in accordance with our Privacy Policy.",
     ],
+    contentList: true,
   },
   {
     id: "modifications",
@@ -115,114 +112,20 @@ const SECTIONS = [
     content: [
       "ChatNexus reserves the right to modify these Terms of Service at any time. When we make material changes, we will provide notice through the platform.",
       "Your continued use of ChatNexus after modifications constitutes acceptance of the updated terms. If you do not agree with the changes, you should stop using the platform.",
-      "Last updated: March 2026",
     ],
+    contentList: true,
+    after: ["Last updated: March 2026"],
   },
 ];
 
 export default function TermsOfServicePage() {
-  const scrollY = useParallax();
-  const [loaded, setLoaded] = useState(false);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const contentRef = useReveal(0.1);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setLoaded(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || !heroRef.current) return;
-    const animation = heroRef.current.animate(
-      [
-        { opacity: 0, transform: "translateY(40px)" },
-        { opacity: 1, transform: "translateY(0)" },
-      ],
-      {
-        duration: 800,
-        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-        fill: "forwards",
-      },
-    );
-
-    return () => animation.cancel();
-  }, [loaded]);
-
   return (
-    <>
-      <Seo
-        title="Terms of Service | ChatNexus"
-        description="Read the ChatNexus Terms of Service governing the use of our anonymous chat platform."
-        path="/terms"
-        robots="index, follow"
-      />
-      <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
-        <CustomCursor />
-        <AmbientOrbs scrollY={scrollY} />
-
-        {/* Nav */}
-        <SiteNav />
-
-        {/* Hero */}
-        <section className="legal-hero" ref={heroRef} style={{ opacity: 0 }}>
-          <span className="section-tag">Legal</span>
-          <h1 className="legal-hero-title">
-            <span className="hero-line">Terms of Service</span>
-          </h1>
-          <p className="legal-hero-sub">
-            Please read these terms carefully before using ChatNexus. They
-            govern your use of our platform and services.
-          </p>
-        </section>
-
-        {/* Table of Contents */}
-        <div className="legal-toc">
-          <div className="legal-toc-card">
-            <h2 className="legal-toc-title">Table of Contents</h2>
-            <ol className="legal-toc-list">
-              {SECTIONS.map((s, i) => (
-                <li key={s.id}>
-                  <a href={`#${s.id}`} className="legal-toc-link">
-                    {i + 1}. {s.title}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div ref={contentRef} className="reveal-item legal-content">
-          {SECTIONS.map((s, i) => (
-            <section key={s.id} id={s.id} className="legal-section">
-              <h2 className="legal-section-title">
-                <span className="legal-section-num">{i + 1}</span>
-                {s.title}
-              </h2>
-              {s.content.map((p, pi) => (
-                <p key={pi} className="legal-text">
-                  {p}
-                </p>
-              ))}
-              {(s as any).list && (
-                <ul className="legal-list">
-                  {(s as any).list.map((item: string, li: number) => (
-                    <li key={li}>{item}</li>
-                  ))}
-                </ul>
-              )}
-              {(s as any).after?.map((p: string, ai: number) => (
-                <p key={ai} className="legal-text">
-                  {p}
-                </p>
-              ))}
-            </section>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <PageFooter />
-      </div>
-    </>
+    <LegalDocumentPage
+      heading="Terms & Conditions"
+      seoTitle="Terms of Service | ChatNexus"
+      seoDescription="Read the ChatNexus Terms of Service governing the use of our anonymous chat platform."
+      path="/terms"
+      sections={SECTIONS}
+    />
   );
 }

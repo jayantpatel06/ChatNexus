@@ -41,6 +41,10 @@ export function MobileBottomNav() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:hidden">
       <div
         aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 h-[calc(env(safe-area-inset-bottom)+2.75rem)] bg-background"
+      />
+      <div
+        aria-hidden="true"
         className="absolute inset-x-0 bottom-0 h-[calc(env(safe-area-inset-bottom)+5.5rem)]"
         style={{
           background:

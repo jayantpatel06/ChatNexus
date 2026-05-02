@@ -1,16 +1,8 @@
-import "./legal-pages.css";
-import { useEffect, useRef, useState } from "react";
-import PageFooter from "@/components/page-footer";
-import SiteNav from "@/components/site-nav";
-import { Seo } from "@/components/seo";
-import {
-  CustomCursor,
-  AmbientOrbs,
-  useParallax,
-  useReveal,
-} from "@/components/effects";
+import LegalDocumentPage, {
+  type LegalSection,
+} from "@/components/legal-document-page";
 
-const SECTIONS = [
+const SECTIONS: LegalSection[] = [
   {
     id: "information-we-collect",
     title: "Information We Collect",
@@ -48,6 +40,7 @@ const SECTIONS = [
       "ChatNexus uses cookies and browser local storage to maintain your session, remember your theme preference (light/dark mode), and keep you logged in across visits. We do not use third-party advertising cookies.",
       "You can clear cookies and local storage at any time through your browser settings, though this may require you to log in again.",
     ],
+    contentList: true,
   },
   {
     id: "data-sharing",
@@ -70,6 +63,7 @@ const SECTIONS = [
       "Guest session data is ephemeral and is automatically purged when the session ends or after a short expiration window.",
       "Anonymized analytics data may be retained indefinitely as it cannot be linked back to individual users.",
     ],
+    contentList: true,
   },
   {
     id: "your-rights",
@@ -93,6 +87,7 @@ const SECTIONS = [
       "We take the security of your data seriously. ChatNexus implements industry-standard security measures including encrypted connections (HTTPS/WSS), secure password hashing, token-based authentication, and regular security audits.",
       "However, no method of transmission over the internet is 100% secure. While we strive to protect your data, we cannot guarantee absolute security.",
     ],
+    contentList: true,
   },
   {
     id: "childrens-privacy",
@@ -106,114 +101,19 @@ const SECTIONS = [
     title: "Changes to This Policy",
     content: [
       "We may update this Privacy Policy from time to time. When we make significant changes, we will notify users through the platform. Your continued use of ChatNexus after changes constitutes acceptance of the updated policy.",
-      "Last updated: March 2026",
     ],
+    after: ["Last updated: March 2026"],
   },
 ];
 
 export default function PrivacyPolicyPage() {
-  const scrollY = useParallax();
-  const [loaded, setLoaded] = useState(false);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const contentRef = useReveal(0.1);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setLoaded(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || !heroRef.current) return;
-    const animation = heroRef.current.animate(
-      [
-        { opacity: 0, transform: "translateY(40px)" },
-        { opacity: 1, transform: "translateY(0)" },
-      ],
-      {
-        duration: 800,
-        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-        fill: "forwards",
-      },
-    );
-
-    return () => animation.cancel();
-  }, [loaded]);
-
   return (
-    <>
-      <Seo
-        title="Privacy Policy | ChatNexus"
-        description="Read ChatNexus's privacy policy to understand how we collect, use, and protect your data."
-        path="/privacy"
-        robots="index, follow"
-      />
-      <div className="landing-root" style={{ scrollBehavior: "smooth" }}>
-        <CustomCursor />
-        <AmbientOrbs scrollY={scrollY} />
-
-        {/* Nav */}
-        <SiteNav />
-
-        {/* Hero */}
-        <section className="legal-hero" ref={heroRef} style={{ opacity: 0 }}>
-          <span className="section-tag">Legal</span>
-          <h1 className="legal-hero-title">
-            <span className="hero-line">Privacy Policy</span>
-          </h1>
-          <p className="legal-hero-sub">
-            Your privacy matters to us. This policy explains what data we
-            collect, how we use it, and the choices you have.
-          </p>
-        </section>
-
-        {/* Table of Contents */}
-        <div className="legal-toc">
-          <div className="legal-toc-card">
-            <h2 className="legal-toc-title">Table of Contents</h2>
-            <ol className="legal-toc-list">
-              {SECTIONS.map((s, i) => (
-                <li key={s.id}>
-                  <a href={`#${s.id}`} className="legal-toc-link">
-                    {i + 1}. {s.title}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div ref={contentRef} className="reveal-item legal-content">
-          {SECTIONS.map((s, i) => (
-            <section key={s.id} id={s.id} className="legal-section">
-              <h2 className="legal-section-title">
-                <span className="legal-section-num">{i + 1}</span>
-                {s.title}
-              </h2>
-              {s.content.map((p, pi) => (
-                <p key={pi} className="legal-text">
-                  {p}
-                </p>
-              ))}
-              {s.list && (
-                <ul className="legal-list">
-                  {s.list.map((item, li) => (
-                    <li key={li}>{item}</li>
-                  ))}
-                </ul>
-              )}
-              {(s as any).after?.map((p: string, ai: number) => (
-                <p key={ai} className="legal-text">
-                  {p}
-                </p>
-              ))}
-            </section>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <PageFooter />
-      </div>
-    </>
+    <LegalDocumentPage
+      heading="Privacy Policy"
+      seoTitle="Privacy Policy | ChatNexus"
+      seoDescription="Read ChatNexus's privacy policy to understand how we collect, use, and protect your data."
+      path="/privacy"
+      sections={SECTIONS}
+    />
   );
 }
