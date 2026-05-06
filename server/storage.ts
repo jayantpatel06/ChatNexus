@@ -1365,21 +1365,24 @@ class DatabaseStorage implements IStorage {
     });
 
     if (!existingReaction) {
-      await tx.messageReaction.create({
-        data: { messageId, userId, emoji },
+      await tx.messageReaction.upsert({
+        where: {
+          messageId_userId: { messageId, userId },
+        },
+        create: { messageId, userId, emoji },
+        update: { emoji },
       });
     } else if (existingReaction.emoji === emoji) {
-      await tx.messageReaction.delete({
-        where: {
-          messageId_userId: { messageId, userId },
-        },
+      await tx.messageReaction.deleteMany({
+        where: { messageId, userId },
       });
     } else {
-      await tx.messageReaction.update({
+      await tx.messageReaction.upsert({
         where: {
           messageId_userId: { messageId, userId },
         },
-        data: { emoji },
+        create: { messageId, userId, emoji },
+        update: { emoji },
       });
     }
   }
@@ -1975,11 +1978,19 @@ class DatabaseStorage implements IStorage {
 
   async clearEphemeralConversationsForUser(userId: number): Promise<number> {
     const partners = await messageRepository.getConversationPartners(userId);
-    let deletedMessages = 0;
+    if (partners.length === 0) return 0;
 
+    // Batch-check all friendships in a single query instead of N+1
+    const pairs = partners.map((otherUserId) => {
+      const { userId1, userId2 } = normalizeUserPair(userId, otherUserId);
+      return { userId1, userId2 };
+    });
+    const friendsSet = await friendshipRepository.getFriendshipsForPairs(pairs);
+
+    let deletedMessages = 0;
     for (const otherUserId of partners) {
-      const areFriends = await this.areFriends(userId, otherUserId);
-      if (!areFriends) {
+      const { userId1, userId2 } = normalizeUserPair(userId, otherUserId);
+      if (!friendsSet.has(`${userId1}:${userId2}`)) {
         deletedMessages += await this.clearConversation(userId, otherUserId);
       }
     }

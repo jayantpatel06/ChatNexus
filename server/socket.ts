@@ -115,10 +115,39 @@ const randomChatActiveUsers = new Set<number>();
 const randomChatPreferencesByUser = new Map<number, RandomChatPreferences>();
 const randomChatQueueByUser = new Map<number, RandomChatQueueEntry>();
 const randomChatSessionsByUser = new Map<number, RandomChatSession>();
+const recentReactionToggleTimestamps = new Map<string, number>();
 let lastGlobalChatCleanupAt = 0;
 let pendingGlobalChatCleanup: Promise<void> | null = null;
 let pendingRandomChatMatchProcessing: Promise<void> | null = null;
 let rerunRandomChatMatchProcessing = false;
+
+const REACTION_DEDUP_WINDOW_MS = 600;
+
+function isDuplicateReactionToggle(
+  userId: number,
+  messageId: number,
+  emoji: string,
+): boolean {
+  const now = Date.now();
+  const key = `${userId}:${messageId}:${emoji}`;
+  const lastSeenAt = recentReactionToggleTimestamps.get(key);
+
+  if (lastSeenAt && now - lastSeenAt < REACTION_DEDUP_WINDOW_MS) {
+    return true;
+  }
+
+  recentReactionToggleTimestamps.set(key, now);
+
+  if (recentReactionToggleTimestamps.size > 500) {
+    for (const [existingKey, existingSeenAt] of recentReactionToggleTimestamps) {
+      if (now - existingSeenAt >= REACTION_DEDUP_WINDOW_MS) {
+        recentReactionToggleTimestamps.delete(existingKey);
+      }
+    }
+  }
+
+  return false;
+}
 
 function sanitizeRandomChatPreferences(
   payload?: RandomChatRequestPayload | null,
@@ -1077,6 +1106,10 @@ function handleToggleReaction(
       messageId: data.messageId,
       error: "Invalid reaction data",
     });
+    return;
+  }
+
+  if (isDuplicateReactionToggle(socket.userId, data.messageId, data.emoji)) {
     return;
   }
 

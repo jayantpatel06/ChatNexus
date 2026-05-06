@@ -60,7 +60,7 @@ export function isWebPushAvailable() {
   return configureVapidDetails();
 }
 
-function getMessagePreviewText(message: Message) {
+export function getMessagePreviewText(message: Message) {
   const normalizedMessage = message.message.trim();
 
   if (!normalizedMessage || normalizedMessage === "Sent an attachment") {
@@ -109,17 +109,21 @@ export async function sendFriendMessagePushNotifications(args: {
   groupedBody?: string;
 }) {
   if (!isWebPushAvailable()) {
-    console.log(
-      `[Push] Skipped for receiver=${args.receiverId}: web push not available (VAPID not configured)`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[Push] Skipped for receiver=${args.receiverId}: web push not available (VAPID not configured)`,
+      );
+    }
     return;
   }
 
   const subscriptions = await storage.getPushSubscriptions(args.receiverId);
   if (subscriptions.length === 0) {
-    console.log(
-      `[Push] Skipped for receiver=${args.receiverId}: no push subscriptions registered`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[Push] Skipped for receiver=${args.receiverId}: no push subscriptions registered`,
+      );
+    }
     return;
   }
 
@@ -131,17 +135,21 @@ export async function sendFriendMessagePushNotifications(args: {
     senderId: args.message.senderId,
   };
 
-  console.log(
-    `[Push] Sending to receiver=${args.receiverId} from "${args.senderUsername}" (${subscriptions.length} subscription(s), tag=${payload.tag})`,
-  );
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[Push] Sending to receiver=${args.receiverId} from "${args.senderUsername}" (${subscriptions.length} subscription(s), tag=${payload.tag})`,
+    );
+  }
 
   const results = await Promise.allSettled(
     subscriptions.map(async (subscription) => {
       try {
         await sendNotificationToSubscription(subscription, payload);
-        console.log(
-          `[Push] Delivered to receiver=${args.receiverId} endpoint=${subscription.endpoint.slice(0, 60)}...`,
-        );
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[Push] Delivered to receiver=${args.receiverId} endpoint=${subscription.endpoint.slice(0, 60)}...`,
+          );
+        }
       } catch (error: any) {
         const statusCode =
           typeof error?.statusCode === "number" ? error.statusCode : null;

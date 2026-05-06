@@ -770,69 +770,6 @@ export function ChatArea({
     [user, toggleReaction, replaceMessageLocally, toast],
   );
 
-  // Keep the HTTP mutation as fallback (for edit which doesn't have socket yet)
-  const deleteMessageMutation = useMutation({
-    mutationFn: async (messageId: number) => {
-      const res = await apiRequest("DELETE", `/api/messages/item/${messageId}`);
-      return readJsonResponse<{ message: Message }>(res);
-    },
-    onSuccess: (data) => {
-      if (editTarget?.msgId === data.message.msgId) {
-        setEditTarget(null);
-        setMessageText("");
-        messageTextRef.current = "";
-      }
-
-      if (replyTarget?.msgId === data.message.msgId) {
-        setReplyTarget(null);
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to delete message",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Keep for compatibility but prefer handleToggleReaction
-  const toggleReactionMutation = useMutation({
-    mutationFn: async ({
-      messageId,
-      emoji,
-    }: {
-      messageId: number;
-      emoji: string;
-      optimisticMessage: Message;
-      previousMessage: Message;
-    }) => {
-      const res = await apiRequest(
-        "POST",
-        `/api/messages/${messageId}/reactions`,
-        { emoji },
-      );
-      return readJsonResponse<{ message: Message }>(res);
-    },
-    onMutate: ({ optimisticMessage, previousMessage }) => {
-      replaceMessageLocally(optimisticMessage);
-      return { previousMessage };
-    },
-    onSuccess: (data) => {
-      replaceMessageLocally(data.message);
-    },
-    onError: (error: Error, _variables, context) => {
-      if (context?.previousMessage) {
-        replaceMessageLocally(context.previousMessage);
-      }
-
-      toast({
-        title: "Failed to update reaction",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   useEffect(() => {
     if (!socket || !user || !selectedUser) return;
@@ -2128,7 +2065,7 @@ export function ChatArea({
   const isLightboxOpen = imagePreview !== null;
   const lightboxSrc = imagePreview?.url ?? "";
   const isComposerPickerOpen = activeComposerPicker !== null;
-  const composerPickerHeight = isMobile ? 320 : 320;
+  const composerPickerHeight = 320;
   const hasDraftText = messageText.length > 0;
   const canSendDraft =
     messageText.trim().length > 0 &&
@@ -2527,6 +2464,7 @@ export function ChatArea({
                           : selectedUser
                       }
                       currentUserId={user?.userId ?? null}
+                      isMobile={isMobile}
                       isOptimistic={
                         (item.message as OptimisticMessage).isOptimistic
                       }
@@ -2731,7 +2669,7 @@ export function ChatArea({
                     accept="image/*"
                     capture="environment"
                   />
-                  <div className="relative rounded-[1rem] border bg-card border-border bg-card px-6 shadow-sm">
+                  <div className="relative rounded-[1rem] border border-border bg-card px-6 shadow-sm">
                     {(replyTarget || editTarget) && (
                       <div className="flex items-start justify-between gap-3 border-b border-border/70 py-3">
                         <div className="min-w-0">

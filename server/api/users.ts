@@ -824,41 +824,6 @@ function createSendFriendRequestController(io: SocketIOServer) {
   };
 }
 
-export async function getUserController(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const parsed = parseTargetUserId(req.params.userId);
-    if ("error" in parsed) {
-      res.status(400).json({ message: parsed.error });
-      return;
-    }
-
-    const { userId } = parsed;
-
-    const [user, isBlockedOrBlocking] = await Promise.all([
-      storage.getUser(userId),
-      storage.getBlockBetweenUsers(req.jwtUser!.userId, userId),
-    ]);
-
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
-      return;
-    }
-
-    if (isBlockedOrBlocking) {
-      res.status(403).json({ message: "Not permitted to view this user" });
-      return;
-    }
-
-    res.json(toPublicUser(user));
-  } catch (error) {
-    next(error);
-  }
-}
-
 function createRespondFriendRequestController(io: SocketIOServer) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {

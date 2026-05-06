@@ -31,13 +31,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  getQuotedReplyPreviewText,
+  getReplyPreviewText,
+  isImageMessageUrl,
+  isVideoMessageUrl,
   sanitizeExternalUrl,
+  VIDEO_MEDIA_URL_PATTERN,
 } from "./chat-message-utils";
 
-const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
-const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
-const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
 const BUBBLE_APPENDIX_PATH =
   "M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z";
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "🙏"] as const;
@@ -61,12 +61,40 @@ type ImagePreviewState = {
   url: string;
 };
 
-function isImageMessageUrl(url: string): boolean {
-  return IMAGE_MEDIA_URL_PATTERN.test(url) || TENOR_MEDIA_URL_PATTERN.test(url);
+type SwipeGestureState = {
+  active: boolean;
+  pointerId: number;
+  startX: number;
+};
+
+const LOVE_REACTION = "\u2764\uFE0F";
+const REPLY_SWIPE_TRIGGER_PX = 38;
+const REPLY_SWIPE_MAX_PX = 30;
+const REPLY_SWIPE_RESISTANCE = 0.42;
+const DOUBLE_TAP_DELAY_MS = 280;
+const DOUBLE_TAP_DISTANCE_PX = 24;
+const DOUBLE_REACTION_GUARD_MS = 450;
+
+function isReplyGestureIgnoredTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        "a, input, textarea, select, video, [role='menuitem'], [data-no-swipe-reply='true']",
+      ),
+    )
+  );
 }
 
-function isVideoMessageUrl(url: string): boolean {
-  return VIDEO_MEDIA_URL_PATTERN.test(url);
+function isLoveGestureIgnoredTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        "button, a, input, textarea, select, video, [role='menuitem'], [data-no-love-react='true']",
+      ),
+    )
+  );
 }
 
 function isVideoAttachmentType(fileType: string): boolean {
@@ -468,6 +496,7 @@ export const MessageBubble = memo(function MessageBubble({
   isOwnMessage,
   sender,
   currentUserId,
+  isMobile = false,
   isOptimistic,
   pendingAttachment,
   onImagePreview,
@@ -481,6 +510,7 @@ export const MessageBubble = memo(function MessageBubble({
   isOwnMessage: boolean;
   sender: User | null;
   currentUserId: number | null;
+  isMobile?: boolean;
   isOptimistic?: boolean;
   pendingAttachment?: PendingAttachment | null;
   onImagePreview: (preview: ImagePreviewState) => void;
@@ -494,6 +524,13 @@ export const MessageBubble = memo(function MessageBubble({
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(
+    null,
+  );
+  const didSwipeGestureRef = useRef(false);
+  const swipeBubbleRef = useRef<HTMLDivElement | null>(null);
+  const swipeGestureRef = useRef<SwipeGestureState | null>(null);
+  const lastLoveReactionAtRef = useRef(0);
   const attachments = message.attachments ?? [];
   const reactions = message.reactions ?? [];
   const isDeleted = Boolean(message.deletedAt);
@@ -510,6 +547,7 @@ export const MessageBubble = memo(function MessageBubble({
   const hasTextBubble = Boolean(normalizedMessage && !isMediaOnlyMessage);
   const canReply = !isOptimistic;
   const canReact = !isOptimistic && !isDeleted;
+  const isSwipeReplyEnabled = isMobile && canReply;
   const canEdit =
     isOwnMessage && !isOptimistic && !isDeleted && Boolean(normalizedMessage);
   const canDelete = isOwnMessage && !isOptimistic && !isDeleted;
@@ -571,7 +609,7 @@ export const MessageBubble = memo(function MessageBubble({
       message.replyTo.senderId === currentUserId
         ? "You"
         : message.replyTo.sender.username;
-    const replyPreviewText = getQuotedReplyPreviewText(message.replyTo);
+    const replyPreviewText = getReplyPreviewText(message.replyTo);
 
     return (
       <div
@@ -639,6 +677,198 @@ export const MessageBubble = memo(function MessageBubble({
     [clearLongPress],
   );
 
+  const triggerLoveReaction = useCallback(() => {
+    if (!canReact || !LOVE_REACTION) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastLoveReactionAtRef.current < DOUBLE_REACTION_GUARD_MS) {
+      return;
+    }
+
+    lastLoveReactionAtRef.current = now;
+    clearLongPress();
+    lastTapRef.current = null;
+    onReact(message, LOVE_REACTION);
+  }, [canReact, clearLongPress, message, onReact]);
+
+  const setSwipeTransform = useCallback(
+    (offsetPx: number, animate: boolean) => {
+      const node = swipeBubbleRef.current;
+      if (!node) {
+        return;
+      }
+
+      node.style.transition = animate
+        ? "transform 140ms cubic-bezier(0.22, 1, 0.36, 1)"
+        : "none";
+      node.style.transform =
+        offsetPx === 0 ? "" : `translate3d(${offsetPx}px, 0, 0)`;
+    },
+    [],
+  );
+
+  const handleSwipePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (
+        !isSwipeReplyEnabled ||
+        (event.pointerType !== "touch" && event.pointerType !== "pen") ||
+        isReplyGestureIgnoredTarget(event.target)
+      ) {
+        return;
+      }
+
+      swipeGestureRef.current = {
+        active: false,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+      };
+      didSwipeGestureRef.current = false;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [isSwipeReplyEnabled],
+  );
+
+  const handleSwipePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const swipeGesture = swipeGestureRef.current;
+      if (
+        !swipeGesture ||
+        swipeGesture.pointerId !== event.pointerId ||
+        !isSwipeReplyEnabled
+      ) {
+        return;
+      }
+
+      const replyDirection = isOwnMessage ? -1 : 1;
+      const directionalOffset = Math.max(
+        0,
+        (event.clientX - swipeGesture.startX) * replyDirection,
+      );
+
+      if (!swipeGesture.active && directionalOffset > 8) {
+        swipeGesture.active = true;
+        didSwipeGestureRef.current = true;
+        clearLongPress();
+      }
+
+      if (!swipeGesture.active) {
+        return;
+      }
+
+      const translatedOffset =
+        Math.min(REPLY_SWIPE_MAX_PX, directionalOffset * REPLY_SWIPE_RESISTANCE) *
+        replyDirection;
+      setSwipeTransform(translatedOffset, false);
+    },
+    [clearLongPress, isOwnMessage, isSwipeReplyEnabled, setSwipeTransform],
+  );
+
+  const finishSwipeGesture = useCallback(
+    (
+      event: React.PointerEvent<HTMLDivElement>,
+      options?: { cancelled?: boolean },
+    ) => {
+      const swipeGesture = swipeGestureRef.current;
+      if (!swipeGesture || swipeGesture.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      swipeGestureRef.current = null;
+
+      if (options?.cancelled || !swipeGesture.active) {
+        didSwipeGestureRef.current = false;
+        setSwipeTransform(0, swipeGesture.active);
+        return;
+      }
+
+      const replyDirection = isOwnMessage ? -1 : 1;
+      const directionalOffset = Math.max(
+        0,
+        (event.clientX - swipeGesture.startX) * replyDirection,
+      );
+      const shouldReply = directionalOffset >= REPLY_SWIPE_TRIGGER_PX;
+
+      if (shouldReply) {
+        setSwipeTransform(0, false);
+        lastTapRef.current = null;
+        onReply(message);
+        return;
+      }
+
+      setSwipeTransform(0, true);
+      didSwipeGestureRef.current = directionalOffset > 8;
+    },
+    [isOwnMessage, message, onReply, setSwipeTransform],
+  );
+
+  const handleGesturePointerUpCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (didSwipeGestureRef.current) {
+        didSwipeGestureRef.current = false;
+        lastTapRef.current = null;
+        return;
+      }
+
+      if (
+        !canReact ||
+        (event.pointerType !== "touch" && event.pointerType !== "pen") ||
+        isLoveGestureIgnoredTarget(event.target)
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      const previousTap = lastTapRef.current;
+
+      if (
+        previousTap &&
+        now - previousTap.time <= DOUBLE_TAP_DELAY_MS &&
+        Math.hypot(
+          event.clientX - previousTap.x,
+          event.clientY - previousTap.y,
+        ) <= DOUBLE_TAP_DISTANCE_PX
+      ) {
+        triggerLoveReaction();
+        return;
+      }
+
+      lastTapRef.current = {
+        time: now,
+        x: event.clientX,
+        y: event.clientY,
+      };
+    },
+    [canReact, triggerLoveReaction],
+  );
+
+  const swipeReplyProps = isSwipeReplyEnabled
+    ? {
+        onPointerCancel: (event: React.PointerEvent<HTMLDivElement>) => {
+          finishSwipeGesture(event, { cancelled: true });
+        },
+        onPointerDown: handleSwipePointerDown,
+        onPointerMove: handleSwipePointerMove,
+        onPointerUp: finishSwipeGesture,
+      }
+    : undefined;
+
+  const handleMouseDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (isLoveGestureIgnoredTarget(event.target)) {
+        return;
+      }
+
+      triggerLoveReaction();
+    },
+    [triggerLoveReaction],
+  );
+
   return (
     <div
       className={`message-bubble flex items-start ${
@@ -663,12 +893,18 @@ export const MessageBubble = memo(function MessageBubble({
           onPointerCancel={clearLongPress}
           onPointerLeave={clearLongPress}
         >
-          <div
-            className={cn(
-              "relative overflow-visible transition-all duration-300",
-              groupedReactions.length > 0 && "pb-3",
-            )}
-          >
+          <div className="relative">
+            <div
+              {...swipeReplyProps}
+              ref={swipeBubbleRef}
+              onPointerUpCapture={handleGesturePointerUpCapture}
+              onDoubleClick={handleMouseDoubleClick}
+              className={cn(
+                "relative overflow-visible transform-gpu",
+                groupedReactions.length > 0 && "pb-3",
+              )}
+              style={{ touchAction: isSwipeReplyEnabled ? "pan-y" : undefined }}
+            >
             {pendingAttachment && (
               <div className="flex flex-wrap gap-2">
                 <div
@@ -857,6 +1093,8 @@ export const MessageBubble = memo(function MessageBubble({
                       key={reaction.emoji}
                       type="button"
                       onClick={() => onReact(message, reaction.emoji)}
+                      data-no-swipe-reply="true"
+                      data-no-love-react="true"
                       className={cn(
                         "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-medium leading-none transition-colors",
                         reaction.reactedByCurrentUser
@@ -880,6 +1118,7 @@ export const MessageBubble = memo(function MessageBubble({
                 </div>
               </div>
             )}
+            </div>
           </div>
 
           {!isOptimistic && (

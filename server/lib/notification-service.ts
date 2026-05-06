@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import {
   sendFriendMessagePushNotifications,
   isWebPushAvailable,
+  getMessagePreviewText,
 } from "./push";
 
 /**
@@ -38,9 +39,11 @@ export async function enqueueAndDeliver(args: {
   message: Message;
 }): Promise<void> {
   if (!isWebPushAvailable()) {
-    console.log(
-      `[NotificationService] Skipped enqueue for receiver=${args.receiverId}: web push unavailable`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[NotificationService] Skipped enqueue for receiver=${args.receiverId}: web push unavailable`,
+      );
+    }
     return;
   }
 
@@ -54,7 +57,7 @@ export async function enqueueAndDeliver(args: {
   const body =
     totalCount > 1
       ? `${totalCount} new messages`
-      : getMessagePreviewBody(args.message);
+      : getMessagePreviewText(args.message);
 
   const payload = {
     title: args.senderUsername,
@@ -74,9 +77,11 @@ export async function enqueueAndDeliver(args: {
     expiresAt,
   });
 
-  console.log(
-    `[NotificationService] Enqueued notification id=${record.id} for receiver=${args.receiverId} from sender=${args.senderId} (pending count: ${totalCount})`,
-  );
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[NotificationService] Enqueued notification id=${record.id} for receiver=${args.receiverId} from sender=${args.senderId} (pending count: ${totalCount})`,
+    );
+  }
 
   // Attempt immediate delivery
   try {
@@ -88,9 +93,11 @@ export async function enqueueAndDeliver(args: {
     });
 
     await storage.markNotificationDelivered(record.id);
-    console.log(
-      `[NotificationService] Immediate delivery succeeded for notification id=${record.id}`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[NotificationService] Immediate delivery succeeded for notification id=${record.id}`,
+      );
+    }
   } catch (error: any) {
     const statusCode =
       typeof error?.statusCode === "number" ? error.statusCode : null;
@@ -122,9 +129,11 @@ export async function processRetryQueue(): Promise<void> {
     return;
   }
 
-  console.log(
-    `[NotificationService] Processing ${retryable.length} retryable notification(s)`,
-  );
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[NotificationService] Processing ${retryable.length} retryable notification(s)`,
+    );
+  }
 
   for (const notification of retryable) {
     if (notification.attempts >= MAX_ATTEMPTS) {
@@ -134,9 +143,11 @@ export async function processRetryQueue(): Promise<void> {
         new Date(Date.now() + NOTIFICATION_TTL_MS),
         notification.attempts,
       );
-      console.log(
-        `[NotificationService] Max attempts reached for id=${notification.id}, marking expired`,
-      );
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[NotificationService] Max attempts reached for id=${notification.id}, marking expired`,
+        );
+      }
       continue;
     }
 
@@ -146,9 +157,11 @@ export async function processRetryQueue(): Promise<void> {
       );
 
       if (subscriptions.length === 0) {
-        console.log(
-          `[NotificationService] No subscriptions for receiver=${notification.receiverId}, skipping retry for id=${notification.id}`,
-        );
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[NotificationService] No subscriptions for receiver=${notification.receiverId}, skipping retry for id=${notification.id}`,
+          );
+        }
         // Keep the record — user might re-subscribe
         const nextRetryAt = new Date(
           Date.now() + getRetryDelay(notification.attempts),
@@ -182,9 +195,11 @@ export async function processRetryQueue(): Promise<void> {
       });
 
       await storage.markNotificationDelivered(notification.id);
-      console.log(
-        `[NotificationService] Retry delivery succeeded for id=${notification.id} (attempt ${notification.attempts + 1})`,
-      );
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[NotificationService] Retry delivery succeeded for id=${notification.id} (attempt ${notification.attempts + 1})`,
+        );
+      }
     } catch (error) {
       const nextRetryAt = new Date(
         Date.now() + getRetryDelay(notification.attempts),
@@ -210,7 +225,7 @@ export async function processRetryQueue(): Promise<void> {
  */
 export async function handleUserReconnect(userId: number): Promise<void> {
   const cleared = await storage.clearPendingNotificationsForUser(userId);
-  if (cleared > 0) {
+  if (cleared > 0 && process.env.NODE_ENV !== "production") {
     console.log(
       `[NotificationService] Cleared ${cleared} pending notification(s) for reconnected user=${userId}`,
     );
@@ -223,37 +238,10 @@ export async function handleUserReconnect(userId: number): Promise<void> {
  */
 export async function cleanupExpired(): Promise<void> {
   const deleted = await storage.deleteExpiredNotifications(new Date());
-  if (deleted > 0) {
+  if (deleted > 0 && process.env.NODE_ENV !== "production") {
     console.log(
       `[NotificationService] Cleaned up ${deleted} delivered/expired notification record(s)`,
     );
   }
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
-const IMAGE_MEDIA_URL_PATTERN =
-  /\.(jpg|jpeg|png|gif|webp|avif|bmp|svg)(\?.*)?$/i;
-const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
-const STANDALONE_URL_PATTERN = /^https?:\/\/[^\s]+$/i;
-
-function getMessagePreviewBody(message: Message): string {
-  const text = message.message.trim();
-
-  if (!text || text === "Sent an attachment") {
-    return "Sent an attachment";
-  }
-
-  if (STANDALONE_URL_PATTERN.test(text)) {
-    if (
-      TENOR_MEDIA_URL_PATTERN.test(text) ||
-      IMAGE_MEDIA_URL_PATTERN.test(text) ||
-      VIDEO_MEDIA_URL_PATTERN.test(text)
-    ) {
-      return "Sent an attachment";
-    }
-  }
-
-  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
-}

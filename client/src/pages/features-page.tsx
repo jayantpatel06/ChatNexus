@@ -8,7 +8,7 @@ import {
   Globe,
   Lock,
   MessageSquare,
-  ShieldCheck,
+  UserPlus,
   Users,
   X,
   Zap,
@@ -30,9 +30,9 @@ const FEATURES = [
     desc: "Real-time message delivery with zero latency. Stay connected in the exact moment.",
   },
   {
-    Icon: ShieldCheck,
-    title: "Secure & Private",
-    desc: "End-to-end encrypted conversations. Your privacy is our number one priority.",
+    Icon: UserPlus,
+    title: "Block & Add Friends",
+    desc: "Send friend requests, build your circle, and block anyone you don't want to hear from.",
   },
   {
     Icon: Users,
@@ -65,7 +65,7 @@ const DETAILED_FEATURES = [
   {
     ...FEATURES[1],
     longDesc:
-      "Your conversations are protected with industry-standard encryption. We never store plaintext messages on disk, and our privacy-first architecture means minimal data retention. Guest users leave zero permanent footprint when their session ends.",
+      "Manage your connections with full control. Send and respond to friend requests, curate your friends list, and instantly block or unblock anyone. Blocked users can't send you messages, and your block list stays completely private.",
   },
   {
     ...FEATURES[2],

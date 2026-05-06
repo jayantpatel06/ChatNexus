@@ -12,6 +12,7 @@ import {
 import { ChatPageHeader } from "@/chat/chat-page-header";
 import type { User } from "@shared/schema";
 import { apiRequest, readJsonResponse } from "@/lib/api-client";
+import { getSidebarMessagePreview } from "@/chat/chat-message-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
@@ -44,9 +45,6 @@ interface CachedUser extends User {
 const CACHED_USERS_KEY = "chatnexus_cached_users";
 const SIDEBAR_FILTERS_KEY = "chatnexus_sidebar_filters";
 const USER_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
-const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
-const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i;
-const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
 
 type SidebarFilters = {
   friendsOnly: boolean;
@@ -97,33 +95,6 @@ interface UsersSidebarProps {
   onUserSelect: (user: User) => void;
   mode?: UsersSidebarMode;
   onModeChange?: (mode: UsersSidebarMode) => void;
-}
-
-function getSidebarMessagePreview(message: unknown): string {
-  if (typeof message !== "string") {
-    return "";
-  }
-
-  const normalizedMessage = message.trim();
-  if (!normalizedMessage) {
-    return "";
-  }
-
-  if (normalizedMessage === "Sent an attachment") {
-    return normalizedMessage;
-  }
-
-  const isStandaloneUrl = /^https?:\/\/[^\s]+$/i.test(normalizedMessage);
-  const isMediaUrl =
-    TENOR_MEDIA_URL_PATTERN.test(normalizedMessage) ||
-    IMAGE_MEDIA_URL_PATTERN.test(normalizedMessage) ||
-    VIDEO_MEDIA_URL_PATTERN.test(normalizedMessage);
-
-  if (isStandaloneUrl && isMediaUrl) {
-    return "Sent an attachment";
-  }
-
-  return normalizedMessage;
 }
 
 function formatSidebarTimestamp(timestamp: unknown): string {

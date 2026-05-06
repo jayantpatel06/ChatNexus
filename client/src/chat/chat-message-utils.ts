@@ -2,9 +2,50 @@ import type { Message } from "@shared/schema";
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:"]);
 const URL_ONLY_MESSAGE_PATTERN = /^https?:\/\/[^\s]+$/i;
-const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
+
+export const TENOR_MEDIA_URL_PATTERN = /^https?:\/\/media\.tenor\.com\//i;
 const GIF_MEDIA_URL_PATTERN = /\.gif(\?.*)?$/i;
-const IMAGE_MEDIA_URL_PATTERN = /\.(jpg|jpeg|png|webp|avif|bmp|svg)(\?.*)?$/i;
+export const IMAGE_MEDIA_URL_PATTERN =
+  /\.(jpg|jpeg|png|gif|webp|avif|bmp|svg)(\?.*)?$/i;
+export const VIDEO_MEDIA_URL_PATTERN = /\.(mp4|webm)(\?.*)?$/i;
+
+export function isImageMessageUrl(url: string): boolean {
+  return IMAGE_MEDIA_URL_PATTERN.test(url) || TENOR_MEDIA_URL_PATTERN.test(url);
+}
+
+export function isVideoMessageUrl(url: string): boolean {
+  return VIDEO_MEDIA_URL_PATTERN.test(url);
+}
+
+export function isStandaloneMediaUrl(url: string): boolean {
+  return (
+    TENOR_MEDIA_URL_PATTERN.test(url) ||
+    IMAGE_MEDIA_URL_PATTERN.test(url) ||
+    VIDEO_MEDIA_URL_PATTERN.test(url)
+  );
+}
+
+export function getSidebarMessagePreview(message: unknown): string {
+  if (typeof message !== "string") {
+    return "";
+  }
+
+  const normalizedMessage = message.trim();
+  if (!normalizedMessage) {
+    return "";
+  }
+
+  if (normalizedMessage === "Sent an attachment") {
+    return normalizedMessage;
+  }
+
+  const isStandaloneUrl = /^https?:\/\/[^\s]+$/i.test(normalizedMessage);
+  if (isStandaloneUrl && isStandaloneMediaUrl(normalizedMessage)) {
+    return "Sent an attachment";
+  }
+
+  return normalizedMessage;
+}
 
 type ReplyPreviewSource = Pick<Message, "message" | "deletedAt">;
 type ReplyPreviewKind = "gif" | "image" | "link" | "text" | "message" | "deleted";
@@ -103,23 +144,3 @@ export function getReplyPreviewText(
   }
 }
 
-export function getQuotedReplyPreviewText(
-  message: ReplyPreviewSource | null | undefined,
-): string {
-  const preview = getReplyPreviewKind(message);
-
-  if (!preview) {
-    return "";
-  }
-
-  switch (preview.kind) {
-    case "gif":
-      return "Sent a GIF";
-    case "image":
-      return "Sent an image";
-    case "link":
-      return "Sent a link";
-    default:
-      return preview.text;
-  }
-}
