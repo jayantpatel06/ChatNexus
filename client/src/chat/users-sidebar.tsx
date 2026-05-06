@@ -121,6 +121,7 @@ export function UsersSidebar({
   onModeChange,
 }: UsersSidebarProps) {
   const { user, logoutMutation } = useAuth();
+  const currentUserId = user?.userId ?? null;
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const { sidebarUsers } = useSocket();
@@ -264,7 +265,7 @@ export function UsersSidebar({
   }, []);
 
   const friendUsersQuery = useQuery({
-    queryKey: ["/api/users/friends"],
+    queryKey: ["/api/users/friends", currentUserId],
     enabled: !!user && !user.isGuest,
     queryFn: async () =>
       readJsonResponse<User[]>(await apiRequest("GET", "/api/users/friends")),
@@ -272,7 +273,7 @@ export function UsersSidebar({
   });
 
   const historyUsersQuery = useQuery({
-    queryKey: ["/api/users/history"],
+    queryKey: ["/api/users/history", currentUserId],
     enabled: !!user,
     queryFn: async () =>
       readJsonResponse<User[]>(await apiRequest("GET", "/api/users/history")),
@@ -344,25 +345,29 @@ export function UsersSidebar({
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) &&
         (appliedFilters.gender === "all" ||
           (appliedFilters.gender === "male" && u.gender === "Male") ||
-          (appliedFilters.gender === "female" && u.gender === "Female")),
+        (appliedFilters.gender === "female" && u.gender === "Female")),
     );
+  const candidateUserIdsKey = useMemo(
+    () =>
+      candidateUsers
+        .map((candidateUser) => candidateUser.userId)
+        .sort((leftUserId, rightUserId) => leftUserId - rightUserId)
+        .join(","),
+    [candidateUsers],
+  );
 
   // Fetch conversation stats for candidate users
   const { data: conversationStats } = useQuery({
-    queryKey: [
-      "conversations-stats",
-      candidateUsers.map((u) => u.userId).join(","),
-    ],
+    queryKey: ["conversations-stats", currentUserId, candidateUserIdsKey],
     queryFn: async () => {
-      if (candidateUsers.length === 0) return {};
-      const ids = candidateUsers.map((u) => u.userId).join(",");
+      if (!candidateUserIdsKey) return {};
       const res = await apiRequest(
         "GET",
-        `/api/conversations/stats?userIds=${encodeURIComponent(ids)}`,
+        `/api/conversations/stats?userIds=${encodeURIComponent(candidateUserIdsKey)}`,
       );
       return readJsonResponse<ConversationStatsResponse>(res);
     },
-    enabled: candidateUsers.length > 0,
+    enabled: !!currentUserId && candidateUserIdsKey.length > 0,
   });
 
   const displayUsers = candidateUsers

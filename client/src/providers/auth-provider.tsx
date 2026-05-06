@@ -66,10 +66,34 @@ const GUEST_LOGIN_PATH = "/api/guest-login";
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const IS_DEV = import.meta.env.DEV;
+const USER_CACHE_STORAGE_KEYS = ["chatnexus_cached_users"] as const;
+const USER_SESSION_STORAGE_KEYS = ["chatnexus_sidebar_filters"] as const;
 
 function clearStoredSession() {
   removeStoredToken();
   removeStoredUser();
+}
+
+function clearPersistedClientState() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  for (const storageKey of USER_CACHE_STORAGE_KEYS) {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // Ignore storage errors during logout cleanup.
+    }
+  }
+
+  for (const storageKey of USER_SESSION_STORAGE_KEYS) {
+    try {
+      sessionStorage.removeItem(storageKey);
+    } catch {
+      // Ignore storage errors during logout cleanup.
+    }
+  }
 }
 
 function logAuthWarning(message: string, detail?: unknown) {
@@ -200,10 +224,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearSession = useCallback(() => {
     clearStoredSession();
+    clearPersistedClientState();
     setToken(null);
     setUser(null);
     setError(null);
-    queryClient.setQueryData(["/api/user"], null);
+    void queryClient.cancelQueries();
+    queryClient.removeQueries();
+    queryClient.setQueryData([CURRENT_USER_PATH], null);
   }, []);
 
   const refreshTokenIfNeeded = useCallback(
