@@ -764,14 +764,6 @@ function MessageListItem({
                 onImagePreview={() => undefined}
               />
             </div>
-            <div
-              className={cn(
-                "flex items-center gap-1 text-xs leading-4 text-muted-foreground",
-                isCurrentUser ? "justify-end" : "pl-1",
-              )}
-            >
-              <span>{formattedTimestamp}</span>
-            </div>
           </div>
         ) : (
         <div className={cn("relative", !isCurrentUser && "ml-8")}>

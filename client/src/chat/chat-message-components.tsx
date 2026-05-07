@@ -141,10 +141,12 @@ export const MessageContent = ({
   content,
   onImagePreview,
   metadata,
+  compactMedia = false,
 }: {
   content: string;
   onImagePreview: (preview: ImagePreviewState) => void;
   metadata?: ReactNode;
+  compactMedia?: boolean;
 }) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = content.split(urlRegex);
@@ -169,6 +171,7 @@ export const MessageContent = ({
               key={index}
               url={part}
               onImagePreview={onImagePreview}
+              compact={compactMedia}
             />
           );
         }
@@ -241,9 +244,11 @@ function InlineVideoPreview({ url }: { url: string }) {
 function InlineImagePreview({
   url,
   onImagePreview,
+  compact = false,
 }: {
   url: string;
   onImagePreview: (preview: ImagePreviewState) => void;
+  compact?: boolean;
 }) {
   const [hasError, setHasError] = useState(false);
 
@@ -270,7 +275,10 @@ function InlineImagePreview({
   return (
     <button
       type="button"
-      className="my-2 block w-full max-w-[11rem] overflow-hidden rounded-2xl border border-brand-border bg-muted/30 text-left transition-transform duration-200 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className={cn(
+        "block w-full max-w-[11rem] overflow-hidden rounded-2xl border border-brand-border bg-muted/30 text-left transition-transform duration-200 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        compact ? "my-0" : "my-2",
+      )}
       onClick={() => onImagePreview({ url })}
     >
       <img
@@ -1093,9 +1101,10 @@ export const MessageBubble = memo(function MessageBubble({
                     <MessageContent
                       content={message.message}
                       onImagePreview={onImagePreview}
+                      compactMedia={true}
                     />
                   ) : isEmojiOnlyTextMessage ? (
-                    <div className="select-none whitespace-pre-wrap break-words text-[2rem] leading-none sm:text-[2rem]">
+                    <div className="select-none whitespace-pre-wrap break-words text-[1.75rem] leading-none sm:text-[1.75rem]">
                       {normalizedMessage}
                     </div>
                   ) : (
@@ -1237,8 +1246,8 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
         </div>
-        {!hasTextBubble && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        {!hasTextBubble && !isEmojiOnlyTextMessage && (
+          <div className="flex items-center text-[11px] text-foreground/60">
             {message.editedAt && !message.deletedAt && <span>edited</span>}
             <span>{formatBubbleTime(message.timestamp)}</span>
           </div>
