@@ -754,7 +754,7 @@ function MessageListItem({
               </div>
             )}
             {!isCurrentUser && (
-              <div className="min-w-0 truncate pl-1 text-[11px] font-semibold leading-4 text-red-500">
+              <div className="min-w-0 truncate pl-1 text-[11px] font-semibold leading-4 tracking-[0.11em] text-rose-500">
                 {displayName}
               </div>
             )}
@@ -794,7 +794,7 @@ function MessageListItem({
             style={{ backgroundColor: bubbleFillColor }}
           >
             {!isCurrentUser && (
-              <div className="mb-0.5 min-w-0 truncate text-[11px] font-semibold leading-4 text-red-500">
+              <div className="mb-0.5 min-w-0 truncate text-[11px] font-semibold leading-4 tracking-[0.11em] text-rose-500">
                 {displayName}
               </div>
             )}

@@ -151,7 +151,7 @@ export const messageRepository = {
 
     try {
       const raw = await prisma.message.findMany({
-        where: { conversationId },
+        where: { conversationId, deletedAt: null },
         orderBy: [{ timestamp: "desc" }, { msgId: "desc" }],
         take: limit + 1,
         cursor: cursor

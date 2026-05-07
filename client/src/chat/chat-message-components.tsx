@@ -122,6 +122,21 @@ function getStandaloneMediaMessageUrl(content: string): string | null {
     : null;
 }
 
+const EMOJI_ONLY_ALLOWED_PATTERN =
+  /^(?:\s|\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|\p{Emoji_Component}|\u200d|\ufe0e|\ufe0f|\u20e3|[0-9#*])+$/u;
+const HAS_VISIBLE_EMOJI_PATTERN =
+  /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\ufe0f?\u20e3)/u;
+
+function isEmojiOnlyMessage(content: string): boolean {
+  const normalizedContent = content.trim();
+
+  return (
+    normalizedContent.length > 0 &&
+    HAS_VISIBLE_EMOJI_PATTERN.test(normalizedContent) &&
+    EMOJI_ONLY_ALLOWED_PATTERN.test(normalizedContent)
+  );
+}
+
 export const MessageContent = ({
   content,
   onImagePreview,
@@ -136,7 +151,7 @@ export const MessageContent = ({
 
   return (
     <div
-      className="relative block min-w-0 whitespace-pre-wrap break-words leading-[21px]"
+      className="relative block min-w-0 whitespace-pre-wrap break-words text-[17px] leading-[22px] sm:text-base"
       style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
     >
       {metadata}
@@ -544,7 +559,16 @@ export const MessageBubble = memo(function MessageBubble({
     normalizedMessage &&
     getStandaloneMediaMessageUrl(normalizedMessage),
   );
-  const hasTextBubble = Boolean(normalizedMessage && !isMediaOnlyMessage);
+  const isEmojiOnlyTextMessage = Boolean(
+    !isDeleted &&
+      !message.replyTo &&
+      normalizedMessage &&
+      !isMediaOnlyMessage &&
+      isEmojiOnlyMessage(normalizedMessage),
+  );
+  const hasTextBubble = Boolean(
+    normalizedMessage && !isMediaOnlyMessage && !isEmojiOnlyTextMessage,
+  );
   const canReply = !isOptimistic;
   const canReact = !isOptimistic && !isDeleted;
   const isSwipeReplyEnabled = isMobile && canReply;
@@ -1048,7 +1072,7 @@ export const MessageBubble = memo(function MessageBubble({
               !pendingAttachment && (
                 <div
                   className={
-                    isMediaOnlyMessage
+                    isMediaOnlyMessage || isEmojiOnlyTextMessage
                       ? ""
                       : cn(
                           "relative min-w-0 max-w-full overflow-visible px-3 py-1.5 text-base leading-5 shadow-sm",
@@ -1057,17 +1081,23 @@ export const MessageBubble = memo(function MessageBubble({
                         )
                   }
                   style={
-                    isMediaOnlyMessage
+                    isMediaOnlyMessage || isEmojiOnlyTextMessage
                       ? undefined
                       : { backgroundColor: bubbleFillColor }
                   }
                 >
-                  {!isMediaOnlyMessage && renderReplyPreview()}
+                  {!isMediaOnlyMessage &&
+                    !isEmojiOnlyTextMessage &&
+                    renderReplyPreview()}
                   {isMediaOnlyMessage ? (
                     <MessageContent
                       content={message.message}
                       onImagePreview={onImagePreview}
                     />
+                  ) : isEmojiOnlyTextMessage ? (
+                    <div className="select-none whitespace-pre-wrap break-words text-[2rem] leading-none sm:text-[2rem]">
+                      {normalizedMessage}
+                    </div>
                   ) : (
                     <MessageContent
                       content={normalizedMessage}
@@ -1075,7 +1105,7 @@ export const MessageBubble = memo(function MessageBubble({
                       metadata={renderInlineTimestamp()}
                     />
                   )}
-                  {!isMediaOnlyMessage && (
+                  {!isMediaOnlyMessage && !isEmojiOnlyTextMessage && (
                     <BubbleAppendix
                       isOwnMessage={isOwnMessage}
                       fillColor={bubbleFillColor}
