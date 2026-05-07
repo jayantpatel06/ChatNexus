@@ -742,6 +742,7 @@ function startPeriodicCleanup(
       const now = Date.now();
 
       const deletedExpiredMessages = await cleanupExpiredEphemeralMessages(now);
+      await cleanupExpiredGlobalMessagesIfNeeded(io);
 
       const connectedUserIds = getConnectedUserIds();
 
@@ -909,8 +910,6 @@ async function handleGlobalMessage(
     if (!socket.userId || !data.message) {
       return;
     }
-
-    await cleanupExpiredGlobalMessagesIfNeeded(io);
 
     const validatedMessage = insertGlobalMessageSchema.parse({
       senderId: socket.userId,

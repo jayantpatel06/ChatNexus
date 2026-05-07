@@ -57,7 +57,7 @@ type FriendRequestRecord = FriendRequest & {
 
 type ChatAttachment = NonNullable<Message["attachments"]>[number];
 
-type ImagePreviewState = {
+export type ImagePreviewState = {
   url: string;
 };
 
@@ -122,7 +122,7 @@ function getStandaloneMediaMessageUrl(content: string): string | null {
     : null;
 }
 
-const MessageContent = ({
+export const MessageContent = ({
   content,
   onImagePreview,
   metadata,
@@ -443,7 +443,7 @@ function VideoAttachmentCard({
   );
 }
 
-function BubbleAppendix({
+export function BubbleAppendix({
   isOwnMessage,
   fillColor,
 }: {

@@ -16,10 +16,12 @@ import {
   Phone,
   Video,
   MoreVertical,
+  MoonStar,
   Image as ImageIcon,
   Camera,
   Smile,
   Send,
+  SunMedium,
   ArrowLeft,
   Loader2,
   Trash2,
@@ -72,6 +74,7 @@ import {
   stripConversationAttachments,
 } from "./chat-message-utils";
 import { FriendRequestCard, MessageBubble } from "./chat-message-components";
+import { useThemeToggleState } from "@/components/site-nav";
 
 const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
@@ -227,6 +230,8 @@ export function ChatArea({
     }
     return false;
   });
+  const { isDark: isThemeDark, toggleTheme } = useThemeToggleState();
+  const ThemeIcon = isThemeDark ? SunMedium : MoonStar;
   const { user } = useAuth();
   const {
     socket,
@@ -2309,6 +2314,10 @@ export function ChatArea({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={toggleTheme}>
+                    <ThemeIcon className="mr-2 h-4 w-4" />
+                    Change theme
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={handleFriendshipAction}
                     disabled={isFriendshipActionDisabled}

@@ -89,8 +89,8 @@ export const messageRepository = {
   async getRecentGlobalMessages(limit = 100): Promise<GlobalMessageWithSender[]> {
     if (!prisma) return [];
     try {
-      return await prisma.globalMessage.findMany({
-        orderBy: { timestamp: "asc" },
+      const messages = await prisma.globalMessage.findMany({
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
         take: Math.min(limit, 500),
         include: {
           sender: {
@@ -98,6 +98,8 @@ export const messageRepository = {
           },
         },
       });
+
+      return messages.reverse();
     } catch (error) {
       console.error("Error getting global messages:", error);
       return [];
