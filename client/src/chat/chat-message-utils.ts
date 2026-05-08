@@ -51,24 +51,30 @@ type ReplyPreviewSource = Pick<Message, "message" | "deletedAt">;
 type ReplyPreviewKind = "gif" | "image" | "link" | "text" | "message" | "deleted";
 
 export function stripConversationAttachments(messages: Message[]): Message[] {
-  return messages.flatMap((message) => {
+  let changed = false;
+  const nextMessages: Message[] = [];
+
+  for (const message of messages) {
     const attachments = message.attachments ?? [];
 
     if (attachments.length === 0) {
-      return [{ ...message }];
+      nextMessages.push(message);
+      continue;
     }
 
     if (!message.message || message.message === "Sent an attachment") {
-      return [];
+      changed = true;
+      continue;
     }
 
-    return [
-      {
-        ...message,
-        attachments: [],
-      },
-    ];
-  });
+    changed = true;
+    nextMessages.push({
+      ...message,
+      attachments: [],
+    });
+  }
+
+  return changed ? nextMessages : messages;
 }
 
 export function sanitizeExternalUrl(url: string): string | null {

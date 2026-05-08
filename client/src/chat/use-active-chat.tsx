@@ -44,6 +44,22 @@ type ConversationStatsResponse = Record<
     unread: number;
   }
 >;
+type MessageHistoryCache = {
+  pages: { messages: Message[]; nextCursor: string | null }[];
+  pageParams?: unknown[];
+};
+
+type ConversationClearedPayload = {
+  userAId: number;
+  userBId: number;
+  deletedMessages: number;
+};
+
+type ConversationAttachmentsClearedPayload = {
+  userAId: number;
+  userBId: number;
+  deletedAttachments: number;
+};
 
 // Helper to update React Query cache for a conversation
 function updateMessageCache(
@@ -215,9 +231,7 @@ function updateMessageReactionsInActiveCache(
 function removeMessageFromActiveCache(otherUserId: number, messageId: number) {
   const queryKey = ["/api/messages/history", otherUserId];
 
-  queryClient.setQueryData<
-    { pages: { messages: Message[]; nextCursor: string | null }[] } | undefined
-  >(queryKey, (oldData) => {
+  queryClient.setQueryData<MessageHistoryCache | undefined>(queryKey, (oldData) => {
     if (!oldData?.pages) return oldData;
 
     return {
@@ -228,6 +242,53 @@ function removeMessageFromActiveCache(otherUserId: number, messageId: number) {
       })),
     };
   });
+}
+
+function clearConversationCache(otherUserId: number) {
+  queryClient.setQueryData<MessageHistoryCache | undefined>(
+    ["/api/messages/history", otherUserId],
+    (oldData) => {
+      if (
+        oldData?.pages.length === 1 &&
+        oldData.pages[0]?.messages.length === 0 &&
+        oldData.pages[0]?.nextCursor === null
+      ) {
+        return oldData;
+      }
+
+      return {
+        pages: [{ messages: [], nextCursor: null }],
+        pageParams: [null],
+      };
+    },
+  );
+}
+
+function clearConversationAttachmentsCache(otherUserId: number) {
+  queryClient.setQueryData<MessageHistoryCache | undefined>(
+    ["/api/messages/history", otherUserId],
+    (oldData) => {
+      if (!oldData?.pages) return oldData;
+
+      return {
+        ...oldData,
+        pages: oldData.pages.map((page) => ({
+          ...page,
+          messages: stripConversationAttachments(page.messages),
+        })),
+      };
+    },
+  );
+}
+
+function getConversationOtherUserId(
+  currentUserId: number,
+  userAId: number,
+  userBId: number,
+): number | null {
+  if (userAId === currentUserId) return userBId;
+  if (userBId === currentUserId) return userAId;
+  return null;
 }
 
 export function ActiveChatProvider({ children }: { children: ReactNode }) {
@@ -290,7 +351,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const clearConversationMessages = useCallback(() => {
     optimisticMessagesRef.current.clear();
-    setLiveMessages([]);
+    setLiveMessages((prev) => (prev.length === 0 ? prev : []));
   }, []);
 
   const clearConversationAttachments = useCallback(() => {
@@ -539,6 +600,47 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       invalidateHistoryUsersQuery();
     };
 
+    const handleConversationCleared = (data: ConversationClearedPayload) => {
+      const otherUserId = getConversationOtherUserId(
+        user.userId,
+        data.userAId,
+        data.userBId,
+      );
+      if (!otherUserId) return;
+
+      clearConversationCache(otherUserId);
+
+      if (activeUserIdRef.current === otherUserId) {
+        optimisticMessagesRef.current.clear();
+        setLiveMessages([]);
+        clearUnreadCountForConversation(otherUserId);
+      }
+
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
+    };
+
+    const handleConversationAttachmentsCleared = (
+      data: ConversationAttachmentsClearedPayload,
+    ) => {
+      const otherUserId = getConversationOtherUserId(
+        user.userId,
+        data.userAId,
+        data.userBId,
+      );
+      if (!otherUserId) return;
+
+      clearConversationAttachmentsCache(otherUserId);
+
+      if (activeUserIdRef.current === otherUserId) {
+        optimisticMessagesRef.current.clear();
+        setLiveMessages((prev) => stripConversationAttachments(prev));
+      }
+
+      invalidateConversationStatsQueries();
+      invalidateHistoryUsersQuery();
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_sent", handleMessageSent);
     socket.on("message_updated", handleMessageUpdated);
@@ -546,6 +648,11 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     socket.on("message_save_error", handleMessageSaveError);
     socket.on("message_confirmed", handleMessageConfirmed);
     socket.on("message_deleted", handleMessageDeleted);
+    socket.on("conversation_cleared", handleConversationCleared);
+    socket.on(
+      "conversation_attachments_cleared",
+      handleConversationAttachmentsCleared,
+    );
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -555,6 +662,11 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       socket.off("message_save_error", handleMessageSaveError);
       socket.off("message_confirmed", handleMessageConfirmed);
       socket.off("message_deleted", handleMessageDeleted);
+      socket.off("conversation_cleared", handleConversationCleared);
+      socket.off(
+        "conversation_attachments_cleared",
+        handleConversationAttachmentsCleared,
+      );
     };
   }, [socket, isConnected, user, removeMessageById, removeOptimisticMessage, toast]);
 

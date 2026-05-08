@@ -138,6 +138,22 @@ type ImagePreviewState = {
   url: string;
 };
 
+type ConversationClearEvent = {
+  userAId: number;
+  userBId: number;
+};
+
+function isConversationEventForSelectedUser(
+  event: ConversationClearEvent,
+  currentUserId: number,
+  selectedUserId: number,
+) {
+  return (
+    (event.userAId === currentUserId && event.userBId === selectedUserId) ||
+    (event.userAId === selectedUserId && event.userBId === currentUserId)
+  );
+}
+
 function invalidateConversationStatsQueries() {
   void queryClient.invalidateQueries({
     queryKey: CONVERSATION_STATS_QUERY_KEY,
@@ -873,6 +889,102 @@ export function ChatArea({
       );
     };
   }, [socket, user, selectedUser, toast, refreshOnlineUsers]);
+
+  useEffect(() => {
+    if (!socket || !user || !selectedUser) return;
+
+    const handleConversationCleared = (data: ConversationClearEvent) => {
+      if (
+        !isConversationEventForSelectedUser(
+          data,
+          user.userId,
+          selectedUser.userId,
+        )
+      ) {
+        return;
+      }
+
+      clearConversationMessages();
+      queryClient.setQueryData<any>(
+        getMessageHistoryQueryKey(selectedUser.userId),
+        (oldData: any) => {
+          if (
+            oldData?.pages?.length === 1 &&
+            oldData.pages[0]?.messages?.length === 0 &&
+            oldData.pages[0]?.nextCursor === null
+          ) {
+            return oldData;
+          }
+
+          return {
+            pages: [{ messages: [], nextCursor: null }],
+            pageParams: [null],
+          };
+        },
+      );
+      pendingReactionRollbackRef.current.clear();
+      pendingDeleteRollbackRef.current.clear();
+      setReplyTarget(null);
+      setEditTarget(null);
+      setMessageText("");
+      messageTextRef.current = "";
+    };
+
+    const handleConversationAttachmentsCleared = (
+      data: ConversationClearEvent,
+    ) => {
+      if (
+        !isConversationEventForSelectedUser(
+          data,
+          user.userId,
+          selectedUser.userId,
+        )
+      ) {
+        return;
+      }
+
+      clearConversationAttachments();
+      queryClient.setQueryData<any>(
+        getMessageHistoryQueryKey(selectedUser.userId),
+        (oldData: any) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              messages: stripConversationAttachments(page.messages ?? []),
+            })),
+          };
+        },
+      );
+      setReplyTarget((current) =>
+        (current?.attachments?.length ?? 0) > 0 ? null : current,
+      );
+      setEditTarget((current) =>
+        current?.message === "Sent an attachment" ? null : current,
+      );
+    };
+
+    socket.on("conversation_cleared", handleConversationCleared);
+    socket.on(
+      "conversation_attachments_cleared",
+      handleConversationAttachmentsCleared,
+    );
+
+    return () => {
+      socket.off("conversation_cleared", handleConversationCleared);
+      socket.off(
+        "conversation_attachments_cleared",
+        handleConversationAttachmentsCleared,
+      );
+    };
+  }, [
+    socket,
+    user,
+    selectedUser,
+    clearConversationMessages,
+    clearConversationAttachments,
+  ]);
 
   useEffect(() => {
     if (!socket) {

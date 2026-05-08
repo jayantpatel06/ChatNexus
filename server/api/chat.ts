@@ -134,6 +134,24 @@ function emitConversationMessageUpdate(io: SocketIOServer, message: { senderId: 
     .emit("message_updated", { message });
 }
 
+function emitConversationCleared(
+  io: SocketIOServer,
+  payload: { userAId: number; userBId: number; deletedMessages: number },
+) {
+  io.to(`user:${payload.userAId}`)
+    .to(`user:${payload.userBId}`)
+    .emit("conversation_cleared", payload);
+}
+
+function emitConversationAttachmentsCleared(
+  io: SocketIOServer,
+  payload: { userAId: number; userBId: number; deletedAttachments: number },
+) {
+  io.to(`user:${payload.userAId}`)
+    .to(`user:${payload.userBId}`)
+    .emit("conversation_attachments_cleared", payload);
+}
+
 async function getRecentMessagesController(
   req: Request,
   res: Response,
@@ -230,7 +248,12 @@ function createClearConversationController(io: SocketIOServer) {
         req.jwtUser!.userId,
         parsed.otherUserId,
       );
-      await emitSidebarUsers(io);
+      emitConversationCleared(io, {
+        userAId: req.jwtUser!.userId,
+        userBId: parsed.otherUserId,
+        deletedMessages,
+      });
+      await emitSidebarUsers(io, [req.jwtUser!.userId, parsed.otherUserId]);
       res.json({ deletedMessages });
     } catch (error) {
       console.error("Error clearing conversation:", error);
@@ -251,7 +274,12 @@ function createClearConversationAttachmentsController(io: SocketIOServer) {
         req.jwtUser!.userId,
         parsed.otherUserId,
       );
-      await emitSidebarUsers(io);
+      emitConversationAttachmentsCleared(io, {
+        userAId: req.jwtUser!.userId,
+        userBId: parsed.otherUserId,
+        deletedAttachments,
+      });
+      await emitSidebarUsers(io, [req.jwtUser!.userId, parsed.otherUserId]);
       res.json({ deletedAttachments });
     } catch (error) {
       console.error("Error clearing conversation attachments:", error);
