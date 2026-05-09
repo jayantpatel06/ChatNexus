@@ -522,6 +522,7 @@ export const MessageBubble = memo(function MessageBubble({
   isMobile = false,
   isOptimistic,
   pendingAttachment,
+  avatar,
   onImagePreview,
   onReply,
   onEdit,
@@ -536,6 +537,7 @@ export const MessageBubble = memo(function MessageBubble({
   isMobile?: boolean;
   isOptimistic?: boolean;
   pendingAttachment?: PendingAttachment | null;
+  avatar?: ReactNode;
   onImagePreview: (preview: ImagePreviewState) => void;
   onReply: (message: Message) => void;
   onEdit: (message: Message) => void;
@@ -903,11 +905,12 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
-      className={`message-bubble flex items-start ${
+      className={`message-bubble flex items-start ${avatar ? "gap-1" : ""} ${
         isOwnMessage ? "justify-end" : ""
       } ${isOptimistic ? "opacity-70" : ""}`}
       data-testid={`message-${message.msgId}`}
     >
+      {!isOwnMessage && avatar}
 
       <div
         className={`min-w-0 max-w-[75%] flex flex-col gap-1 sm:max-w-xs lg:max-w-md ${
@@ -1253,6 +1256,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
       </div>
+      {isOwnMessage && avatar}
     </div>
   );
 });

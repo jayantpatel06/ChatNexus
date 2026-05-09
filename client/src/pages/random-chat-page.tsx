@@ -65,6 +65,7 @@ type RandomChatPreferences = {
   interests: string[];
   interestsMatchingEnabled: boolean;
   maxWaitDurationSeconds: number;
+  autoSearchOnDisconnect: boolean;
   genderPreference: RandomGenderPreference;
 };
 
@@ -132,6 +133,7 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
       interests: [],
       interestsMatchingEnabled: true,
       maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+      autoSearchOnDisconnect: false,
       genderPreference: "any",
     };
   }
@@ -143,6 +145,7 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
         interests: [],
         interestsMatchingEnabled: true,
         maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+        autoSearchOnDisconnect: false,
         genderPreference: "any",
       };
     }
@@ -156,6 +159,7 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
       maxWaitDurationSeconds: sanitizeRandomChatMaxWaitDurationSeconds(
         parsed.maxWaitDurationSeconds,
       ),
+      autoSearchOnDisconnect: parsed.autoSearchOnDisconnect === true,
       genderPreference: sanitizeRandomGenderPreference(parsed.genderPreference),
     };
   } catch {
@@ -163,6 +167,7 @@ function readStoredRandomChatPreferences(): RandomChatPreferences {
       interests: [],
       interestsMatchingEnabled: true,
       maxWaitDurationSeconds: DEFAULT_RANDOM_CHAT_MAX_WAIT_DURATION_SECONDS,
+      autoSearchOnDisconnect: false,
       genderPreference: "any",
     };
   }
@@ -188,6 +193,9 @@ export default function RandomChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [matchState, setMatchState] = useState<RandomMatchState>("idle");
   const [statusMessage, setStatusMessage] = useState(IDLE_RANDOM_CHAT_STATUS);
+  const [disconnectedPartnerName, setDisconnectedPartnerName] = useState<
+    string | null
+  >(null);
   const [sharedInterests, setSharedInterests] = useState<string[]>([]);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [isInterestsExpanded, setIsInterestsExpanded] = useState(false);
@@ -218,6 +226,7 @@ export default function RandomChatPage() {
   const interests = preferences.interests;
   const interestMatchingEnabled = preferences.interestsMatchingEnabled;
   const maxWaitDurationSeconds = preferences.maxWaitDurationSeconds;
+  const autoSearchOnDisconnect = preferences.autoSearchOnDisconnect;
   const hasInterests = interests.length > 0;
   const isIdle = matchState === "idle";
   const isMatched = matchState === "matched";
@@ -268,9 +277,30 @@ export default function RandomChatPage() {
       setMessageInput("");
       setMessages([]);
       setCurrentPartner(null);
+      setDisconnectedPartnerName(null);
       setSharedInterests([]);
       clearPartnerTypingState();
       setMatchState(nextState);
+      setStatusMessage(nextStatus);
+    },
+    [clearPartnerTypingState, stopLocalTyping],
+  );
+
+  const endRandomChatSessionInPanel = useCallback(
+    (nextStatus: string) => {
+      stopLocalTyping();
+      if (broadenSearchTimeoutRef.current !== null) {
+        window.clearTimeout(broadenSearchTimeoutRef.current);
+        broadenSearchTimeoutRef.current = null;
+      }
+      hasBroadenedCurrentSearchRef.current = false;
+      setShowEmojiPicker(false);
+      setMessageInput("");
+      setSharedInterests([]);
+      clearPartnerTypingState();
+      setMatchIntentActive(true);
+      setFooterActionState("start");
+      setMatchState("idle");
       setStatusMessage(nextStatus);
     },
     [clearPartnerTypingState, stopLocalTyping],
@@ -287,7 +317,10 @@ export default function RandomChatPage() {
       }
 
       resetRandomChatState("searching", message);
-      socket.emit("random_chat_request_match", matchPreferencesRef.current);
+      socket.emit("random_chat_request_match", {
+        ...matchPreferencesRef.current,
+        searchMessage: message,
+      });
     },
     [isConnected, resetRandomChatState, socket],
   );
@@ -313,9 +346,9 @@ export default function RandomChatPage() {
 
   const handleSkipChat = useCallback(() => {
     if (isFindingMatch) {
-      setMatchIntentActive(false);
+      setMatchIntentActive(true);
       setFooterActionState("start");
-      resetRandomChatState("idle", IDLE_RANDOM_CHAT_STATUS);
+      resetRandomChatState("idle", "💔 You skipped the chat.");
 
       if (socket && isConnected) {
         socket.emit("random_chat_leave");
@@ -336,15 +369,12 @@ export default function RandomChatPage() {
   ]);
 
   const handleConfirmChatEnd = useCallback(() => {
-    stopLocalTyping();
-    setMatchIntentActive(false);
-    setFooterActionState("start");
-    resetRandomChatState("idle", IDLE_RANDOM_CHAT_STATUS);
+    endRandomChatSessionInPanel("💔 You ended the chat.");
 
     if (socket && isConnected) {
       socket.emit("random_chat_leave");
     }
-  }, [isConnected, resetRandomChatState, socket, stopLocalTyping]);
+  }, [endRandomChatSessionInPanel, isConnected, socket]);
 
   useEffect(() => {
     try {
@@ -473,6 +503,7 @@ export default function RandomChatPage() {
       setFooterActionState("skip");
       setMatchState("searching");
       setCurrentPartner(null);
+      setDisconnectedPartnerName(null);
       setSharedInterests([]);
       setMessages([]);
       clearPartnerTypingState();
@@ -492,6 +523,7 @@ export default function RandomChatPage() {
         : [];
 
       setCurrentPartner(data.partner);
+      setDisconnectedPartnerName(null);
       setSharedInterests(nextSharedInterests);
       setMessages([]);
       clearPartnerTypingState();
@@ -515,6 +547,7 @@ export default function RandomChatPage() {
       clearPartnerTypingState();
       if (footerActionState === "confirm") {
         setFooterActionState("skip");
+        setDisconnectedPartnerName(null);
         setStatusMessage(
           sharedInterests.length > 0
             ? `Matched through ${sharedInterests.join(", ")}`
@@ -523,20 +556,18 @@ export default function RandomChatPage() {
       }
     };
 
-    const handleSessionEnded = (data: {
+    const handleSessionEnded = (_data: {
       message?: string;
       requeued?: boolean;
     }) => {
-      setCurrentPartner(null);
-      setSharedInterests([]);
-      setMessages([]);
-      clearPartnerTypingState();
-      setMatchIntentActive(false);
-      setFooterActionState("start");
-      setMatchState("idle");
-      setStatusMessage(
-        data.message ?? IDLE_RANDOM_CHAT_STATUS,
-      );
+      const partnerName = currentPartner?.username ?? "The user";
+      if (autoSearchOnDisconnect) {
+        beginMatchmaking(`${partnerName} disconnected. Searching for new user...`);
+        return;
+      }
+
+      setDisconnectedPartnerName(partnerName);
+      endRandomChatSessionInPanel("");
     };
 
     const handleTyping = (data: { isTyping?: boolean; userId?: number }) => {
@@ -584,7 +615,17 @@ export default function RandomChatPage() {
       socket.off("random_chat_typing", handleTyping);
       socket.off("random_chat_error", handleError);
     };
-  }, [clearPartnerTypingState, currentPartner, footerActionState, sharedInterests, socket, toast]);
+  }, [
+    autoSearchOnDisconnect,
+    beginMatchmaking,
+    clearPartnerTypingState,
+    currentPartner,
+    endRandomChatSessionInPanel,
+    footerActionState,
+    sharedInterests,
+    socket,
+    toast,
+  ]);
 
   useEffect(() => {
     if (!socket || !isConnected) {
@@ -750,13 +791,6 @@ export default function RandomChatPage() {
   );
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setShowEmojiPicker(false);
-      leaveRandomChat();
-      return;
-    }
-
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       handleSendMessage();
@@ -792,6 +826,7 @@ export default function RandomChatPage() {
   const sidebarContent = (
     <RandomMatchControlsPanel
       currentPartner={currentPartner}
+      autoSearchOnDisconnect={autoSearchOnDisconnect}
       genderPreference={preferences.genderPreference}
       interestMatchingEnabled={interestMatchingEnabled}
       interestDraft={interestDraft}
@@ -811,6 +846,12 @@ export default function RandomChatPage() {
         setPreferences((prev) => ({
           ...prev,
           interestsMatchingEnabled: checked,
+        }))
+      }
+      onAutoSearchOnDisconnectChange={(checked) =>
+        setPreferences((prev) => ({
+          ...prev,
+          autoSearchOnDisconnect: checked,
         }))
       }
       onInterestsExpandedChange={setIsInterestsExpanded}
@@ -841,9 +882,13 @@ export default function RandomChatPage() {
     <RandomChatArea
       currentPartner={currentPartner}
       currentUserId={user?.userId ?? null}
+      currentUsername={user?.username ?? null}
+      disconnectedPartnerName={disconnectedPartnerName}
       footerActionState={footerActionState}
       hasDraftText={hasDraftText}
+      isChatActive={isMatched}
       isDarkTheme={isDarkTheme}
+      isFindingMatch={isFindingMatch}
       isMobile={isMobile}
       isPartnerTyping={isPartnerTyping}
       messageInput={messageInput}
@@ -865,7 +910,8 @@ export default function RandomChatPage() {
       composerPickerTriggerRef={composerPickerTriggerRef}
     />
   );
-  const shouldShowDesktopConversation = matchIntentActive;
+  const shouldShowConversationPanel =
+    matchIntentActive || currentPartner !== null || messages.length > 0;
 
   const sharedSidebarPanel = (
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground md:overflow-hidden">
@@ -885,7 +931,7 @@ export default function RandomChatPage() {
   );
 
   if (isMobile) {
-    if (isMatched || isFindingMatch) {
+    if (shouldShowConversationPanel) {
       return (
         <>
           <Seo
@@ -953,7 +999,7 @@ export default function RandomChatPage() {
         </div>
 
         <div className="flex min-w-0 flex-1">
-          {shouldShowDesktopConversation ? (
+          {shouldShowConversationPanel ? (
             conversationPanel
           ) : (
             <ChatDesktopShellPlaceholder enableCommandCenter />
@@ -979,6 +1025,7 @@ function RandomSearchOrbitalAnimation() {
 
 function RandomMatchControlsPanel({
   currentPartner,
+  autoSearchOnDisconnect,
   genderPreference,
   interestMatchingEnabled,
   interestDraft,
@@ -987,6 +1034,7 @@ function RandomMatchControlsPanel({
   isFindingMatch,
   isMatched,
   onAddInterest,
+  onAutoSearchOnDisconnectChange,
   onGenderPreferenceChange,
   onInterestDraftChange,
   onInterestMatchingChange,
@@ -1002,6 +1050,7 @@ function RandomMatchControlsPanel({
   maxWaitDurationSeconds,
 }: {
   currentPartner: RandomChatPartner | null;
+  autoSearchOnDisconnect: boolean;
   genderPreference: RandomGenderPreference;
   interestMatchingEnabled: boolean;
   interestDraft: string;
@@ -1010,6 +1059,7 @@ function RandomMatchControlsPanel({
   isFindingMatch: boolean;
   isMatched: boolean;
   onAddInterest: () => void;
+  onAutoSearchOnDisconnectChange: (checked: boolean) => void;
   onGenderPreferenceChange: (preference: RandomGenderPreference) => void;
   onInterestDraftChange: Dispatch<SetStateAction<string>>;
   onInterestMatchingChange: (checked: boolean) => void;
@@ -1243,6 +1293,19 @@ function RandomMatchControlsPanel({
                               );
                             })}
                           </div>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-[0.85rem] bg-background/70 p-3">
+                          <div className="min-w-0 pr-3">
+                            <p className="text-sm font-medium text-foreground">
+                              Auto search after disconnect
+                            </p>
+                          </div>
+                          <Switch
+                            checked={autoSearchOnDisconnect}
+                            onCheckedChange={onAutoSearchOnDisconnectChange}
+                            aria-label="Toggle auto search after disconnect"
+                          />
                         </div>
 
                         <Button
