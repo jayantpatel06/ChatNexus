@@ -1,33 +1,22 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
   type Dispatch,
   type KeyboardEvent,
-  type RefObject,
   type SetStateAction,
 } from "react";
-import { format } from "date-fns";
-import EmojiPicker, {
-  EmojiClickData,
-  Theme as EmojiPickerTheme,
-} from "emoji-picker-react";
+import type { EmojiClickData } from "emoji-picker-react";
 import {
-  ArrowLeft,
   ChevronRight,
-  Compass,
+  VenetianMask,
   Loader2,
   Mars,
   MessageCircleMore,
   Search,
-  Send,
   Shuffle,
-  Smile,
-  SkipForward,
-  UserRound,
   Venus,
   VenusAndMars,
   X,
@@ -36,6 +25,14 @@ import { useLocation } from "wouter";
 import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,22 +52,14 @@ import {
 } from "@/chat/chat-navigation-menu";
 import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
 import { ChatPageHeader } from "@/chat/chat-page-header";
+import {
+  RandomChatArea,
+  type RandomChatPartner,
+  type RandomChatSocketMessage,
+  type RandomFooterActionState,
+} from "@/chat/random-chat-area";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
-import type { User } from "@shared/schema";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-
-type RandomChatPartner = Pick<
-  User,
-  "age" | "gender" | "isGuest" | "userId" | "username"
->;
-
-type RandomChatSocketMessage = {
-  id: string;
-  message: string;
-  senderId: number;
-  timestamp: string;
-};
+import { cn } from "@/lib/utils";
 
 type RandomChatPreferences = {
   interests: string[];
@@ -85,7 +74,6 @@ type RandomChatMatchPreferences = Pick<
 >;
 
 type RandomMatchState = "connecting" | "idle" | "matched" | "searching";
-type RandomFooterActionState = "confirm" | "skip" | "start";
 type RandomGenderPreference = "any" | "female" | "male";
 
 const RANDOM_CHAT_PREFERENCES_KEY = "chatnexus_random_chat_preferences";
@@ -206,6 +194,9 @@ export default function RandomChatPage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerPickerRef = useRef<HTMLDivElement>(null);
   const composerPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const lastGifSendRef = useRef<{ url: string; timestamp: number } | null>(
+    null,
+  );
   const matchPreferencesRef = useRef<RandomChatMatchPreferences>({
     interests: preferences.interests,
     interestsMatchingEnabled: preferences.interestsMatchingEnabled,
@@ -727,7 +718,45 @@ export default function RandomChatPage() {
     setShowEmojiPicker(false);
   };
 
+  const handleSendGif = useCallback(
+    (gifUrl: string) => {
+      const normalizedGifUrl = gifUrl.trim();
+      if (!normalizedGifUrl || !currentPartner || !socket || isFindingMatch) {
+        return false;
+      }
+
+      const lastGifSend = lastGifSendRef.current;
+      const isDuplicateGifSelection =
+        lastGifSend?.url === normalizedGifUrl &&
+        Date.now() - lastGifSend.timestamp < 1200;
+
+      if (isDuplicateGifSelection) {
+        return false;
+      }
+
+      lastGifSendRef.current = {
+        url: normalizedGifUrl,
+        timestamp: Date.now(),
+      };
+
+      stopLocalTyping();
+      socket.emit("random_chat_send_message", {
+        message: normalizedGifUrl,
+      });
+      setShowEmojiPicker(false);
+      return true;
+    },
+    [currentPartner, isFindingMatch, socket, stopLocalTyping],
+  );
+
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setShowEmojiPicker(false);
+      leaveRandomChat();
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       handleSendMessage();
@@ -809,14 +838,12 @@ export default function RandomChatPage() {
   );
 
   const conversationPanel = (
-    <RandomChatConversationPanel
+    <RandomChatArea
       currentPartner={currentPartner}
       currentUserId={user?.userId ?? null}
       footerActionState={footerActionState}
       hasDraftText={hasDraftText}
       isDarkTheme={isDarkTheme}
-      isIdle={isIdle}
-      isFindingMatch={isFindingMatch}
       isMobile={isMobile}
       isPartnerTyping={isPartnerTyping}
       messageInput={messageInput}
@@ -824,6 +851,7 @@ export default function RandomChatPage() {
       messagesContainerRef={messagesContainerRef}
       onBack={leaveRandomChat}
       onEmojiClick={handleEmojiClick}
+      onGifClick={handleSendGif}
       onConfirmChatEnd={handleConfirmChatEnd}
       onInputChange={handleMessageInputChange}
       onInputKeyDown={handleKeyDown}
@@ -831,7 +859,6 @@ export default function RandomChatPage() {
       onSkip={handleSkipChat}
       onStartChat={() => beginMatchmaking(RANDOM_CHAT_SEARCHING_STATUS)}
       setShowEmojiPicker={setShowEmojiPicker}
-      sharedInterests={sharedInterests}
       statusMessage={statusMessage}
       showEmojiPicker={showEmojiPicker}
       composerPickerRef={composerPickerRef}
@@ -929,10 +956,7 @@ export default function RandomChatPage() {
           {shouldShowDesktopConversation ? (
             conversationPanel
           ) : (
-            <ChatDesktopShellPlaceholder
-              icon={Compass}
-              title="Click Start Chat to find a random chat partner"
-            />
+            <ChatDesktopShellPlaceholder enableCommandCenter />
           )}
         </div>
       </div>
@@ -941,180 +965,14 @@ export default function RandomChatPage() {
 }
 
 function RandomSearchOrbitalAnimation() {
-  const shouldReduceMotion = useReducedMotion();
-  const idPrefix = useId().replace(/:/g, "");
-  const glowId = `${idPrefix}-random-search-glow`;
-  const sweepId = `${idPrefix}-random-search-sweep`;
-
-  const rings = [
-    { radius: 43, opacity: 0.34, duration: 4.8, offset: 0 },
-    { radius: 68, opacity: 0.24, duration: 5.8, offset: 0.18 },
-    { radius: 91, opacity: 0.16, duration: 6.8, offset: 0.34 },
-  ];
-  const orbitDots = [
-    { radius: 43, size: 3.4, duration: 6.5, delay: 0 },
-    { radius: 68, size: 4, duration: 8.4, delay: 0.8 },
-    { radius: 91, size: 3.7, duration: 10.2, delay: 1.4 },
-  ];
-  const spinAnimation = shouldReduceMotion ? { rotate: 0 } : { rotate: 360 };
-  const centerSpinStyle = {
-    transformBox: "view-box",
-    transformOrigin: "center",
-  } as const;
-
   return (
     <div
-      className="relative mx-auto flex h-[16.5rem] w-full items-center justify-center overflow-visible text-primary md:h-[12.75rem]"
+      className="relative mx-auto flex h-[16.5rem] w-full items-center justify-center text-primary md:h-[12.75rem]"
       aria-hidden="true"
     >
-      <motion.svg
-        viewBox="0 0 240 240"
-        className="absolute h-[17.5rem] w-[17.5rem] overflow-visible md:h-[13.5rem] md:w-[13.5rem]"
-        fill="none"
-        initial={false}
-      >
-        <defs>
-          <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
-            <stop offset="58%" stopColor="currentColor" stopOpacity="0.08" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id={sweepId} x1="120" y1="28" x2="206" y2="96">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.84" />
-            <stop offset="58%" stopColor="currentColor" stopOpacity="0.24" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        <motion.circle
-          cx="120"
-          cy="120"
-          r="106"
-          fill={`url(#${glowId})`}
-          animate={
-            shouldReduceMotion
-              ? { opacity: 0.7 }
-              : { opacity: [0.45, 0.82, 0.45], scale: [0.98, 1.04, 0.98] }
-          }
-          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
-          style={{ transformOrigin: "120px 120px" }}
-        />
-
-        {rings.map((ring) => (
-          <motion.circle
-            key={ring.radius}
-            cx="120"
-            cy="120"
-            r={ring.radius}
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.35"
-            initial={false}
-            animate={
-              shouldReduceMotion
-                ? { opacity: ring.opacity, pathLength: 0.82 }
-                : {
-                    opacity: [
-                      ring.opacity * 0.55,
-                      ring.opacity,
-                      ring.opacity * 0.55,
-                    ],
-                    pathLength: [0.28, 0.88, 0.28],
-                    pathOffset: [
-                      ring.offset,
-                      ring.offset + 0.18,
-                      ring.offset + 0.36,
-                    ],
-                  }
-            }
-            transition={{
-              duration: ring.duration,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        ))}
-
-        <motion.g
-          animate={spinAnimation}
-          transition={{ duration: 7.5, repeat: Infinity, ease: "linear" }}
-          style={centerSpinStyle}
-        >
-          <path
-            d="M120 120 L120 27 A93 93 0 0 1 205 82 Z"
-            fill={`url(#${sweepId})`}
-            opacity="0.2"
-          />
-          <path
-            d="M120 27 A93 93 0 0 1 205 82"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.6"
-            opacity="0.68"
-          />
-          <circle cx="120" cy="27" r="4.5" fill="currentColor" />
-        </motion.g>
-
-        {orbitDots.map((dot, index) => (
-          <motion.g
-            key={dot.radius}
-            animate={spinAnimation}
-            transition={{
-              duration: dot.duration,
-              repeat: Infinity,
-              ease: "linear",
-              delay: shouldReduceMotion ? 0 : dot.delay,
-            }}
-            style={centerSpinStyle}
-          >
-            <motion.circle
-              cx="120"
-              cy={120 - dot.radius}
-              r={dot.size}
-              fill="currentColor"
-              animate={
-                shouldReduceMotion
-                  ? { opacity: 0.78 }
-                  : {
-                      opacity: [0.35, 0.95, 0.35],
-                      scale: [0.85, 1.15, 0.85],
-                    }
-              }
-              transition={{
-                duration: 2.8 + index * 0.35,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              style={{ transformOrigin: `120px ${120 - dot.radius}px` }}
-            />
-          </motion.g>
-        ))}
-
-        <motion.g
-          animate={
-            shouldReduceMotion
-              ? { scale: 1 }
-              : { scale: [1, 1.04, 1], opacity: [0.9, 1, 0.9] }
-          }
-          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-          style={{ transformOrigin: "120px 120px" }}
-        >
-          <circle
-            cx="120"
-            cy="120"
-            r="35"
-            fill="var(--card)"
-            stroke="currentColor"
-            strokeOpacity="0.5"
-            strokeWidth="1.5"
-          />
-          <foreignObject x="100" y="100" width="40" height="40">
-            <div className="flex h-full w-full items-center justify-center text-primary">
-              <UserRound className="h-8 w-8" />
-            </div>
-          </foreignObject>
-        </motion.g>
-      </motion.svg>
+      <div className="flex h-24 w-24 items-center justify-center rounded-full border border-violet-500 bg-primary/10 text-violet-500 shadow-[0_0_88px_rgba(56,69,248,0.36)] md:h-20 md:w-20">
+        <VenetianMask className="h-12 w-12 md:h-10 md:w-10" strokeWidth={1.7} />
+      </div>
     </div>
   );
 }
@@ -1181,6 +1039,8 @@ function RandomMatchControlsPanel({
   const primaryActionLabel = isFindingMatch ? "Stop Searching" : startChatLabel;
   const primaryActionHandler = isFindingMatch ? onStopChat : onStartChat;
   const primaryActionDisabled = isFindingMatch ? false : startChatDisabled;
+  const sidebarDrawerScopeClass =
+    "md:left-[54px] md:right-auto md:w-[calc(26rem-54px)] mb-20 md:mb-0";
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -1199,91 +1059,132 @@ function RandomMatchControlsPanel({
             </div>
           </div>
 
-          <div className="mt-auto w-full space-y-3 md:space-y-2">
-          <div className="relative w-full rounded-[1.5rem] border border-border/100 bg-muted">
-            <DropdownMenu>
-              <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <VenusAndMars className="h-4 w-4" />
+          <div className="relative -mx-4 mt-auto w-[calc(100%+2rem)] rounded-t-[2.5rem] bg-gradient-to-b from-muted/80 via-muted/48 to-transparent px-3 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-4 md:-mb-4 md:px-4">
+            <div className="relative mx-auto w-[90%] max-w-[22rem]">
+              <DropdownMenu>
+                <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <VenusAndMars className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        Gender Filter
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Gender Preference
-                    </p>
-                  </div>
+                  <DropdownMenuTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
+                        aria-label="Open gender preference menu"
+                      >
+                        {selectedGenderOption.label}
+                        <ChevronRight className="h-4 w-4 -rotate-90 text-muted-foreground" />
+                      </button>
+                    </div>
+                  </DropdownMenuTrigger>
                 </div>
-                <DropdownMenuTrigger asChild>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
-                      aria-label="Open gender preference menu"
-                    >
-                      {selectedGenderOption.label}
-                      <ChevronRight className="h-4 w-4 -rotate-90 text-muted-foreground" />
-                    </button>
-                  </div>
-                </DropdownMenuTrigger>
-              </div>
-              <DropdownMenuContent
-                side="top"
-                align="end"
-                sideOffset={8}
-                className="w-38 rounded-2xl border border-border/70 bg-card p-2"
-              >
-                {genderOptions.map((option) => {
-                  const OptionIcon = option.icon;
-                  const isSelected = genderPreference === option.value;
+                <DropdownMenuContent
+                  side="top"
+                  align="end"
+                  sideOffset={8}
+                  className="w-38 rounded-2xl border border-border/70 bg-card p-2"
+                >
+                  {genderOptions.map((option) => {
+                    const OptionIcon = option.icon;
+                    const isSelected = genderPreference === option.value;
 
-                  return (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onSelect={() => onGenderPreferenceChange(option.value)}
+                    return (
+                      <DropdownMenuItem
+                        key={option.value}
+                        onSelect={() => onGenderPreferenceChange(option.value)}
+                        className={cn(
+                          "flex min-h-11 items-center justify-between rounded-xl px-3",
+                          isSelected && "bg-accent text-accent-foreground",
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary",
+                              isSelected && "bg-background/70 text-foreground",
+                            )}
+                          >
+                            <OptionIcon className="h-4 w-4" />
+                          </div>
+                          <span>{option.label}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="relative px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Search className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          Your Interests
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Drawer
+                    open={isInterestsExpanded}
+                    onOpenChange={onInterestsExpandedChange}
+                  >
+                    <DrawerTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex shrink-0 items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
+                        aria-label="Open interest matching drawer"
+                      >
+                        <span>{interestMatchingEnabled ? "ON" : "OFF"}</span>
+                        <ChevronRight
+                          className={cn(
+                            "h-4 w-4 -rotate-90 text-muted-foreground transition-transform",
+                          )}  
+                        />
+                      </button>
+                    </DrawerTrigger>
+
+                    <DrawerContent
+                      overlayClassName={sidebarDrawerScopeClass}
                       className={cn(
-                        "flex min-h-11 items-center justify-between rounded-xl px-3",
-                        isSelected && "bg-accent text-accent-foreground",
+                        sidebarDrawerScopeClass,
+                        "border-x-0 border-b-0 bg-muted p-0 shadow-[0_-24px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl md:max-w-none",
                       )}
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary",
-                            isSelected && "bg-background/70 text-foreground",
-                          )}
-                        >
-                          <OptionIcon className="h-4 w-4" />
+                      <div className="space-y-2 pt-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xl font-semibold text-foreground/70">
+                            Match with interests
+                          </span>
+                          <Switch
+                            checked={interestMatchingEnabled}
+                            onCheckedChange={onInterestMatchingChange}
+                            aria-label="Toggle interest matching"
+                          />
                         </div>
-                        <span>{option.label}</span>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
 
-            <div className="border-t border-border/60" />
-
-            <div className="relative px-4 py-3">
-              <AnimatePresence initial={false}>
-                {isInterestsExpanded ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute inset-x-0 bottom-full z-30"
-                  >
-                    <div className="rounded-[1.2rem] border border-border/70 bg-card p-2 shadow-[0_24px_48px_rgba(15,23,42,0.22)]">
-                      <div className="space-y-2">
-                        <div className="rounded-[1rem] border border-border/70 bg-background/65 px-3 py-2.5">
+                        <div className="px-2 py-2 bg-background/70 rounded-[0.85rem]">
                           <div className="flex flex-wrap items-center gap-2">
                             {interests.map((interest) => (
                               <span
                                 key={interest}
-                                className="inline-flex h-9 items-center gap-2 rounded-full bg-card px-3 text-xs font-medium text-foreground"
+                                className="inline-flex h-9 items-center gap-2 rounded-[0.85rem] bg-card px-3 text-xs font-medium text-foreground"
                               >
-                                <span className="truncate">{interest}</span>
+                                <span className="max-w-[8rem] truncate">
+                                  {interest}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => onRemoveInterest(interest)}
@@ -1298,7 +1199,7 @@ function RandomMatchControlsPanel({
                             <Input
                               type="text"
                               placeholder="Add an interest..."
-                              className="h-9 min-w-[8rem] flex-1 border-0 bg-card px-3 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                              className="h-9 min-w-[7.5rem] flex-1 border-0 rounded-[0.85rem] bg-card px-3 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
                               value={interestDraft}
                               onChange={(event) =>
                                 onInterestDraftChange(event.target.value)
@@ -1314,8 +1215,8 @@ function RandomMatchControlsPanel({
                           </div>
                         </div>
 
-                        <div className="rounded-[1rem] border border-border/70 bg-background/65 p-3">
-                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="rounded-[0.85rem] bg-background/70 p-3">
+                          <p className="text-sm font-medium text-muted-foreground/80">
                             Max Wait Duration
                           </p>
                           <div className="mt-2 grid grid-cols-4 gap-2">
@@ -1327,12 +1228,14 @@ function RandomMatchControlsPanel({
                                 <button
                                   key={option.label}
                                   type="button"
-                                  onClick={() => onMaxWaitDurationChange(option.value)}
+                                  onClick={() =>
+                                    onMaxWaitDurationChange(option.value)
+                                  }
                                   className={cn(
-                                    "h-9 rounded-[0.8rem] border px-1 text-[11px] font-medium transition-colors",
+                                    "h-9 rounded-[0.7rem] px-1 text-[11px] font-semibold transition-colors",
                                     isSelected
-                                      ? "border-primary bg-primary text-primary-foreground"
-                                      : "border-border/70 bg-background text-foreground hover:bg-muted/45",
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted text-foreground hover:bg-muted/80",
                                   )}
                                 >
                                   {option.label}
@@ -1341,456 +1244,43 @@ function RandomMatchControlsPanel({
                             })}
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
 
-              <div className="flex items-center gap-3">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Search className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <p className="text-sm font-medium text-foreground">
-                        Interests
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <Switch
-                    checked={interestMatchingEnabled}
-                    onCheckedChange={onInterestMatchingChange}
-                    aria-label="Toggle interest matching"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onInterestsExpandedChange(!isInterestsExpanded)}
-                    className="flex items-center gap-2 rounded-full px-1.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-muted/45"
-                    aria-label={
-                      isInterestsExpanded
-                        ? "Collapse interests panel"
-                        : "Expand interests panel"
-                    }
-                  >
-                    <span>{interestMatchingEnabled ? "ON" : "OFF"}</span>
-                    <ChevronRight
-                      className={cn(
-                        "h-4 w-4 transition-transform duration-200",
-                        isInterestsExpanded ? "-rotate-90" : "rotate-90",
-                      )}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <div className="flex w-full justify-center">
-            <Button
-              type="button"
-              onClick={primaryActionHandler}
-              disabled={primaryActionDisabled}
-              variant="outline"
-              className="h-12 w-[68%] rounded-full border-primary/25 bg-card text-sm font-semibold text-primary shadow-none hover:bg-primary/10 hover:text-primary md:h-10 md:w-[70%] md:rounded-[1rem]"
-            >
-              {isFindingMatch ? (
-                <X className="mr-2 h-4 w-4" />
-              ) : primaryActionDisabled ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <MessageCircleMore className="mr-2 h-4 w-4" />
-              )}
-              {primaryActionLabel}
-            </Button>
-          </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RandomChatConversationPanel({
-  currentPartner,
-  currentUserId,
-  footerActionState,
-  hasDraftText,
-  isDarkTheme,
-  isIdle,
-  isFindingMatch,
-  isMobile,
-  isPartnerTyping,
-  messageInput,
-  messages,
-  messagesContainerRef,
-  onBack,
-  onEmojiClick,
-  onConfirmChatEnd,
-  onInputChange,
-  onInputKeyDown,
-  onSendMessage,
-  onSkip,
-  onStartChat,
-  setShowEmojiPicker,
-  sharedInterests,
-  statusMessage,
-  showEmojiPicker,
-  composerPickerRef,
-  composerPickerTriggerRef,
-}: {
-  currentPartner: RandomChatPartner | null;
-  currentUserId: number | null;
-  footerActionState: RandomFooterActionState;
-  hasDraftText: boolean;
-  isDarkTheme: boolean;
-  isIdle: boolean;
-  isFindingMatch: boolean;
-  isMobile: boolean;
-  isPartnerTyping: boolean;
-  messageInput: string;
-  messages: RandomChatSocketMessage[];
-  messagesContainerRef: RefObject<HTMLDivElement | null>;
-  onBack: () => void;
-  onEmojiClick: (emojiData: EmojiClickData) => void;
-  onConfirmChatEnd: () => void;
-  onInputChange: (value: string) => void;
-  onInputKeyDown: (event: KeyboardEvent) => void;
-  onSendMessage: () => void;
-  onSkip: () => void;
-  onStartChat: () => void;
-  setShowEmojiPicker: Dispatch<SetStateAction<boolean>>;
-  sharedInterests: string[];
-  statusMessage: string;
-  showEmojiPicker: boolean;
-  composerPickerRef: RefObject<HTMLDivElement | null>;
-  composerPickerTriggerRef: RefObject<HTMLButtonElement | null>;
-}) {
-  const isComposerDisabled = isIdle || isFindingMatch;
-  const hasEndedChatNotice =
-    isIdle && statusMessage !== IDLE_RANDOM_CHAT_STATUS;
-  const shouldShowStatusChip =
-    !isIdle || footerActionState === "confirm" || hasEndedChatNotice;
-  const footerActionLabel =
-    footerActionState === "confirm"
-      ? "Confirm"
-      : footerActionState === "skip"
-        ? "Skip"
-        : "Start";
-  const FooterActionIcon = footerActionState === "confirm"
-    ? X
-    : footerActionState === "skip"
-      ? SkipForward
-      : MessageCircleMore;
-  const handleFooterAction =
-    footerActionState === "confirm"
-      ? onConfirmChatEnd
-      : footerActionState === "skip"
-        ? onSkip
-        : onStartChat;
-  const pickerClassName = isMobile
-    ? "absolute bottom-[calc(100%+0.4rem)] left-3 right-3 z-40 overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl"
-    : "absolute bottom-[calc(100%+0.4rem)] right-3 z-40 w-[24rem] max-w-[calc(100%-1.5rem)] overflow-hidden rounded-sm border border-border bg-card-muted font-sans backdrop-blur-xl";
-  const pickerAnimation = isMobile
-    ? {
-        initial: { height: 0, opacity: 0 },
-        animate: { height: "auto", opacity: 1 },
-        exit: { height: 0, opacity: 0 },
-      }
-    : {
-        initial: { opacity: 0, y: 10 },
-        animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: 10 },
-      };
-  const headerSubtitle =
-    isPartnerTyping && currentPartner
-      ? `${currentPartner.username} is typing...`
-      : sharedInterests.length > 0
-        ? `Shared interests: ${sharedInterests.join(", ")}`
-        : isFindingMatch
-          ? "Searching for a stranger"
-          : currentPartner
-            ? "Private room"
-            : statusMessage;
-  const handleInputFocus = () => {
-    setShowEmojiPicker(false);
-  };
-
-  return (
-    <div
-      className={cn(
-        "relative flex-1",
-        isMobile
-          ? "flex h-full flex-col overflow-hidden"
-          : "flex min-w-0 overflow-hidden",
-      )}
-    >
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="z-40 flex flex-shrink-0 items-center justify-between bg-card p-2.5 md:border-b md:border-border/70 md:px-5 md:py-3.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="p-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
-            onClick={onBack}
-            title="Back to random chat controls"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand-grad-start)] to-[var(--brand-grad-end)] font-semibold text-black"
-          >
-            <Shuffle className="h-5 w-5" />
-          </div>
-
-          <div className="min-w-0">
-            <h3 className="truncate font-semibold text-foreground">
-              {currentPartner?.username ?? "Random Chat"}
-            </h3>
-            <p className="truncate text-xs text-muted-foreground">{headerSubtitle}</p>
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={messagesContainerRef}
-        className="relative min-h-0 flex-1 overflow-y-auto bg-background p-4 space-y-1 overscroll-contain scrollbar-none"
-      >
-        <div className="space-y-1">
-          {shouldShowStatusChip ? (
-            <div className="my-2 flex justify-center">
-              <div className="flex items-center gap-2 rounded-full border border-border bg-card-muted/80 px-4 py-1.5 text-[11px] text-muted-foreground">
-                <Compass className="h-3.5 w-3.5" />
-                {statusMessage}
-              </div>
-            </div>
-          ) : null}
-
-          {isIdle ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <Compass className="h-12 w-12 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">
-                {footerActionState === "confirm"
-                  ? "Confirm the reset, then start a new chat."
-                  : hasEndedChatNotice
-                    ? "Press Start to connect with someone new."
-                  : "Start chat from the sidebar to begin."}
-              </p>
-            </div>
-          ) : isFindingMatch ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="max-w-sm text-sm text-muted-foreground">
-                Looking for someone to connect you with...
-              </p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <Compass className="h-12 w-12 text-muted-foreground/50" />
-              <p className="text-sm font-medium text-foreground">
-                You are now chatting with {currentPartner?.username ?? "a stranger"}
-              </p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                No messages yet. Start the conversation!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {messages.map((message) => {
-                const isCurrentUser = message.senderId === currentUserId;
-                const senderName = isCurrentUser ? "You" : (currentPartner?.username ?? "Stranger");
-
-                return (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      "flex w-full",
-                      isCurrentUser ? "justify-end" : "justify-start",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex max-w-[min(82%,40rem)] items-end gap-2",
-                        isCurrentUser && "justify-end",
-                      )}
-                    >
-                      {!isCurrentUser && (
-                        <div
-                          className="mb-4 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-black"
-                          style={{
-                            background: getAvatarColor(
-                              currentPartner?.username ?? senderName,
-                            ),
-                          }}
+                        <Button
+                          type="button"
+                          onClick={() => onInterestsExpandedChange(false)}
+                          className="h-10 w-full rounded-[0.7rem] bg-background text-sm font-semibold text-foreground hover:bg-card"
                         >
-                          {getUserInitials(
-                            currentPartner?.username ?? senderName,
-                          )}
-                        </div>
-                      )}
-
-                      <div
-                        className={cn(
-                          "min-w-0 rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm",
-                          isCurrentUser
-                            ? "bg-brand-msg-sent text-brand-msg-sent-text"
-                            : "bg-brand-msg-received text-brand-msg-received-text",
-                        )}
-                      >
-                        <div className="flex items-center gap-2 text-[11px]">
-                          <span className="truncate font-semibold text-current/90">
-                            {senderName}
-                          </span>
-                          <span className="whitespace-nowrap opacity-70">
-                            {format(new Date(message.timestamp), "HH:mm")}
-                          </span>
-                        </div>
-                        <div className="min-w-0 whitespace-pre-wrap break-words">
-                          {message.message}
-                        </div>
+                          Done
+                        </Button>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {isPartnerTyping && (
-                <div className="flex w-full justify-start">
-                  <div className="flex max-w-[min(82%,40rem)] items-end gap-2">
-                    <div
-                      className="mb-4 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-black opacity-60"
-                      style={{
-                        background: getAvatarColor(
-                          currentPartner?.username ?? "Stranger",
-                        ),
-                      }}
-                    >
-                      {getUserInitials(currentPartner?.username ?? "Stranger")}
-                    </div>
-                    <div className="min-w-0 rounded-[0.95rem] px-3 py-1.5 text-base leading-5 shadow-sm bg-brand-msg-received text-brand-msg-received-text opacity-80">
-                      <span className="text-[11px] font-semibold text-current/70">
-                        {currentPartner?.username ?? "Stranger"}
-                      </span>
-                      <div className="min-w-0 whitespace-pre-wrap break-words italic opacity-70">
-                        typing...
-                      </div>
-                    </div>
-                  </div>
+                    </DrawerContent>
+                  </Drawer>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div
-        className="relative overflow-visible bg-card-muted flex-shrink-0"
-        style={{ paddingBottom: "6px" }}
-      >
-        <AnimatePresence initial={false}>
-          {showEmojiPicker && (
-            <motion.div
-              ref={composerPickerRef}
-              initial={pickerAnimation.initial}
-              animate={pickerAnimation.animate}
-              exit={pickerAnimation.exit}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className={pickerClassName}
-            >
-              <div className="overflow-hidden font-sans">
-                <EmojiPicker
-                  onEmojiClick={onEmojiClick}
-                  width="100%"
-                  height={320}
-                  theme={
-                    isDarkTheme
-                      ? (EmojiPickerTheme.DARK as unknown as EmojiPickerTheme)
-                      : (EmojiPickerTheme.LIGHT as unknown as EmojiPickerTheme)
-                  }
-                  autoFocusSearch={false}
-                  searchPlaceholder="Search emoji"
-                  lazyLoadEmojis={true}
-                  previewConfig={{ showPreview: false }}
-                  className={cn(
-                    "font-sans [--epr-bg-color:transparent] [--epr-picker-border-color:transparent] [--epr-picker-border-radius:0px] [--epr-emoji-padding:4px] [--epr-horizontal-padding:8px] [&_.epr-header-overlay]:pb-0",
-                    isMobile
-                      ? "[--epr-emoji-size:22px] [--epr-search-input-height:30px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:26px] [--epr-category-label-height:26px]"
-                      : "[--epr-emoji-size:24px] [--epr-search-input-height:32px] [--epr-search-input-border-radius:9999px] [--epr-category-navigation-button-size:28px] [--epr-category-label-height:28px]",
-                  )}
-                />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
-        <div className={isMobile ? "p-2" : "p-2 pb-1"}>
-        <div className="flex items-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-full px-4"
-            onClick={handleFooterAction}
-          >
-            <FooterActionIcon className="mr-2 h-4 w-4" />
-            {footerActionLabel}
-          </Button>
-
-          <div className="relative flex-1 rounded-[1rem] border border-border bg-card px-6 shadow-sm">
-            <Textarea
-              placeholder={
-                isIdle
-                  ? "Start a chat to begin messaging"
-                  : isFindingMatch
-                    ? "Waiting for the next match..."
-                    : "Message..."
-              }
-              className={cn(
-                "min-h-[40px] max-h-32 rounded-none border-0 px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                isMobile ? "bg-transparent" : "bg-card",
-                hasDraftText ? "pr-12" : "pr-14",
-              )}
-              rows={1}
-              value={messageInput}
-              onChange={(event) => onInputChange(event.target.value)}
-              onKeyDown={onInputKeyDown}
-              onFocus={handleInputFocus}
-              disabled={isComposerDisabled}
-            />
-            <div className="absolute inset-y-0 right-1.5 flex items-center">
-              {hasDraftText ? (
+              <div className="pt-4 pb-3 flex items-center justify-center">
                 <Button
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={onSendMessage}
-                  disabled={!hasDraftText || isComposerDisabled}
-                  className="h-8 w-8 rounded-2xl"
-                  size="icon"
-                  title="Send message"
+                  type="button"
+                  onClick={primaryActionHandler}
+                  disabled={primaryActionDisabled}
+                  variant="outline"
+                  className="h-12 w-[80%] rounded-full border-primary/25 bg-muted/80 text-sm font-semibold text-primary shadow-none hover:bg-primary/10 hover:text-primary md:h-10 md:rounded-[1rem]"
                 >
-                  <Send className="h-4 w-4" />
+                  {isFindingMatch ? (
+                    <X className="mr-2 h-4 w-4" />
+                  ) : primaryActionDisabled ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircleMore className="mr-2 h-4 w-4" />
+                  )}
+                  {primaryActionLabel}
                 </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  ref={composerPickerTriggerRef}
-                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                  title="Open emoji picker"
-                  onClick={() => setShowEmojiPicker((prev) => !prev)}
-                  disabled={isComposerDisabled}
-                >
-                  <Smile className="h-4 w-4" />
-                </Button>
-              )}
+              </div>
             </div>
           </div>
         </div>
-        </div>
-      </div>
       </div>
     </div>
   );
 }
+

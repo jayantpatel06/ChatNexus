@@ -358,10 +358,7 @@ export default function GlobalChatPage() {
         {showDesktopRoom ? (
           <GlobalChatRoomPanel isMobile={false} onBack={closeDesktopRoom} />
         ) : (
-          <ChatDesktopShellPlaceholder
-            icon={Globe}
-            title="Use the floating button to open the public room."
-          />
+          <ChatDesktopShellPlaceholder enableCommandCenter />
         )}
       </div>
     </>

@@ -73,6 +73,7 @@ import {
   getReplyPreviewText,
   stripConversationAttachments,
 } from "./chat-message-utils";
+import { ChatDesktopShellPlaceholder } from "./chat-desktop-shell-placeholder";
 import { FriendRequestCard, MessageBubble } from "./chat-message-components";
 import { useThemeToggleState } from "@/components/site-nav";
 
@@ -2216,25 +2217,7 @@ export function ChatArea({
       );
     }
 
-    return (
-      <div className="flex min-w-0 flex-1">
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_40%)] dark:bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.3),transparent_44%)]" />
-          <div className="relative flex h-full flex-col">
-            <div className="flex flex-1 items-center justify-center p-6 lg:p-10">
-              <div className="w-full max-w-3xl p-8 text-center lg:p-10">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary/10 text-primary">
-                  <Send className="h-8 w-8" />
-                </div>
-                <p className="text-xl font-semibold tracking-tight text-foreground mt-6">
-                  Select a chat to start messaging
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <ChatDesktopShellPlaceholder enableCommandCenter />;
   }
 
   return (
