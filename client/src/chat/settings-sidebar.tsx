@@ -12,6 +12,7 @@ import {
   unsubscribeFromPushNotifications,
 } from "@/lib/push-notifications";
 import { ChatPageHeader } from "@/chat/chat-page-header";
+import { useSocket } from "@/providers/socket-provider";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleButton2 } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn, getUserInitials } from "@/lib/utils";
-import type { SelfUserProfile, User } from "@shared/schema";
+import type { FriendRequestWithUsers, SelfUserProfile, User } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
 import {
   Ban,
@@ -34,6 +35,7 @@ import {
   Palette,
   Settings,
   User as UserIcon,
+  UserPlus,
 } from "lucide-react";
 import {
   ChatNavigationMenu,
@@ -42,6 +44,7 @@ import {
 
 type SettingsSection =
   | "profile"
+  | "friendRequests"
   | "notifications"
   | "blocked"
   | "appearance"
@@ -51,6 +54,10 @@ type SettingsSection =
 
 type BlockedUsersResponse = {
   users: User[];
+};
+
+type PendingFriendRequestsResponse = {
+  requests: FriendRequestWithUsers[];
 };
 
 type SettingSectionKey = Exclude<SettingsSection, null>;
@@ -124,6 +131,7 @@ function ReadonlyField({
 
 export function SettingsSidebar() {
   const { user, updateUser, logoutMutation } = useAuth();
+  const { socket } = useSocket();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
 
@@ -164,6 +172,16 @@ export function SettingsSidebar() {
     staleTime: 0,
   });
 
+  const friendRequestsQuery = useQuery({
+    queryKey: ["/api/friend-requests"],
+    enabled: !!user,
+    queryFn: async () =>
+      readJsonResponse<PendingFriendRequestsResponse>(
+        await apiRequest("GET", "/api/friend-requests"),
+      ),
+    staleTime: 0,
+  });
+
   const pushSubscriptionStatusQuery = useQuery({
     queryKey: ["/api/notifications/push-subscription"],
     enabled: !!user && !user.isGuest && isPushNotificationsSupported(),
@@ -174,6 +192,7 @@ export function SettingsSidebar() {
   const profile = profileQuery.data ?? (user ? { ...user, gmail: null } : null);
   const isGuestUser = user?.isGuest ?? false;
   const blockedUsers = blockedUsersQuery.data?.users ?? [];
+  const pendingFriendRequests = friendRequestsQuery.data?.requests ?? [];
 
   useEffect(() => {
     setNewUsername(user?.username || "");
@@ -217,6 +236,29 @@ export function SettingsSidebar() {
 
     return () => window.cancelAnimationFrame(frame);
   }, [activeSection]);
+
+  useEffect(() => {
+    if (!socket) {
+      return;
+    }
+
+    const refreshFriendRequests = () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/friend-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/friends"],
+      });
+    };
+
+    socket.on("friend_request_updated", refreshFriendRequests);
+    socket.on("relationship_status_updated", refreshFriendRequests);
+
+    return () => {
+      socket.off("friend_request_updated", refreshFriendRequests);
+      socket.off("relationship_status_updated", refreshFriendRequests);
+    };
+  }, [socket]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { username: string; age: number }) => {
@@ -280,6 +322,55 @@ export function SettingsSidebar() {
     onError: (error: Error) => {
       toast({
         title: "Failed to unblock",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const respondToFriendRequestMutation = useMutation({
+    mutationFn: async ({
+      requestId,
+      action,
+    }: {
+      requestId: number;
+      action: "accept" | "reject";
+    }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/friend-requests/${requestId}/respond`,
+        { action },
+      );
+      return readJsonResponse<{
+        action: "accept" | "reject";
+        request: FriendRequestWithUsers;
+      }>(res);
+    },
+    onSuccess: (data) => {
+      const otherUserId =
+        data.request.senderId === user?.userId
+          ? data.request.receiverId
+          : data.request.senderId;
+
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/friend-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/friends"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status", otherUserId],
+      });
+      toast({
+        title:
+          data.action === "accept"
+            ? "Friend request accepted"
+            : "Friend request rejected",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update friend request",
         description: error.message,
         variant: "destructive",
       });
@@ -405,6 +496,13 @@ export function SettingsSidebar() {
       description: "Username, age, and profile",
       icon: UserIcon,
       iconClassName: "bg-sky-500",
+    },
+    {
+      id: "friendRequests",
+      title: "Friend Requests",
+      description: "Accept or reject friend requests",
+      icon: UserPlus,
+      iconClassName: "bg-fuchsia-500",
     },
     {
       id: "notifications",
@@ -549,6 +647,97 @@ export function SettingsSidebar() {
             </Button>
           )}
         </form>
+      );
+    }
+
+    if (section === "friendRequests") {
+      if (friendRequestsQuery.isPending) {
+        return (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground md:h-3.5 md:w-3.5" />
+          </div>
+        );
+      }
+
+      if (friendRequestsQuery.isError) {
+        return (
+          <p className="text-sm text-destructive md:text-xs">
+            Failed to load friend requests.
+          </p>
+        );
+      }
+
+      if (pendingFriendRequests.length === 0) {
+        return (
+          <SettingsSurface>
+            <p className="text-sm text-muted-foreground md:text-xs">
+              No pending friend requests.
+            </p>
+          </SettingsSurface>
+        );
+      }
+
+      return (
+        <div className="space-y-2">
+          {pendingFriendRequests.map((request) => {
+            const isIncoming = request.receiverId === user?.userId;
+            const otherUser = isIncoming ? request.sender : request.receiver;
+            const isCurrentRequestPending =
+              respondToFriendRequestMutation.isPending &&
+              respondToFriendRequestMutation.variables?.requestId === request.id;
+
+            return (
+              <SettingsSurface
+                key={request.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground md:text-[14px]">
+                    {otherUser.username}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {isIncoming ? "Sent you a friend request" : "Request sent"}
+                  </p>
+                </div>
+                {isIncoming ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        respondToFriendRequestMutation.mutate({
+                          requestId: request.id,
+                          action: "accept",
+                        })
+                      }
+                      disabled={isCurrentRequestPending}
+                      className="h-9 rounded-full px-3 text-xs md:h-8 md:px-2.5 md:text-[11px]"
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        respondToFriendRequestMutation.mutate({
+                          requestId: request.id,
+                          action: "reject",
+                        })
+                      }
+                      disabled={isCurrentRequestPending}
+                      className="h-9 rounded-full px-3 text-xs md:h-8 md:px-2.5 md:text-[11px]"
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary md:px-2.5 md:py-0.5 md:text-[11px]">
+                    Pending
+                  </span>
+                )}
+              </SettingsSurface>
+            );
+          })}
+        </div>
       );
     }
 
@@ -863,7 +1052,7 @@ export function SettingsSidebar() {
                   onClick={() => logoutMutation.mutate()}
                   disabled={logoutMutation.isPending}
                   variant="ghost"
-                  className="h-11 w-[88%] rounded-full border border-destructive/20 bg-destructive/10 text-sm font-semibold text-destructive hover:bg-destructive/15 hover:text-destructive md:h-9 md:w-[70%] md:text-xs"
+                  className="h-11 w-[88%] mb-4 rounded-full border border-destructive/20 bg-destructive/10 text-sm font-semibold text-destructive hover:bg-destructive/15 hover:text-destructive md:h-9 md:w-[70%] md:text-xs"
                 >
                   {logoutMutation.isPending ? (
                     <Loader2 className="h-3 w-3 animate-spin md:h-3 md:w-3" />

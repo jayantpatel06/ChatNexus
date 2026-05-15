@@ -218,6 +218,10 @@ async function getBlockedUsers(userId: number) {
   return { users: await storage.getBlockedUsers(userId) };
 }
 
+async function getPendingFriendRequests(userId: number) {
+  return { requests: await storage.getPendingFriendRequestsForUser(userId) };
+}
+
 async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
   if (user.isGuest) {
     return {
@@ -576,6 +580,18 @@ async function getBlockedUsersController(
 ) {
   try {
     res.json(await getBlockedUsers(req.jwtUser!.userId));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getPendingFriendRequestsController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(await getPendingFriendRequests(req.jwtUser!.userId));
   } catch (error) {
     next(error);
   }
@@ -977,6 +993,7 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
   app.get("/api/users/history", jwtAuth, getConversationUsersController);
   app.get("/api/user/profile", jwtAuth, getSelfProfileController);
   app.get("/api/users/blocked", jwtAuth, getBlockedUsersController);
+  app.get("/api/friend-requests", jwtAuth, getPendingFriendRequestsController);
 
   app.get("/api/users/:userId", jwtAuth, async (req, res, next) => {
     try {

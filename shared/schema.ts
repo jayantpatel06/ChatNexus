@@ -151,6 +151,11 @@ export type FriendRequest = {
   respondedAt: Date | null;
 };
 
+export type FriendRequestWithUsers = FriendRequest & {
+  sender: User;
+  receiver: User;
+};
+
 export type UserBlock = {
   id: number;
   blockerId: number;

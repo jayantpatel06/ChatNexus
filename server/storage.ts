@@ -4,6 +4,7 @@ import type {
   DbUser,
   FriendRequest,
   FriendRequestStatus,
+  FriendRequestWithUsers,
   Friendship,
   GlobalMessageWithSender,
   InsertAttachment,
@@ -632,6 +633,32 @@ const friendRequestRepository = {
 
     return result.count;
   },
+
+  async getPendingForUser(userId: number): Promise<FriendRequestWithUsers[]> {
+    if (!prisma) return [];
+
+    const requests = await prisma.friendRequest.findMany({
+      where: {
+        status: "pending",
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        sender: {
+          select: publicUserSelect,
+        },
+        receiver: {
+          select: publicUserSelect,
+        },
+      },
+    });
+
+    return requests.map((request) => ({
+      ...mapFriendRequestRow(request as FriendRequest),
+      sender: request.sender,
+      receiver: request.receiver,
+    }));
+  },
 };
 
 const blockRepository = {
@@ -839,6 +866,7 @@ export interface IStorage {
     user1Id: number,
     user2Id: number,
   ): Promise<FriendRequest | undefined>;
+  getPendingFriendRequestsForUser(userId: number): Promise<FriendRequestWithUsers[]>;
   getFriendRequestById(id: number): Promise<FriendRequest | undefined>;
   createFriendRequest(
     senderId: number,
@@ -1687,6 +1715,12 @@ class DatabaseStorage implements IStorage {
     user2Id: number,
   ): Promise<FriendRequest | undefined> {
     return friendRequestRepository.getPendingBetweenUsers(user1Id, user2Id);
+  }
+
+  async getPendingFriendRequestsForUser(
+    userId: number,
+  ): Promise<FriendRequestWithUsers[]> {
+    return friendRequestRepository.getPendingForUser(userId);
   }
 
   async getFriendRequestById(id: number): Promise<FriendRequest | undefined> {

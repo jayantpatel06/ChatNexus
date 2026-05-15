@@ -6,6 +6,7 @@ import {
   type RefObject,
   type SetStateAction,
 } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import EmojiPicker, {
   type EmojiClickData,
   Theme as EmojiPickerTheme,
@@ -19,11 +20,14 @@ import {
   Send,
   Smile,
   SunMedium,
+  UserCheck,
+  UserPlus,
 } from "lucide-react";
-import type { User } from "@shared/schema";
-import type { Message } from "@shared/schema";
+import type { FriendRequest, Message, User } from "@shared/schema";
 import { BubbleAppendix, MessageBubble } from "@/chat/chat-message-components";
 import { GifPicker } from "@/chat/gif-picker";
+import { useAuth } from "@/providers/auth-provider";
+import { useSocket } from "@/providers/socket-provider";
 import { useThemeToggleState } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +37,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, readJsonResponse } from "@/lib/api-client";
+import { queryClient } from "@/lib/queryClient";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 
 export type RandomChatPartner = Pick<
@@ -48,6 +55,27 @@ export type RandomChatSocketMessage = {
 };
 
 export type RandomFooterActionState = "confirm" | "skip" | "start";
+
+type FriendRequestRecord = FriendRequest & {
+  createdAt: Date | string;
+  respondedAt: Date | string | null;
+};
+
+type FriendshipStatusResponse = {
+  isFriend: boolean;
+  friendship: unknown | null;
+  pendingRequest: FriendRequestRecord | null;
+  pendingDirection: "incoming" | "outgoing" | null;
+  isBlocked: boolean;
+  block: {
+    id: number;
+    blockerId: number;
+    blockedId: number;
+    createdAt: Date | string;
+  } | null;
+  blockedByMe: boolean;
+  blockedByUser: boolean;
+};
 
 type RandomChatAreaProps = {
   currentPartner: RandomChatPartner | null;
@@ -172,6 +200,9 @@ export function RandomChatArea({
     "emoji" | "gif"
   >("gif");
   const { isDark, toggleTheme } = useThemeToggleState();
+  const { user } = useAuth();
+  const { socket, refreshOnlineUsers } = useSocket();
+  const { toast } = useToast();
   const ThemeIcon = isDark ? SunMedium : MoonStar;
   const isComposerDisabled = !isChatActive;
   const footerActionLabel =
@@ -201,6 +232,227 @@ export function RandomChatArea({
         exit: { opacity: 0, y: 10 },
       };
   const isComposerPickerOpen = showEmojiPicker;
+
+  const friendshipStatusQuery = useQuery({
+    queryKey: ["friendship-status", currentPartner?.userId],
+    enabled: !!currentPartner?.userId && !!user && isChatActive,
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/users/${currentPartner!.userId}/friendship`,
+      );
+      return readJsonResponse<FriendshipStatusResponse>(res);
+    },
+    staleTime: 15_000,
+  });
+
+  const addFriendMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentPartner) {
+        throw new Error("No random chat partner connected");
+      }
+
+      const res = await apiRequest(
+        "POST",
+        `/api/users/${currentPartner.userId}/friendship`,
+      );
+      return readJsonResponse<FriendshipStatusResponse>(res);
+    },
+    onSuccess: (data) => {
+      if (!currentPartner) return;
+
+      queryClient.setQueryData(
+        ["friendship-status", currentPartner.userId],
+        data,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/friend-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/friends"],
+      });
+      void refreshOnlineUsers();
+      toast({
+        title: "Friend request sent",
+        description: `Waiting for ${currentPartner.username} to respond.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to send friend request",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const acceptFriendRequestMutation = useMutation({
+    mutationFn: async () => {
+      const requestId = friendshipStatusQuery.data?.pendingRequest?.id;
+      if (!requestId) {
+        throw new Error("No friend request to accept");
+      }
+
+      const res = await apiRequest(
+        "POST",
+        `/api/friend-requests/${requestId}/respond`,
+        { action: "accept" },
+      );
+      return readJsonResponse<{ friendshipStatus: FriendshipStatusResponse }>(
+        res,
+      );
+    },
+    onSuccess: (data) => {
+      if (!currentPartner) return;
+
+      queryClient.setQueryData(
+        ["friendship-status", currentPartner.userId],
+        data.friendshipStatus,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/friend-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/friends"],
+      });
+      void refreshOnlineUsers();
+      toast({
+        title: "Friend request accepted",
+        description: `You are now friends with ${currentPartner.username}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to accept friend request",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!socket || !currentPartner?.userId) {
+      return;
+    }
+
+    const isEventForPartner = (data: {
+      senderId?: number;
+      receiverId?: number;
+      userAId?: number;
+      userBId?: number;
+    }) =>
+      data.senderId === currentPartner.userId ||
+      data.receiverId === currentPartner.userId ||
+      data.userAId === currentPartner.userId ||
+      data.userBId === currentPartner.userId;
+
+    const refreshFriendshipStatus = (data: {
+      senderId?: number;
+      receiverId?: number;
+      userAId?: number;
+      userBId?: number;
+    }) => {
+      if (!isEventForPartner(data)) {
+        return;
+      }
+
+      void queryClient.invalidateQueries({
+        queryKey: ["friendship-status", currentPartner.userId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/friend-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/users/friends"],
+      });
+    };
+
+    socket.on("friend_request_updated", refreshFriendshipStatus);
+    socket.on("relationship_status_updated", refreshFriendshipStatus);
+
+    return () => {
+      socket.off("friend_request_updated", refreshFriendshipStatus);
+      socket.off("relationship_status_updated", refreshFriendshipStatus);
+    };
+  }, [currentPartner?.userId, socket]);
+
+  const isFriend = friendshipStatusQuery.data?.isFriend ?? false;
+  const pendingDirection = friendshipStatusQuery.data?.pendingDirection ?? null;
+  const isFriendshipBlocked = friendshipStatusQuery.data?.isBlocked ?? false;
+  const isFriendshipActionDisabled =
+    !currentPartner ||
+    !isChatActive ||
+    friendshipStatusQuery.isLoading ||
+    addFriendMutation.isPending ||
+    acceptFriendRequestMutation.isPending ||
+    isFriend ||
+    pendingDirection === "outgoing" ||
+    isFriendshipBlocked;
+  const friendButtonLabel = acceptFriendRequestMutation.isPending
+    ? "Accepting..."
+    : addFriendMutation.isPending
+    ? "Sending..."
+    : isFriend
+      ? "Friends"
+      : pendingDirection === "outgoing"
+        ? "Request Sent"
+        : pendingDirection === "incoming"
+          ? "Accept"
+          : "Add Friend";
+
+  const handleAddFriend = () => {
+    if (!currentPartner || !user) return;
+
+    if (isFriend) {
+      toast({
+        title: "Already friends",
+        description: `${currentPartner.username} is already in your friends list.`,
+      });
+      return;
+    }
+
+    if (user.isGuest) {
+      toast({
+        title: "Register required",
+        description: "Register an account to add friends.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (currentPartner.isGuest) {
+      toast({
+        title: "Guest account",
+        description: "Guest accounts cannot be added as friends.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isFriendshipBlocked) {
+      toast({
+        title: "Action unavailable",
+        description: "Friend requests are unavailable for this user.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (pendingDirection === "incoming") {
+      acceptFriendRequestMutation.mutate();
+      return;
+    }
+
+    if (pendingDirection === "outgoing") {
+      toast({
+        title: "Request already sent",
+        description: `Waiting for ${currentPartner.username} to respond.`,
+      });
+      return;
+    }
+
+    addFriendMutation.mutate();
+  };
 
   useEffect(() => {
     const handleDocumentKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -316,26 +568,51 @@ export function RandomChatArea({
               </h3>
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <div className="flex shrink-0 items-center gap-2">
+            {currentPartner && isChatActive ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                title="Random chat options"
-                aria-label="Random chat options"
-                data-testid="button-random-chat-options"
+                onClick={handleAddFriend}
+                disabled={isFriendshipActionDisabled}
+                title={friendButtonLabel}
+                aria-label={friendButtonLabel}
+                data-testid="button-random-add-friend"
+                className="h-9 rounded-full px-3 text-xs font-semibold"
               >
-                <MoreVertical className="h-5 w-5 text-muted-foreground" />
+                {isFriend ? (
+                  <UserCheck className="mr-1.5 h-4 w-4" />
+                ) : addFriendMutation.isPending ||
+                  acceptFriendRequestMutation.isPending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="mr-1.5 h-4 w-4" />
+                )}
+                <span className="max-w-[7rem] truncate">{friendButtonLabel}</span>
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={toggleTheme}>
-                <ThemeIcon className="mr-2 h-4 w-4" />
-                Change theme
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title="Random chat options"
+                  aria-label="Random chat options"
+                  data-testid="button-random-chat-options"
+                >
+                  <MoreVertical className="h-5 w-5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={toggleTheme}>
+                  <ThemeIcon className="mr-2 h-4 w-4" />
+                  Change theme
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div
