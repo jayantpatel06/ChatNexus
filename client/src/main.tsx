@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import "./styles/theme.css";
+import "./theme.css";
 import "./index.css";
 import "lenis/dist/lenis.css";
 import { initThemeFromStorage } from "@/lib/theme";

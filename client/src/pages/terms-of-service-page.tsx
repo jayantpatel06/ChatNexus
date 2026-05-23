@@ -1,6 +1,6 @@
 import LegalDocumentPage, {
   type LegalSection,
-} from "@/components/legal-document-page";
+} from "./legal-document-page";
 
 const SECTIONS: LegalSection[] = [
   {

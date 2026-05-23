@@ -103,7 +103,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
       "Use guest access for instant anonymous chat, explore global messaging, and create an account when you want a more persistent profile.",
     ],
     keywords:
-      "Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus",
+      "Omegle, chitchat, monkey app, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus, chat app, online chat rooms, meet new people, instant conversations, no signup chat, mobile chat, PWA chat, real-time messaging, privacy-first chat",
     indexable: true,
     changefreq: "daily",
     priority: "1.0",
@@ -262,7 +262,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     sourceFiles: ["client/src/pages/auth-page.tsx"],
   },
   {
-    path: "/dashboard",
+    path: "/direct",
     title: "Dashboard | ChatNexus",
     description: "Protected chat dashboard inside ChatNexus.",
     heading: "ChatNexus Dashboard",
@@ -271,22 +271,10 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     ],
     robots: NOINDEX_ROBOTS,
     indexable: false,
-    sourceFiles: ["client/src/pages/chat-dashboard-page.tsx"],
+    sourceFiles: ["client/src/features/direct/direct-page.tsx"],
   },
   {
-    path: "/history",
-    title: "History | ChatNexus",
-    description: "Protected conversation history inside ChatNexus.",
-    heading: "Chat History",
-    summary: [
-      "This area is part of the protected ChatNexus application experience.",
-    ],
-    robots: NOINDEX_ROBOTS,
-    indexable: false,
-    sourceFiles: ["client/src/pages/chat-history-page.tsx"],
-  },
-  {
-    path: "/global-chat",
+    path: "/global",
     title: "Global Chat | ChatNexus",
     description: "Protected global chat inside ChatNexus.",
     heading: "Global Chat",
@@ -295,10 +283,22 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     ],
     robots: NOINDEX_ROBOTS,
     indexable: false,
-    sourceFiles: ["client/src/pages/global-chat-page.tsx"],
+    sourceFiles: ["client/src/features/global/global-page.tsx"],
   },
   {
-    path: "/random-chat",
+    path: "/global/chat",
+    title: "Global Chat Room | ChatNexus",
+    description: "Protected live global chat room inside ChatNexus.",
+    heading: "Global Chat Room",
+    summary: [
+      "This area is part of the protected ChatNexus application experience.",
+    ],
+    robots: NOINDEX_ROBOTS,
+    indexable: false,
+    sourceFiles: ["client/src/features/global/global-chat-panel.tsx"],
+  },
+  {
+    path: "/random",
     title: "Random Chat | ChatNexus",
     description: "Protected random chat inside ChatNexus.",
     heading: "Random Chat",
@@ -307,7 +307,19 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     ],
     robots: NOINDEX_ROBOTS,
     indexable: false,
-    sourceFiles: ["client/src/pages/random-chat-page.tsx"],
+    sourceFiles: ["client/src/features/random/random-page.tsx"],
+  },
+  {
+    path: "/settings",
+    title: "Settings | ChatNexus",
+    description: "Protected account settings inside ChatNexus.",
+    heading: "ChatNexus Settings",
+    summary: [
+      "This area is part of the protected ChatNexus application experience.",
+    ],
+    robots: NOINDEX_ROBOTS,
+    indexable: false,
+    sourceFiles: ["client/src/features/settings/settings-page.tsx"],
   },
 ] as const;
 

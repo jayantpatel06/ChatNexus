@@ -4,11 +4,11 @@ import { PageLoader } from "@/components/page-loader";
 import { getAppLenis } from "@/lib/lenis";
 
 const LandingPage = lazy(() => import("@/pages/landing-page"));
-const ChatDashboard = lazy(() => import("@/pages/chat-dashboard-page"));
-const GlobalChat = lazy(() => import("@/chat/global-chat-sidebar"));
-const GlobalChatRoom = lazy(() => import("@/chat/global-chat-room-panel"));
-const RandomChatPage = lazy(() => import("@/pages/random-chat-page"));
-const SettingsPage = lazy(() => import("@/pages/settings-page"));
+const ChatDashboard = lazy(() => import("@/features/direct/direct-page"));
+const GlobalChat = lazy(() => import("@/features/global/global-page"));
+const GlobalChatRoom = lazy(() => import("@/features/global/global-chat-panel"));
+const RandomChatPage = lazy(() => import("@/features/random/random-page"));
+const SettingsPage = lazy(() => import("@/features/settings/settings-page"));
 const AuthPage = lazy(() => import("@/pages/auth-page"));
 const HelpCenterPage = lazy(() => import("@/pages/help-center-page"));
 const FeaturesPage = lazy(() => import("@/pages/features-page"));
@@ -91,16 +91,16 @@ export function AppRouter() {
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={LandingPage} />
-          <Route path="/dashboard">
+          <Route path="/direct">
             <ProtectedRouteBoundary component={ChatDashboard} />
           </Route>
-          <Route path="/global-chat/room">
+          <Route path="/global/chat">
             <ProtectedRouteBoundary component={GlobalChatRoom} />
           </Route>
-          <Route path="/global-chat">
+          <Route path="/global">
             <ProtectedRouteBoundary component={GlobalChat} />
           </Route>
-          <Route path="/random-chat">
+          <Route path="/random">
             <ProtectedRouteBoundary component={RandomChatPage} />
           </Route>
           <Route path="/settings">

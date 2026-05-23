@@ -29,7 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
-import { NewMessageIndicator } from "./new-message-indicator";
+import { NewMessageIndicator } from "@/features/shared/new-message-indicator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useActiveChat } from "./use-active-chat";
 import { useSocket } from "@/providers/socket-provider";
@@ -68,13 +68,13 @@ import EmojiPicker, {
   EmojiClickData,
   Theme as EmojiPickerTheme,
 } from "emoji-picker-react";
-import { GifPicker } from "./gif-picker";
+import { GifPicker } from "@/features/shared/gif-picker";
 import {
   getReplyPreviewText,
   stripConversationAttachments,
-} from "./chat-message-utils";
-import { ChatDesktopShellPlaceholder } from "./chat-desktop-shell-placeholder";
-import { FriendRequestCard, MessageBubble } from "./chat-message-components";
+} from "@/features/shared/chat-message-utils";
+import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
+import { FriendRequestCard, MessageBubble } from "@/features/shared/chat-message-components";
 import { useThemeToggleState } from "@/components/site-nav";
 
 const getMessageHistoryQueryKey = (userId: number) =>

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Message, MessageReactionWithUser } from "@shared/schema";
-import { stripConversationAttachments } from "@/chat/chat-message-utils";
+import { stripConversationAttachments } from "@/features/shared/chat-message-utils";
 import { useAuth } from "@/providers/auth-provider";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";

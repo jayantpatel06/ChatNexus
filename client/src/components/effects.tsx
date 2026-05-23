@@ -1,4 +1,4 @@
-import "@/styles/effects.css";
+import "./effects.css";
 import { MessageCircle } from "lucide-react";
 import {
   useEffect,

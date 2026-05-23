@@ -130,7 +130,7 @@ export async function sendFriendMessagePushNotifications(args: {
   const payload: PushPayload = {
     title: args.senderUsername,
     body: args.groupedBody ?? getMessagePreviewText(args.message),
-    url: `${getSiteUrl()}/dashboard?user=${args.message.senderId}`,
+    url: `${getSiteUrl()}/direct?user=${args.message.senderId}`,
     tag: `dm-${args.message.senderId}-${args.message.receiverId}`,
     senderId: args.message.senderId,
   };

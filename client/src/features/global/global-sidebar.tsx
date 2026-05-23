@@ -5,9 +5,6 @@ import { format } from "date-fns";
 import type { GlobalMessageWithSender, User } from "@shared/schema";
 import { useLocation } from "wouter";
 import { navigateWithinAppShell } from "@/app/app-shell-navigation";
-import { GlobalChatRoomPanel } from "@/chat/global-chat-room-panel";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { Seo } from "@/components/seo";
 import { useAuth } from "@/providers/auth-provider";
 import { useSocket } from "@/providers/socket-provider";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,9 +13,9 @@ import { Button } from "@/components/ui/button";
 import {
   ChatNavigationMenu,
   type ChatNavigationItem,
-} from "@/chat/chat-navigation-menu";
-import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
-import { ChatPageHeader } from "@/chat/chat-page-header";
+} from "@/features/shared/chat-navigation-menu";
+import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
+import { ChatPageHeader } from "@/features/shared/chat-page-header";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 
 const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages?limit=200"] as const;
@@ -104,13 +101,13 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
   }, [participants, searchTerm, user?.userId]);
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
-    if (item === "chat" && location !== "/dashboard") {
-      navigateWithinAppShell(location, "/dashboard", setLocation);
+    if (item === "chat" && location !== "/direct") {
+      navigateWithinAppShell(location, "/direct", setLocation);
       return;
     }
 
-    if (item === "random" && location !== "/random-chat") {
-      navigateWithinAppShell(location, "/random-chat", setLocation);
+    if (item === "random" && location !== "/random") {
+      navigateWithinAppShell(location, "/random", setLocation);
       return;
     }
 
@@ -124,8 +121,8 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
       return;
     }
 
-    if (location !== "/global-chat") {
-      navigateWithinAppShell(location, "/global-chat", setLocation);
+    if (location !== "/global") {
+      navigateWithinAppShell(location, "/global", setLocation);
     }
   };
 
@@ -134,7 +131,7 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
       PENDING_PRIVATE_CHAT_KEY,
       JSON.stringify(selectedUser),
     );
-    navigateWithinAppShell(location, "/dashboard", setLocation);
+    navigateWithinAppShell(location, "/direct", setLocation);
   };
 
   return (
@@ -144,7 +141,6 @@ export function GlobalChatSidebar({ onEnterRoom }: GlobalChatSidebarProps) {
           <ChatNavigationMenu
             activeItem="global"
             onSelect={handleNavigationSelect}
-            variant="rail"
             className="h-full"
           />
         </div>
@@ -303,64 +299,4 @@ function formatParticipantTimestamp(timestamp: unknown): string {
   }
 
   return format(parsed, "MMM d");
-}
-
-export default function GlobalChatPage() {
-  const [location, setLocation] = useLocation();
-  const isMobile = useIsMobile();
-  const [showDesktopRoom, setShowDesktopRoom] = useState(false);
-
-  const openGlobalRoom = () => {
-    if (!isMobile) {
-      setShowDesktopRoom(true);
-      return;
-    }
-
-    if (location !== "/global-chat/room") {
-      setLocation("/global-chat/room");
-    }
-  };
-
-  const closeDesktopRoom = () => {
-    setShowDesktopRoom(false);
-  };
-
-  if (isMobile) {
-    return (
-      <>
-        <Seo
-          title="Global Chat | ChatNexus"
-          description="Discover who is active in the ChatNexus global room."
-          path="/global-chat"
-          robots="noindex, nofollow"
-        />
-        <div className="safe-top-shell flex h-[100dvh] flex-col bg-background text-foreground">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <GlobalChatSidebar onEnterRoom={openGlobalRoom} />
-          </div>
-          <MobileBottomNav />
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <Seo
-        title="Global Chat | ChatNexus"
-        description="Discover who is active in the ChatNexus global room."
-        path="/global-chat"
-        robots="noindex, nofollow"
-      />
-      <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <GlobalChatSidebar onEnterRoom={openGlobalRoom} />
-
-        {showDesktopRoom ? (
-          <GlobalChatRoomPanel isMobile={false} onBack={closeDesktopRoom} />
-        ) : (
-          <ChatDesktopShellPlaceholder enableCommandCenter />
-        )}
-      </div>
-    </>
-  );
 }

@@ -20,14 +20,14 @@ import type { GlobalMessageWithSender } from "@shared/schema";
 import {
   BubbleAppendix,
   MessageContent,
-} from "@/chat/chat-message-components";
-import { GifPicker } from "@/chat/gif-picker";
+} from "@/features/shared/chat-message-components";
+import { GifPicker } from "@/features/shared/gif-picker";
 import {
   isStandaloneMediaUrl,
   sanitizeExternalUrl,
-} from "@/chat/chat-message-utils";
+} from "@/features/shared/chat-message-utils";
 import { useThemeToggleState } from "@/components/site-nav";
-import { NewMessageIndicator } from "@/chat/new-message-indicator";
+import { NewMessageIndicator } from "@/features/shared/new-message-indicator";
 import { Seo } from "@/components/seo";
 import { Button } from "@/components/ui/button";
 import {
@@ -824,7 +824,7 @@ export default function GlobalChatRoomPage() {
   const isMobile = useIsMobile();
 
   const handleBack = () => {
-    setLocation("/global-chat");
+    setLocation("/global");
   };
 
   return (
@@ -832,7 +832,7 @@ export default function GlobalChatRoomPage() {
       <Seo
         title="Global Chat Room | ChatNexus"
         description="Live global chat room inside ChatNexus."
-        path="/global-chat/room"
+        path="/global/chat"
         robots="noindex, nofollow"
       />
       <div

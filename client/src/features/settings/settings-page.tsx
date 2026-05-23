@@ -1,7 +1,7 @@
-import { SettingsSidebar } from "@/chat/settings-sidebar";
-import { ChatDesktopShellPlaceholder } from "@/chat/chat-desktop-shell-placeholder";
+import { SettingsSidebar } from "./settings-sidebar";
+import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { MobileBottomNav } from "@/features/shared/mobile-bottom-nav";
 import { Seo } from "@/components/seo";
 
 export default function SettingsPage() {

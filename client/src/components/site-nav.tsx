@@ -354,9 +354,9 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
     };
   }, [isLanding]);
 
-  const dest = hasSession ? "/dashboard" : "/auth";
+  const dest = hasSession ? "/direct" : "/auth";
   const mobileMenuItems = hasSession
-    ? [{ label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard }]
+    ? [{ label: "Dashboard", href: "/direct", Icon: LayoutDashboard }]
     : [
         { label: "Login", href: "/auth?mode=login", Icon: LogIn },
         { label: "Sign Up", href: "/auth?mode=register", Icon: UserPlus },

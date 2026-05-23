@@ -62,7 +62,7 @@ export async function enqueueAndDeliver(args: {
   const payload = {
     title: args.senderUsername,
     body,
-    url: `/dashboard?user=${args.senderId}`,
+    url: `/direct?user=${args.senderId}`,
     tag: `dm-${args.senderId}-${args.receiverId}`,
     senderId: args.senderId,
   };

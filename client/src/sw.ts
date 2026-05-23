@@ -16,7 +16,7 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
 function toNotificationUrl(rawUrl: unknown) {
-  const fallbackUrl = "/dashboard";
+  const fallbackUrl = "/direct";
   const resolvedUrl =
     typeof rawUrl === "string" && rawUrl.trim().length > 0
       ? rawUrl
@@ -58,7 +58,7 @@ self.addEventListener("push", (event) => {
         badge: "/assets/images/logo-64.png",
         tag: payload.tag ?? "chatnexus-message",
         data: {
-          url: payload.url ?? "/dashboard",
+          url: payload.url ?? "/direct",
           senderId: payload.senderId,
         },
       } as any);

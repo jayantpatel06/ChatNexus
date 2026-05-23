@@ -24,8 +24,8 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { FriendRequest, Message, User } from "@shared/schema";
-import { BubbleAppendix, MessageBubble } from "@/chat/chat-message-components";
-import { GifPicker } from "@/chat/gif-picker";
+import { BubbleAppendix, MessageBubble } from "@/features/shared/chat-message-components";
+import { GifPicker } from "@/features/shared/gif-picker";
 import { useAuth } from "@/providers/auth-provider";
 import { useSocket } from "@/providers/socket-provider";
 import { useThemeToggleState } from "@/components/site-nav";

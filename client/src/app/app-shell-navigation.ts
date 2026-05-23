@@ -3,9 +3,9 @@ type AppShellNavigate = (
   options?: { replace?: boolean; state?: unknown },
 ) => void;
 
-const DASHBOARD_ROUTE = "/dashboard";
-const GLOBAL_ROUTE = "/global-chat";
-const RANDOM_ROUTE = "/random-chat";
+const DASHBOARD_ROUTE = "/direct";
+const GLOBAL_ROUTE = "/global";
+const RANDOM_ROUTE = "/random";
 const SETTINGS_ROUTE = "/settings";
 const APP_SHELL_BASE_STATE_KEY = "chatnexusAppShellBaseRoute";
 

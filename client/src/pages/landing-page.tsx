@@ -175,8 +175,8 @@ export default function LandingPage() {
   const faqRef = useReveal(0.12);
   const footerRef = useReveal(0.15);
 
-  const dest = hasSession ? "/dashboard" : "/auth";
-  const guestDest = hasSession ? "/dashboard" : "/auth?mode=guest";
+  const dest = hasSession ? "/direct" : "/auth";
+  const guestDest = hasSession ? "/direct" : "/auth?mode=guest";
 
   useEffect(() => {
     const syncStoredSession = () => {
@@ -193,7 +193,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (hasSession) {
-      setLocation("/dashboard");
+      setLocation("/direct");
     }
   }, [hasSession, setLocation]);
 

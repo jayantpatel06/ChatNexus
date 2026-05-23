@@ -108,11 +108,11 @@ const getInitialAuthMode = (): AuthMode => {
   return "login";
 };
 
-const DEFAULT_POST_AUTH_PATH = "/dashboard";
+const DEFAULT_POST_AUTH_PATH = "/direct";
 const ALLOWED_POST_AUTH_PATHS = new Set([
-  "/dashboard",
-  "/global-chat",
-  "/random-chat",
+  "/direct",
+  "/global",
+  "/random",
   "/settings",
 ]);
 

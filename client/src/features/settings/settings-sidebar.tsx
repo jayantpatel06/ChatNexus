@@ -11,7 +11,7 @@ import {
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
 } from "@/lib/push-notifications";
-import { ChatPageHeader } from "@/chat/chat-page-header";
+import { ChatPageHeader } from "@/features/shared/chat-page-header";
 import { useSocket } from "@/providers/socket-provider";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggleButton2 } from "@/components/site-nav";
@@ -40,7 +40,7 @@ import {
 import {
   ChatNavigationMenu,
   type ChatNavigationItem,
-} from "@/chat/chat-navigation-menu";
+} from "@/features/shared/chat-navigation-menu";
 
 type SettingsSection =
   | "profile"
@@ -457,14 +457,14 @@ export function SettingsSidebar() {
   };
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
-    if (item === "random" && location !== "/random-chat") {
-      navigateWithinAppShell(location, "/random-chat", setLocation);
+    if (item === "random" && location !== "/random") {
+      navigateWithinAppShell(location, "/random", setLocation);
     }
-    if (item === "global" && location !== "/global-chat") {
-      navigateWithinAppShell(location, "/global-chat", setLocation);
+    if (item === "global" && location !== "/global") {
+      navigateWithinAppShell(location, "/global", setLocation);
     }
-    if (item === "chat" && location !== "/dashboard") {
-      navigateWithinAppShell(location, "/dashboard", setLocation);
+    if (item === "chat" && location !== "/direct") {
+      navigateWithinAppShell(location, "/direct", setLocation);
     }
     if (item === "settings" && location !== "/settings") {
       navigateWithinAppShell(location, "/settings", setLocation);
@@ -930,7 +930,6 @@ export function SettingsSidebar() {
           <ChatNavigationMenu
             activeItem="settings"
             onSelect={handleNavigationSelect}
-            variant="rail"
             className="h-full"
           />
         </div>

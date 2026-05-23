@@ -1,23 +1,16 @@
 import { useEffect, useState } from "react";
 import { useSearch } from "wouter";
-import { ChatArea } from "@/chat/chat-area";
-import { ActiveChatProvider, useActiveChat } from "@/chat/use-active-chat";
-import { UsersSidebar } from "@/chat/users-sidebar";
+import { ChatArea } from "./direct-chat-panel";
+import { ActiveChatProvider, useActiveChat } from "./use-active-chat";
+import { UsersSidebar } from "./direct-sidebar";
 import { Seo } from "@/components/seo";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { MobileBottomNav } from "@/features/shared/mobile-bottom-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { User } from "@shared/schema";
 
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
 export type PrivateChatPageMode = "chat" | "history";
-
-type PrivateChatPageShellProps = {
-  title: string;
-  description: string;
-  path: string;
-  testId: string;
-};
 
 function parsePublicUser(value: unknown): User | null {
   if (!value || typeof value !== "object") {
@@ -58,12 +51,7 @@ function parsePublicUser(value: unknown): User | null {
   } as User;
 }
 
-export function PrivateChatPageShell({
-  title,
-  description,
-  path,
-  testId,
-}: PrivateChatPageShellProps) {
+export default function ChatDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [mode, setMode] = useState<PrivateChatPageMode>("chat");
 
@@ -77,13 +65,9 @@ export function PrivateChatPageShell({
 
   return (
     <ActiveChatProvider>
-      <PrivateChatPageShellContent
+      <ChatDashboardContent
         mode={mode}
         onModeChange={setMode}
-        title={title}
-        description={description}
-        path={path}
-        testId={testId}
         selectedUser={selectedUser}
         onUserSelect={handleUserSelect}
         onBack={handleBackToSidebar}
@@ -92,17 +76,13 @@ export function PrivateChatPageShell({
   );
 }
 
-function PrivateChatPageShellContent({
+function ChatDashboardContent({
   mode,
   onModeChange,
-  title,
-  description,
-  path,
-  testId,
   selectedUser,
   onUserSelect,
   onBack,
-}: PrivateChatPageShellProps & {
+}: {
   mode: PrivateChatPageMode;
   onModeChange: (mode: PrivateChatPageMode) => void;
   selectedUser: User | null;
@@ -173,14 +153,14 @@ function PrivateChatPageShellContent({
       return (
         <>
           <Seo
-            title={title}
-            description={description}
-            path={path}
+            title="Dashboard | ChatNexus"
+            description="Protected chat dashboard inside ChatNexus."
+            path="/direct"
             robots="noindex, nofollow"
           />
           <div
             className="safe-top-shell flex h-[100dvh] flex-col overflow-hidden bg-background"
-            data-testid={testId}
+            data-testid="chat-dashboard"
           >
             <ChatArea
               selectedUser={selectedUser}
@@ -195,12 +175,12 @@ function PrivateChatPageShellContent({
     return (
       <>
         <Seo
-          title={title}
-          description={description}
-          path={path}
+          title="Dashboard | ChatNexus"
+          description="Protected chat dashboard inside ChatNexus."
+          path="/direct"
           robots="noindex, nofollow"
         />
-        <div className="safe-top-shell flex h-[100dvh] flex-col bg-background" data-testid={testId}>
+        <div className="safe-top-shell flex h-[100dvh] flex-col bg-background" data-testid="chat-dashboard">
           <div className="flex-1 min-h-0 overflow-hidden">
             <UsersSidebar
               selectedUser={selectedUser}
@@ -218,14 +198,14 @@ function PrivateChatPageShellContent({
   return (
     <>
       <Seo
-        title={title}
-        description={description}
-        path={path}
+        title="Dashboard | ChatNexus"
+        description="Protected chat dashboard inside ChatNexus."
+        path="/direct"
         robots="noindex, nofollow"
       />
       <div
         className="flex h-screen overflow-hidden bg-background text-foreground"
-        data-testid={testId}
+        data-testid="chat-dashboard"
       >
         <UsersSidebar
           selectedUser={selectedUser}

@@ -9,10 +9,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChatPageHeader } from "@/chat/chat-page-header";
+import { ChatPageHeader } from "@/features/shared/chat-page-header";
 import type { User } from "@shared/schema";
 import { apiRequest, readJsonResponse } from "@/lib/api-client";
-import { getSidebarMessagePreview } from "@/chat/chat-message-utils";
+import { getSidebarMessagePreview } from "@/features/shared/chat-message-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
@@ -32,7 +32,7 @@ import { useSocket } from "@/providers/socket-provider";
 import {
   ChatNavigationMenu,
   type ChatNavigationItem,
-} from "@/chat/chat-navigation-menu";
+} from "@/features/shared/chat-navigation-menu";
 
 // Extended user type with online status tracking
 interface CachedUser extends User {
@@ -408,9 +408,9 @@ export function UsersSidebar({
     !user?.isGuest &&
     friendUsersQuery.isPending;
   const activeNavigationItem: ChatNavigationItem =
-    location.startsWith("/global-chat")
+    location.startsWith("/global")
       ? "global"
-      : location === "/random-chat"
+      : location === "/random"
           ? "random"
           : "chat";
 
@@ -449,8 +449,8 @@ export function UsersSidebar({
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
     if (item === "random") {
-      if (location !== "/random-chat") {
-        navigateWithinAppShell(location, "/random-chat", setLocation);
+      if (location !== "/random") {
+        navigateWithinAppShell(location, "/random", setLocation);
       }
       return;
     }
@@ -468,14 +468,14 @@ export function UsersSidebar({
     }
 
     if (item === "global") {
-      if (location !== "/global-chat") {
-        navigateWithinAppShell(location, "/global-chat", setLocation);
+      if (location !== "/global") {
+        navigateWithinAppShell(location, "/global", setLocation);
       }
       return;
     }
 
-    if (location !== "/dashboard") {
-      navigateWithinAppShell(location, "/dashboard", setLocation);
+    if (location !== "/direct") {
+      navigateWithinAppShell(location, "/direct", setLocation);
     }
   };
 
@@ -581,7 +581,6 @@ export function UsersSidebar({
           <ChatNavigationMenu
             activeItem={activeNavigationItem}
             onSelect={handleNavigationSelect}
-            variant="rail"
             className="h-full"
           />
         </div>
