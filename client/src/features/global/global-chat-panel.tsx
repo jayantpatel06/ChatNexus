@@ -26,7 +26,7 @@ import {
   isStandaloneMediaUrl,
   sanitizeExternalUrl,
 } from "@/features/shared/chat-message-utils";
-import { useThemeToggleState } from "@/components/site-nav";
+import { useThemeToggleState } from "@/components/theme-toggle";
 import { NewMessageIndicator } from "@/features/shared/new-message-indicator";
 import { Seo } from "@/components/seo";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { useSocket } from "@/providers/socket-provider";
 import { useLocation } from "wouter";
 
-const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages"] as const;
+export const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages?limit=200"] as const;
 
 type GlobalChatRoomPanelProps = {
   isMobile: boolean;

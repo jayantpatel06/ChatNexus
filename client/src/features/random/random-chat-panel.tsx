@@ -28,7 +28,7 @@ import { BubbleAppendix, MessageBubble } from "@/features/shared/chat-message-co
 import { GifPicker } from "@/features/shared/gif-picker";
 import { useAuth } from "@/providers/auth-provider";
 import { useSocket } from "@/providers/socket-provider";
-import { useThemeToggleState } from "@/components/site-nav";
+import { useThemeToggleState } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

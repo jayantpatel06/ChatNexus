@@ -17,8 +17,8 @@ import {
 import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
 import { ChatPageHeader } from "@/features/shared/chat-page-header";
 import { cn, getAvatarColor, getUserInitials } from "@/lib/utils";
+import { GLOBAL_MESSAGES_QUERY_KEY } from "./global-chat-panel";
 
-const GLOBAL_MESSAGES_QUERY_KEY = ["/api/global-messages?limit=200"] as const;
 const PENDING_PRIVATE_CHAT_KEY = "chatnexus_pending_private_chat";
 
 type GlobalParticipant = {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { LogOut, MoonStar, MoreVertical, SunMedium } from "lucide-react";
-import { useThemeToggleState } from "@/components/site-nav";
+import { useThemeToggleState } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

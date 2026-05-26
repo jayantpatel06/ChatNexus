@@ -75,7 +75,7 @@ import {
 } from "@/features/shared/chat-message-utils";
 import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
 import { FriendRequestCard, MessageBubble } from "@/features/shared/chat-message-components";
-import { useThemeToggleState } from "@/components/site-nav";
+import { useThemeToggleState } from "@/components/theme-toggle";
 
 const getMessageHistoryQueryKey = (userId: number) =>
   ["/api/messages/history", userId] as const;
