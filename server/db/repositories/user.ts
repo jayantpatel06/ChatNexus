@@ -125,4 +125,84 @@ export const userRepository = {
       return [];
     }
   },
+
+  async deleteUser(id: number): Promise<{
+    conversationPartnerIds: number[];
+    attachments: Array<{ url: string }>;
+  }> {
+    if (!prisma) return { conversationPartnerIds: [], attachments: [] };
+
+    const { messageRepository } = await import("../message");
+
+    const [conversationPartnerIds, messages] = await Promise.all([
+      messageRepository.getConversationPartners(id),
+      prisma.message.findMany({
+        where: {
+          OR: [{ senderId: id }, { receiverId: id }],
+        },
+        select: {
+          msgId: true,
+          attachments: true,
+        },
+      }),
+    ]);
+
+    const messageIds = messages.map((message) => message.msgId);
+    const attachments = messages.flatMap((message) => message.attachments);
+
+    await prisma.$transaction(async (tx) => {
+      if (messageIds.length > 0) {
+        await tx.attachment.deleteMany({
+          where: {
+            messageId: { in: messageIds },
+          },
+        });
+      }
+
+      await tx.messageReaction.deleteMany({
+        where:
+          messageIds.length > 0
+            ? {
+                OR: [{ messageId: { in: messageIds } }, { userId: id }],
+              }
+            : { userId: id },
+      });
+
+      if (messageIds.length > 0) {
+        await tx.message.deleteMany({
+          where: {
+            msgId: { in: messageIds },
+          },
+        });
+      }
+
+      await tx.globalMessage.deleteMany({
+        where: { senderId: id },
+      });
+
+      await tx.friendRequest.deleteMany({
+        where: {
+          OR: [{ senderId: id }, { receiverId: id }],
+        },
+      });
+
+      await tx.friendship.deleteMany({
+        where: {
+          OR: [{ userId1: id }, { userId2: id }],
+        },
+      });
+
+      await tx.userBlock.deleteMany({
+        where: {
+          OR: [{ blockerId: id }, { blockedId: id }],
+        },
+      });
+
+      await tx.user.deleteMany({
+        where: { userId: id },
+      });
+    });
+
+    return { conversationPartnerIds, attachments };
+  },
 };

@@ -25,10 +25,11 @@ import path from "path";
 import { createClient, type RedisClientType } from "redis";
 import { prisma } from "./db/prisma";
 import {
-  conversationMessageInclude,
   getConversationId,
   messageRepository,
-  publicUserSelect,
+  type ConversationMessageMeta,
+  type ConversationReactionSync,
+  type ConversationDeleteSync,
 } from "./db/message";
 import { sortUsersByPresence } from "./lib/user-utils";
 
@@ -45,6 +46,7 @@ import {
   type BlockPairState,
   type DirectionalBlockState,
 } from "./db/repositories/block";
+import { notificationRepository } from "./db/repositories/notification";
 
 
 const CacheKeys = {
@@ -90,24 +92,6 @@ async function initializeCache(): Promise<void> {
 }
 
 initializeCache();
-
-type ConversationMessageMeta = Pick<
-  Message,
-  "msgId" | "senderId" | "receiverId" | "deletedAt"
->;
-
-type ConversationReactionSync = {
-  messageId: number;
-  senderId: number;
-  receiverId: number;
-  reactions: MessageReactionWithUser[];
-};
-
-type ConversationDeleteSync = {
-  messageId: number;
-  senderId: number;
-  receiverId: number;
-};
 
 export interface IStorage {
   getUser(id: number): Promise<DbUser | undefined>;
@@ -239,6 +223,8 @@ export interface IStorage {
 
 
 class DatabaseStorage implements IStorage {
+  // ── File System Helpers ─────────────────────────────────────────────
+
   private async deleteAttachmentFiles(attachments: Attachment[]): Promise<void> {
     await Promise.allSettled(
       attachments.map(async (attachment) => {
@@ -258,6 +244,8 @@ class DatabaseStorage implements IStorage {
       }),
     );
   }
+
+  // ── Cache Helpers ───────────────────────────────────────────────────
 
   private async invalidateConversationCaches(
     user1Id: number,
@@ -284,22 +272,27 @@ class DatabaseStorage implements IStorage {
     }
   }
 
-  private async getConversationMessageRecord(
-    messageId: number,
-    userId: number,
-  ): Promise<Message | undefined> {
-    if (!prisma) return undefined;
+  private async updateMessageCaches(message: Message): Promise<void> {
+    if (!cacheClient) return;
 
-    const message = await prisma.message.findFirst({
-      where: {
-        msgId: messageId,
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-      include: conversationMessageInclude,
+    const { senderId, receiverId, conversationId } = message;
+    if (!senderId || !receiverId) return;
+
+    const convId = conversationId || getConversationId(senderId, receiverId);
+
+    const lastKey = CacheKeys.conversationLast(convId);
+    await cacheClient.set(lastKey, JSON.stringify(message), {
+      EX: CacheTTL.LAST_MESSAGE,
     });
 
-    return message ?? undefined;
+    const unreadKey = CacheKeys.conversationUnread(convId, receiverId);
+    await cacheClient.incr(unreadKey);
+
+    const dmCacheKey = CacheKeys.conversation(senderId, receiverId);
+    await cacheClient.del(dmCacheKey);
   }
+
+  // ── User Methods ────────────────────────────────────────────────────
 
   async getUser(id: number): Promise<DbUser | undefined> {
     return userRepository.getById(id);
@@ -318,81 +311,10 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: number): Promise<void> {
-    if (!prisma) {
-      return;
-    }
-
-    const [conversationPartnerIds, messages] = await Promise.all([
-      messageRepository.getConversationPartners(id),
-      prisma.message.findMany({
-        where: {
-          OR: [{ senderId: id }, { receiverId: id }],
-        },
-        select: {
-          msgId: true,
-          attachments: true,
-        },
-      }),
-    ]);
-
-    const messageIds = messages.map((message) => message.msgId);
-    const attachments = messages.flatMap((message) => message.attachments);
-
-    await prisma.$transaction(async (tx) => {
-      if (messageIds.length > 0) {
-        await tx.attachment.deleteMany({
-          where: {
-            messageId: { in: messageIds },
-          },
-        });
-      }
-
-      await tx.messageReaction.deleteMany({
-        where:
-          messageIds.length > 0
-            ? {
-                OR: [{ messageId: { in: messageIds } }, { userId: id }],
-              }
-            : { userId: id },
-      });
-
-      if (messageIds.length > 0) {
-        await tx.message.deleteMany({
-          where: {
-            msgId: { in: messageIds },
-          },
-        });
-      }
-
-      await tx.globalMessage.deleteMany({
-        where: { senderId: id },
-      });
-
-      await tx.friendRequest.deleteMany({
-        where: {
-          OR: [{ senderId: id }, { receiverId: id }],
-        },
-      });
-
-      await tx.friendship.deleteMany({
-        where: {
-          OR: [{ userId1: id }, { userId2: id }],
-        },
-      });
-
-      await tx.userBlock.deleteMany({
-        where: {
-          OR: [{ blockerId: id }, { blockedId: id }],
-        },
-      });
-
-      await tx.user.deleteMany({
-        where: { userId: id },
-      });
-    });
+    const { conversationPartnerIds, attachments } = await userRepository.deleteUser(id);
 
     if (attachments.length > 0) {
-      await this.deleteAttachmentFiles(attachments);
+      await this.deleteAttachmentFiles(attachments as Attachment[]);
     }
 
     await Promise.allSettled(
@@ -467,6 +389,8 @@ class DatabaseStorage implements IStorage {
     return sortUsersByPresence(users);
   }
 
+  // ── Message Methods ─────────────────────────────────────────────────
+
   async createMessage(message: InsertMessage): Promise<Message> {
     const createdMessage = await messageRepository.create(message);
 
@@ -482,36 +406,11 @@ class DatabaseStorage implements IStorage {
     attachment?: Omit<InsertAttachment, "messageId">,
     replyTo?: MessageReplyPreview | null,
   ): Promise<Message & { attachments: Attachment[] }> {
-    if (!prisma) throw new Error("Database not initialized");
-
-    const createdMessage = attachment
-      ? await prisma.message.create({
-          data: {
-            ...message,
-            attachments: {
-              create: attachment,
-            },
-          },
-          include: {
-            attachments: true,
-          },
-        })
-      : await prisma.message.create({
-          data: message,
-        });
-
-    const normalizedMessage: Message & { attachments: Attachment[] } = {
-      ...createdMessage,
-      attachments: attachment
-        ? (createdMessage as typeof createdMessage & { attachments: Attachment[] })
-            .attachments
-        : [],
-      reactions: [],
-      replyTo: replyTo ?? null,
-      replyToId: createdMessage.replyToId ?? null,
-      editedAt: createdMessage.editedAt ?? null,
-      deletedAt: createdMessage.deletedAt ?? null,
-    };
+    const normalizedMessage = await messageRepository.createMessageWithAttachments(
+      message,
+      attachment,
+      replyTo,
+    );
 
     this.updateMessageCaches(normalizedMessage).catch((err) =>
       console.error("Cache update error:", err),
@@ -524,208 +423,71 @@ class DatabaseStorage implements IStorage {
     messageId: number,
     userId: number,
   ): Promise<Message | undefined> {
-    return this.getConversationMessageRecord(messageId, userId);
+    return messageRepository.getConversationMessageRecord(messageId, userId);
   }
 
   async getConversationReplyPreview(
     messageId: number,
     userId: number,
   ): Promise<MessageReplyPreview | undefined> {
-    if (!prisma) return undefined;
-
-    const replyPreview = await prisma.message.findFirst({
-      where: {
-        msgId: messageId,
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-      select: {
-        msgId: true,
-        senderId: true,
-        message: true,
-        deletedAt: true,
-        sender: {
-          select: publicUserSelect,
-        },
-      },
-    });
-
-    return replyPreview ?? undefined;
+    return messageRepository.getConversationReplyPreview(messageId, userId);
   }
 
   async getConversationMessageMeta(
     messageId: number,
     userId: number,
   ): Promise<ConversationMessageMeta | undefined> {
-    if (!prisma) return undefined;
-
-    const message = await prisma.message.findFirst({
-      where: {
-        msgId: messageId,
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-      select: {
-        msgId: true,
-        senderId: true,
-        receiverId: true,
-        deletedAt: true,
-      },
-    });
-
-    return message ?? undefined;
+    return messageRepository.getConversationMessageMeta(messageId, userId);
   }
 
   async updateConversationMessage(
     messageId: number,
     message: string,
   ): Promise<Message | undefined> {
-    if (!prisma) return undefined;
+    const updatedMessage = await messageRepository.updateConversationMessage(messageId, message);
 
-    const updatedMessage = await prisma.message.update({
-      where: { msgId: messageId },
-      data: {
-        message,
-        editedAt: new Date(),
-      },
-      include: conversationMessageInclude,
-    });
-
-    await this.invalidateConversationCaches(
-      updatedMessage.senderId,
-      updatedMessage.receiverId,
-    );
+    if (updatedMessage) {
+      await this.invalidateConversationCaches(
+        updatedMessage.senderId,
+        updatedMessage.receiverId,
+      );
+    }
 
     return updatedMessage;
   }
 
   async deleteConversationMessage(messageId: number): Promise<Message | undefined> {
-    if (!prisma) return undefined;
+    const result = await messageRepository.deleteConversationMessage(messageId);
+    if (!result) return undefined;
 
-    const existingMessage = await prisma.message.findUnique({
-      where: { msgId: messageId },
-      include: { attachments: true },
-    });
-
-    if (!existingMessage) {
-      return undefined;
+    if (result.attachments.length > 0) {
+      await this.deleteAttachmentFiles(result.attachments);
     }
 
-    await this.softDeleteMessageTransaction(messageId, existingMessage.attachments);
-
-    if (existingMessage.attachments.length > 0) {
-      await this.deleteAttachmentFiles(existingMessage.attachments);
-    }
-
-    await this.invalidateConversationCaches(
-      existingMessage.senderId,
-      existingMessage.receiverId,
-    );
-
-    const updatedMessage = await prisma.message.findUnique({
-      where: { msgId: messageId },
-      include: conversationMessageInclude,
-    });
-
-    return updatedMessage ?? undefined;
+    await this.invalidateConversationCaches(result.senderId, result.receiverId);
+    return result.message;
   }
 
   async deleteConversationMessageSync(
     messageId: number,
   ): Promise<ConversationDeleteSync | undefined> {
-    if (!prisma) return undefined;
+    const result = await messageRepository.deleteConversationMessageSync(messageId);
+    if (!result) return undefined;
 
-    const existingMessage = await prisma.message.findUnique({
-      where: { msgId: messageId },
-      select: {
-        msgId: true,
-        senderId: true,
-        receiverId: true,
-        attachments: true,
-      },
-    });
-
-    if (!existingMessage) {
-      return undefined;
-    }
-
-    await this.softDeleteMessageTransaction(messageId, existingMessage.attachments);
-
-    if (existingMessage.attachments.length > 0) {
-      await this.deleteAttachmentFiles(existingMessage.attachments);
+    if (result.attachments.length > 0) {
+      await this.deleteAttachmentFiles(result.attachments);
     }
 
     this.invalidateConversationCaches(
-      existingMessage.senderId,
-      existingMessage.receiverId,
+      result.senderId,
+      result.receiverId,
     ).catch((error) => console.error("Cache invalidate error:", error));
 
     return {
-      messageId: existingMessage.msgId,
-      senderId: existingMessage.senderId,
-      receiverId: existingMessage.receiverId,
+      messageId: result.messageId,
+      senderId: result.senderId,
+      receiverId: result.receiverId,
     };
-  }
-
-  private async softDeleteMessageTransaction(
-    messageId: number,
-    attachments: Attachment[],
-  ): Promise<void> {
-    if (!prisma) return;
-
-    await prisma.$transaction(async (tx) => {
-      if (attachments.length > 0) {
-        await tx.attachment.deleteMany({
-          where: { messageId },
-        });
-      }
-
-      await tx.messageReaction.deleteMany({
-        where: { messageId },
-      });
-
-      await tx.message.update({
-        where: { msgId: messageId },
-        data: {
-          message: "Message deleted",
-          deletedAt: new Date(),
-          editedAt: null,
-        },
-      });
-    });
-  }
-
-  private async toggleReactionTransaction(
-    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
-    messageId: number,
-    userId: number,
-    emoji: string,
-  ): Promise<void> {
-    const existingReaction = await tx.messageReaction.findUnique({
-      where: {
-        messageId_userId: { messageId, userId },
-      },
-    });
-
-    if (!existingReaction) {
-      await tx.messageReaction.upsert({
-        where: {
-          messageId_userId: { messageId, userId },
-        },
-        create: { messageId, userId, emoji },
-        update: { emoji },
-      });
-    } else if (existingReaction.emoji === emoji) {
-      await tx.messageReaction.deleteMany({
-        where: { messageId, userId },
-      });
-    } else {
-      await tx.messageReaction.upsert({
-        where: {
-          messageId_userId: { messageId, userId },
-        },
-        create: { messageId, userId, emoji },
-        update: { emoji },
-      });
-    }
   }
 
   async toggleConversationReaction(
@@ -733,25 +495,18 @@ class DatabaseStorage implements IStorage {
     userId: number,
     emoji: string,
   ): Promise<Message | undefined> {
-    if (!prisma) return undefined;
-
-    const updatedMessage = await prisma.$transaction(async (tx) => {
-      await this.toggleReactionTransaction(tx, messageId, userId, emoji);
-
-      return tx.message.findUnique({
-        where: { msgId: messageId },
-        include: conversationMessageInclude,
-      });
-    });
-
-    if (!updatedMessage) {
-      return undefined;
-    }
-
-    await this.invalidateConversationCaches(
-      updatedMessage.senderId,
-      updatedMessage.receiverId,
+    const updatedMessage = await messageRepository.toggleConversationReaction(
+      messageId,
+      userId,
+      emoji,
     );
+
+    if (updatedMessage) {
+      await this.invalidateConversationCaches(
+        updatedMessage.senderId,
+        updatedMessage.receiverId,
+      );
+    }
 
     return updatedMessage;
   }
@@ -761,71 +516,20 @@ class DatabaseStorage implements IStorage {
     userId: number,
     emoji: string,
   ): Promise<ConversationReactionSync | undefined> {
-    if (!prisma) return undefined;
+    const updatedReactionState = await messageRepository.toggleConversationReactionSync(
+      messageId,
+      userId,
+      emoji,
+    );
 
-    const updatedReactionState = await prisma.$transaction(async (tx) => {
-      const existingMessage = await tx.message.findUnique({
-        where: { msgId: messageId },
-        select: {
-          msgId: true,
-          senderId: true,
-          receiverId: true,
-        },
-      });
-
-      if (!existingMessage) {
-        return null;
-      }
-
-      await this.toggleReactionTransaction(tx, messageId, userId, emoji);
-
-      const reactions = await tx.messageReaction.findMany({
-        where: { messageId },
-        orderBy: { createdAt: "asc" },
-        include: {
-          user: { select: publicUserSelect },
-        },
-      });
-
-      return {
-        messageId: existingMessage.msgId,
-        senderId: existingMessage.senderId,
-        receiverId: existingMessage.receiverId,
-        reactions,
-      };
-    });
-
-    if (!updatedReactionState) {
-      return undefined;
+    if (updatedReactionState) {
+      this.invalidateConversationCaches(
+        updatedReactionState.senderId,
+        updatedReactionState.receiverId,
+      ).catch((error) => console.error("Cache invalidate error:", error));
     }
 
-    this.invalidateConversationCaches(
-      updatedReactionState.senderId,
-      updatedReactionState.receiverId,
-    ).catch((error) => console.error("Cache invalidate error:", error));
-
     return updatedReactionState;
-  }
-
-
-  private async updateMessageCaches(message: Message): Promise<void> {
-    if (!cacheClient) return;
-
-    const { senderId, receiverId, conversationId } = message;
-    if (!senderId || !receiverId) return;
-
-    const convId = conversationId || getConversationId(senderId, receiverId);
-
-    const lastKey = CacheKeys.conversationLast(convId);
-    await cacheClient.set(lastKey, JSON.stringify(message), {
-      EX: CacheTTL.LAST_MESSAGE,
-    });
-
-    const unreadKey = CacheKeys.conversationUnread(convId, receiverId);
-    await cacheClient.incr(unreadKey);
-
-    const dmCacheKey = CacheKeys.conversation(senderId, receiverId);
-    await cacheClient.del(dmCacheKey);
   }
 
   async getMessagesBetweenUsersCursor(
@@ -918,6 +622,8 @@ class DatabaseStorage implements IStorage {
     return deletedMessageIds;
   }
 
+  // ── Attachment Methods ──────────────────────────────────────────────
+
   async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
     return attachmentRepository.create(attachment);
   }
@@ -929,6 +635,8 @@ class DatabaseStorage implements IStorage {
   async getOldAttachments(olderThan: Date): Promise<Attachment[]> {
     return attachmentRepository.getOlderThan(olderThan);
   }
+
+  // ── Conversation Stats (with cache) ─────────────────────────────────
 
   async getConversationStats(
     userId: number,
@@ -1001,6 +709,8 @@ class DatabaseStorage implements IStorage {
     }
   }
 
+  // ── Friendship Methods ──────────────────────────────────────────────
+
   async getFriendship(
     user1Id: number,
     user2Id: number,
@@ -1022,6 +732,8 @@ class DatabaseStorage implements IStorage {
   async removeFriend(user1Id: number, user2Id: number): Promise<boolean> {
     return friendshipRepository.deleteByUsers(user1Id, user2Id);
   }
+
+  // ── Friend Request Methods ──────────────────────────────────────────
 
   async getPendingFriendRequestBetweenUsers(
     user1Id: number,
@@ -1060,6 +772,8 @@ class DatabaseStorage implements IStorage {
   ): Promise<number> {
     return friendRequestRepository.deletePendingBetweenUsers(user1Id, user2Id);
   }
+
+  // ── Block Methods ───────────────────────────────────────────────────
 
   async getBlockBetweenUsers(
     user1Id: number,
@@ -1126,106 +840,31 @@ class DatabaseStorage implements IStorage {
     return blockRepository.getRestrictedUserIds(userId);
   }
 
-  async getPushSubscriptions(userId: number): Promise<PushSubscriptionRecord[]> {
-    if (!prisma) return [];
+  // ── Push Subscription Methods ───────────────────────────────────────
 
-    try {
-      return await prisma.$queryRaw<PushSubscriptionRecord[]>(Prisma.sql`
-        SELECT
-          id,
-          user_id AS "userId",
-          endpoint,
-          p256dh,
-          auth,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM "PushSubscriptions"
-        WHERE user_id = ${userId}
-        ORDER BY updated_at DESC, id DESC
-      `);
-    } catch (error) {
-      console.error("Error getting push subscriptions:", error);
-      return [];
-    }
+  async getPushSubscriptions(userId: number): Promise<PushSubscriptionRecord[]> {
+    return notificationRepository.getPushSubscriptions(userId);
   }
 
   async savePushSubscription(
     userId: number,
     subscription: WebPushSubscriptionInput,
   ): Promise<PushSubscriptionRecord | undefined> {
-    if (!prisma) return undefined;
-
-    try {
-      const rows = await prisma.$queryRaw<PushSubscriptionRecord[]>(Prisma.sql`
-        INSERT INTO "PushSubscriptions" (
-          user_id,
-          endpoint,
-          p256dh,
-          auth,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${userId},
-          ${subscription.endpoint},
-          ${subscription.keys.p256dh},
-          ${subscription.keys.auth},
-          NOW(),
-          NOW()
-        )
-        ON CONFLICT (endpoint) DO UPDATE SET
-          user_id = EXCLUDED.user_id,
-          p256dh = EXCLUDED.p256dh,
-          auth = EXCLUDED.auth,
-          updated_at = NOW()
-        RETURNING
-          id,
-          user_id AS "userId",
-          endpoint,
-          p256dh,
-          auth,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-      `);
-      return rows[0];
-    } catch (error) {
-      console.error("Error saving push subscription:", error);
-      return undefined;
-    }
+    return notificationRepository.savePushSubscription(userId, subscription);
   }
 
   async deletePushSubscription(
     userId: number,
     endpoint: string,
   ): Promise<boolean> {
-    if (!prisma) return false;
-
-    try {
-      const result = await prisma.$executeRaw(Prisma.sql`
-        DELETE FROM "PushSubscriptions"
-        WHERE user_id = ${userId} AND endpoint = ${endpoint}
-      `);
-      return result > 0;
-    } catch (error) {
-      console.error("Error deleting push subscription:", error);
-      return false;
-    }
+    return notificationRepository.deletePushSubscription(userId, endpoint);
   }
 
   async deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean> {
-    if (!prisma) return false;
-
-    try {
-      const result = await prisma.$executeRaw(Prisma.sql`
-        DELETE FROM "PushSubscriptions"
-        WHERE endpoint = ${endpoint}
-      `);
-      return result > 0;
-    } catch (error) {
-      console.error("Error deleting push subscription by endpoint:", error);
-      return false;
-    }
+    return notificationRepository.deletePushSubscriptionByEndpoint(endpoint);
   }
+
+  // ── Conversation Lifecycle Methods ──────────────────────────────────
 
   async clearConversation(user1Id: number, user2Id: number): Promise<number> {
     const attachments = await attachmentRepository.getByConversation(user1Id, user2Id);
@@ -1239,33 +878,13 @@ class DatabaseStorage implements IStorage {
   }
 
   async markConversationAsRead(userId: number, otherUserId: number): Promise<void> {
-    if (!prisma) return;
+    await messageRepository.markConversationAsRead(userId, otherUserId);
 
-    try {
-      await prisma.conversationReadState.upsert({
-        where: {
-          userId_otherUserId: {
-            userId: userId,
-            otherUserId: otherUserId,
-          },
-        },
-        update: {
-          lastReadAt: new Date(),
-        },
-        create: {
-          userId: userId,
-          otherUserId: otherUserId,
-        },
-      });
-
-      // Erase the old Redis cache since it will be stale now
-      const conversationId = getConversationId(userId, otherUserId);
-      if (cacheClient) {
-        const unreadKey = CacheKeys.conversationUnread(conversationId, userId);
-        await cacheClient.del(unreadKey);
-      }
-    } catch (error) {
-      console.error("Error marking conversation as read:", error);
+    // Erase the old Redis cache since it will be stale now
+    const conversationId = getConversationId(userId, otherUserId);
+    if (cacheClient) {
+      const unreadKey = CacheKeys.conversationUnread(conversationId, userId);
+      await cacheClient.del(unreadKey);
     }
   }
 
@@ -1278,45 +897,7 @@ class DatabaseStorage implements IStorage {
       return 0;
     }
 
-    if (!prisma) {
-      return 0;
-    }
-
-    const messageIds = Array.from(
-      new Set(attachments.map((attachment) => attachment.messageId)),
-    );
-    const conversationId = getConversationId(user1Id, user2Id);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.attachment.deleteMany({
-        where: {
-          messageId: { in: messageIds },
-        },
-      });
-
-      const removableMessages = await tx.message.findMany({
-        where: {
-          conversationId,
-          message: "Sent an attachment",
-          attachments: {
-            none: {},
-          },
-        },
-        select: {
-          msgId: true,
-        },
-      });
-
-      if (removableMessages.length > 0) {
-        await tx.message.deleteMany({
-          where: {
-            msgId: {
-              in: removableMessages.map((message) => message.msgId),
-            },
-          },
-        });
-      }
-    });
+    await messageRepository.clearConversationAttachments(user1Id, user2Id, attachments);
 
     await this.invalidateConversationCaches(user1Id, user2Id);
     await this.deleteAttachmentFiles(attachments);
@@ -1412,6 +993,8 @@ class DatabaseStorage implements IStorage {
     return deletedCount;
   }
 
+  // ── Pending Notification Methods ────────────────────────────────────
+
   async createPendingNotification(data: {
     receiverId: number;
     senderId: number;
@@ -1419,59 +1002,31 @@ class DatabaseStorage implements IStorage {
     payload: object;
     expiresAt: Date;
   }): Promise<PendingNotificationRecord> {
-    const record = await prisma.pendingNotification.create({
-      data: {
-        receiverId: data.receiverId,
-        senderId: data.senderId,
-        messageId: data.messageId,
-        payload: data.payload as Prisma.InputJsonValue,
-        expiresAt: data.expiresAt,
-        nextRetryAt: new Date(),
-      },
-    });
-    return record as unknown as PendingNotificationRecord;
+    return notificationRepository.createPendingNotification(data);
   }
 
   async getRetryableNotifications(
     now: Date,
     limit = 50,
   ): Promise<PendingNotificationRecord[]> {
-    const records = await prisma.pendingNotification.findMany({
-      where: {
-        status: "pending",
-        nextRetryAt: { lte: now },
-        expiresAt: { gt: now },
-      },
-      orderBy: { nextRetryAt: "asc" },
-      take: limit,
-    });
-    return records as unknown as PendingNotificationRecord[];
+    return notificationRepository.getRetryableNotifications(now, limit);
   }
 
   async getPendingNotificationsForUser(
     receiverId: number,
   ): Promise<PendingNotificationRecord[]> {
-    const records = await prisma.pendingNotification.findMany({
-      where: { receiverId, status: "pending" },
-      orderBy: { createdAt: "asc" },
-    });
-    return records as unknown as PendingNotificationRecord[];
+    return notificationRepository.getPendingNotificationsForUser(receiverId);
   }
 
   async getPendingCountBySender(
     receiverId: number,
     senderId: number,
   ): Promise<number> {
-    return prisma.pendingNotification.count({
-      where: { receiverId, senderId, status: "pending" },
-    });
+    return notificationRepository.getPendingCountBySender(receiverId, senderId);
   }
 
   async markNotificationDelivered(id: number): Promise<void> {
-    await prisma.pendingNotification.update({
-      where: { id },
-      data: { status: "delivered", deliveredAt: new Date() },
-    });
+    return notificationRepository.markNotificationDelivered(id);
   }
 
   async markNotificationRetry(
@@ -1479,66 +1034,32 @@ class DatabaseStorage implements IStorage {
     nextRetryAt: Date,
     attempts: number,
   ): Promise<void> {
-    await prisma.pendingNotification.update({
-      where: { id },
-      data: { nextRetryAt, attempts },
-    });
+    return notificationRepository.markNotificationRetry(id, nextRetryAt, attempts);
   }
 
   async deleteExpiredNotifications(now: Date): Promise<number> {
-    const delivered = await prisma.pendingNotification.deleteMany({
-      where: { status: "delivered" },
-    });
-    const expired = await prisma.pendingNotification.deleteMany({
-      where: { expiresAt: { lte: now }, status: "pending" },
-    });
-    return delivered.count + expired.count;
+    return notificationRepository.deleteExpiredNotifications(now);
   }
 
   async clearPendingNotificationsForUserFromSender(
     receiverId: number,
     senderId: number,
   ): Promise<number> {
-    const result = await prisma.pendingNotification.deleteMany({
-      where: { receiverId, senderId, status: "pending" },
-    });
-    return result.count;
+    return notificationRepository.clearPendingNotificationsForUserFromSender(receiverId, senderId);
   }
 
   async clearPendingNotificationsForUser(
     receiverId: number,
   ): Promise<number> {
-    const result = await prisma.pendingNotification.deleteMany({
-      where: { receiverId, status: "pending" },
-    });
-    return result.count;
+    return notificationRepository.clearPendingNotificationsForUser(receiverId);
   }
+
+  // ── Unread Counts ───────────────────────────────────────────────────
 
   async getUnreadMessageCountsForUser(
     userId: number,
   ): Promise<Map<number, number>> {
-    const rows = await prisma.$queryRaw<
-      { sender_id: number; count: bigint }[]
-    >(Prisma.sql`
-      SELECT m.sender_id, COUNT(*)::bigint as count
-      FROM "Messages" m
-      LEFT JOIN "ConversationReadStates" crs
-        ON crs.user_id = ${userId} AND crs.other_user_id = m.sender_id
-      JOIN "Friendships" f
-        ON (f.user_id1 = LEAST(${userId}, m.sender_id)
-        AND f.user_id2 = GREATEST(${userId}, m.sender_id))
-      WHERE m.receiver_id = ${userId}
-        AND m.deleted_at IS NULL
-        AND m.timestamp > COALESCE(crs.last_read_at, '1970-01-01'::timestamp)
-      GROUP BY m.sender_id
-      HAVING COUNT(*) > 0
-    `);
-
-    const result = new Map<number, number>();
-    for (const row of rows) {
-      result.set(row.sender_id, Number(row.count));
-    }
-    return result;
+    return messageRepository.getUnreadMessageCountsForUser(userId);
   }
 }
 
