@@ -23,6 +23,10 @@ function registerSystemRoutes(app: Express) {
     res.redirect(301, "/assets/images/logo-48.webp");
   });
 
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.get("/robots.txt", (req, res) => {
     const siteUrl = getSiteUrl(req);
 
