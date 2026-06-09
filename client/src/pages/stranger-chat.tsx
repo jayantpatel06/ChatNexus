@@ -63,7 +63,7 @@ const FAQS = [
   {
     question: "Is stranger chat on ChatNexus safe?",
     answer:
-      "Yes. ChatNexus uses encrypted connections, rate limiting, user blocking tools, and ephemeral guest sessions. Private messages are not permanently stored on our servers.",
+      "Yes. ChatNexus uses encrypted connections, rate limiting, user blocking tools, and ephemeral guest sessions. Registered direct-message history may be retained so conversations work across sessions.",
   },
   {
     question: "Can I talk to strangers without showing my face?",

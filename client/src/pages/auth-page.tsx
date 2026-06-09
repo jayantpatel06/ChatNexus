@@ -112,6 +112,7 @@ const DEFAULT_POST_AUTH_PATH = "/direct";
 const ALLOWED_POST_AUTH_PATHS = new Set([
   "/direct",
   "/global",
+  "/global/chat",
   "/random",
   "/settings",
 ]);

@@ -380,7 +380,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     heading: "Anonymous Chat — Chat Without Registration",
     summary: [
       "ChatNexus anonymous chat lets you chat without registration or sharing personal information.",
-      "Guest sessions are ephemeral, messages are not permanently stored, and your identity stays hidden.",
+      "Guest sessions are ephemeral, registered message history may be retained for direct chats, and your identity stays hidden.",
     ],
     keywords:
       "anonymous chat, anonymous chat rooms, chat without registration, no signup chat, free anonymous chat, private chat online",

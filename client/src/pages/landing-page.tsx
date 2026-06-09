@@ -31,9 +31,9 @@ import {
 } from "@/components/effects";
 import { hasValidStoredAuthSession } from "@/lib/auth-storage";
 
-const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
+const HOME_SEO_TITLE = "ChatNexus — Talk to Strangers Free | Random Chat & Global Rooms";
 const HOME_SEO_DESCRIPTION =
-  "Talk to strangers, make friends, and jump into random chat on ChatNexus. Start anonymous conversations instantly and connect with people worldwide.";
+  "Talk to strangers instantly in free random chat rooms, global chat, and anonymous stranger chat — no sign-up needed. The best Omegle alternative in 2026.";
 
 type FaqItem = {
   category: string;
@@ -80,6 +80,24 @@ const LANDING_FAQS: readonly FaqItem[] = [
     question: "What can I do besides one-to-one stranger chat?",
     answer:
       "You can join global rooms, move between live conversations quickly, and use ChatNexus for both casual discovery and more active community chat.",
+  },
+  {
+    category: "Alternatives",
+    question: "Is ChatNexus a good Omegle alternative?",
+    answer:
+      "ChatNexus is built as a modern Omegle alternative with instant guest access, random stranger matching, global chat rooms, and a mobile-friendly PWA — all without requiring video or a webcam.",
+  },
+  {
+    category: "Safety",
+    question: "Is it safe to talk to strangers on ChatNexus?",
+    answer:
+      "ChatNexus uses encrypted connections, rate limiting, and user blocking tools. Guest sessions are ephemeral, while registered direct-message history may be retained for continuity.",
+  },
+  {
+    category: "Cost",
+    question: "Is ChatNexus completely free to use?",
+    answer:
+      "Yes. ChatNexus is 100% free with no hidden fees, no premium tiers, and no ads. Every feature — including random chat, global rooms, and direct messaging — is available at no cost.",
   },
 ] as const;
 
@@ -207,7 +225,7 @@ export default function LandingPage() {
         title={HOME_SEO_TITLE}
         description={HOME_SEO_DESCRIPTION}
         path="/"
-        keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus"
+        keywords="Omegle alternative, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus, sites like omegle, chat rooms, free chat, no signup chat, mobile chat, PWA chat, real-time messaging"
         structuredData={seoStructuredData}
       />
       {/* ═══════ Main Content ═══════ */}
@@ -220,14 +238,15 @@ export default function LandingPage() {
         {/* ═══════ Hero ═══════ */}
         <section id="hero" className="hero">
           <h1 className="hero-title">
-            <span className="hero-line">Connect Instantly.</span>
+            <span className="hero-line">Talk to Strangers.</span>
             <span className="hero-line hero-line--accent">Chat Freely.</span>
           </h1>
 
           <p className="hero-sub">
-            Chat with strangers, join live global rooms, and start anonymous
-            conversations in seconds. ChatNexus is built for fast, modern,
-            real-time social discovery across mobile and desktop.
+            Talk to strangers instantly in random 1-on-1 chats, jump into live
+            global chat rooms, or browse anonymously as a guest — no registration
+            required. ChatNexus is the fast, free Omegle alternative built for
+            2026.
           </p>
 
           <div className="hero-cta-row">
@@ -253,10 +272,10 @@ export default function LandingPage() {
         <section id="features" className="features-section">
           <div ref={sectionTitleRef} className="reveal-item section-header">
             <span className="section-tag">Features</span>
-            <h2 className="section-title">Why Choose ChatNexus?</h2>
+            <h2 className="section-title">Stranger Chat Features for Every Device</h2>
             <p className="section-desc">
-              Built for modern communication with top-tier performance and
-              security.
+              Built for modern communication with real-time delivery,
+              privacy-first design, and zero signup barriers.
             </p>
           </div>
 
@@ -269,12 +288,12 @@ export default function LandingPage() {
             <div className="about-bento-head">
               <span className="section-tag">About</span>
               <h2 className="section-title about-bento-section-title">
-                The Fastest Way to Talk to Strangers Online
+                The Best Free Omegle Alternative in 2026
               </h2>
               <p className="about-bento-lead">
-                  A modern Omegle alternative designed for people
-                  who want to meet new friends and join
-                  global conversations instantly.
+                  A modern <Link href="/omegle-alternative" className="text-brand-primary hover:underline">Omegle alternative</Link> designed for people
+                  who want to meet new friends, join
+                  global conversations, and start <Link href="/random-chat" className="text-brand-primary hover:underline">random chat</Link> sessions instantly.
                 </p>
             </div>
             <AboutStack />
@@ -303,7 +322,10 @@ export default function LandingPage() {
               Whether you're looking for a quick conversation with a stranger,
               want to join the global chat room, or just need a space to be
               yourself — ChatNexus has you covered. No signup walls, no ads,
-              just instant, real conversations.
+              just instant, real conversations. Explore our{" "}
+              <Link href="/features" className="text-brand-primary hover:underline">full feature set</Link>,
+              read our <Link href="/privacy" className="text-brand-primary hover:underline">privacy policy</Link>,
+              or jump straight into <Link href="/stranger-chat" className="text-brand-primary hover:underline">stranger chat</Link>.
             </p>
             <div className="hero-cta-row">
               <MagneticWrap>
@@ -339,11 +361,12 @@ function BentoFeatures() {
           <VenetianMask className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
         <h3 className="bento-feature-title mb-3">
-          Anonymous
+          Anonymous stranger chat
         </h3>
         <p className="landing-card-copy">
-          Start conversations instantly without exposing your identity or
-          getting blocked by a long signup flow.
+          No account? No problem. Jump into a stranger chat in under 10 seconds
+          as a guest — your identity stays hidden, and the conversation starts
+          immediately.
         </p>
       </div>
 
@@ -353,11 +376,12 @@ function BentoFeatures() {
           <Fingerprint className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
         <h3 className="bento-feature-title mb-3">
-          Secure by default
+          Privacy-first design
         </h3>
         <p className="landing-card-copy">
-          No signups required to chat. We don't track your identity or store
-          chat logs to ensure your privacy.
+          Guest sessions are temporary. Registered direct-message history may
+          be retained for continuity, and we never sell data. Your conversations
+          belong to you, not an ad network.
         </p>
       </div>
 
@@ -367,11 +391,12 @@ function BentoFeatures() {
           <Gauge className="bento-feature-icon h-8 w-8" strokeWidth={1.5} />
         </div>
         <h3 className="bento-feature-title mb-3">
-          Ultra-low latency
+          Sub-50ms delivery
         </h3>
         <p className="landing-card-copy">
-          Every millisecond counts. Our distributed backend brings latency
-          down, feeling faster than light.
+          Messages arrive in under 50ms — before you can blink. Built on
+          WebSocket connections with in-memory caching, ChatNexus is
+          engineered for conversations that feel instant.
         </p>
       </div>
 
@@ -381,11 +406,12 @@ function BentoFeatures() {
             <Globe className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
           </div>
           <h3 className="bento-feature-title mb-3">
-            Global reach
+            Global chat rooms
           </h3>
           <p className="landing-card-copy max-w-sm">
-            Match with users globally in real-time. We focus on frictionless
-            entry, privacy-first flows, and a mobile-friendly experience.
+            ChatNexus connects users across continents in real time. Whether
+            you're in Tokyo or Toronto, random chat matches happen in seconds
+            through our low-latency global infrastructure.
           </p>
         </div>
 
@@ -414,10 +440,11 @@ function BentoFeatures() {
           <Users className="bento-feature-icon h-5 w-5" strokeWidth={1.5} />
         </div>
         <h3 className="bento-feature-title mb-3">
-          Make connections
+          Make real connections
         </h3>
         <p className="landing-card-copy">
-          Meet friends securely. Join a random session instantly.
+          Found someone interesting? Send a friend request to keep the
+          conversation going. Every connection starts with a single random chat.
         </p>
       </div>
     </div>

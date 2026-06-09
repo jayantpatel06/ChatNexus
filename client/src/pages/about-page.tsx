@@ -118,10 +118,10 @@ export default function AboutPage() {
   return (
     <>
       <Seo
-        title="About | ChatNexus"
-        description="Learn about ChatNexus — our mission to make anonymous stranger chat safe, fast, and accessible for everyone."
+        title="About ChatNexus — The Anonymous Stranger Chat Platform Built for Speed & Privacy"
+        description="Learn about ChatNexus and our mission to make anonymous stranger chat safe, fast, and accessible for everyone. Privacy-first messaging with no signup required."
         path="/about"
-        keywords="about ChatNexus, ChatNexus team, anonymous chat platform mission, stranger chat story"
+        keywords="about ChatNexus, ChatNexus team, anonymous chat platform mission, stranger chat story, privacy-first chat"
       />
       <div className="landing-root">
         <CustomCursor />
@@ -134,9 +134,9 @@ export default function AboutPage() {
         <section className="about-hero" ref={heroRef} style={{ opacity: 0 }}>
           <span className="section-tag">About</span>
           <h1 className="about-hero-title">
-            <span className="hero-line">Built for Humans</span>
+            <span className="hero-line">About ChatNexus —</span>
             <span className="hero-line hero-line--accent">
-              Who Love to Talk.
+              Safe, Fast Anonymous Chat.
             </span>
           </h1>
           <p className="about-hero-sub">
@@ -150,18 +150,22 @@ export default function AboutPage() {
         <section className="mission-section">
           <div ref={missionRef} className="reveal-item mission-card">
             <p className="mission-quote">
-              We're building the fastest, most private way to connect with
-              strangers online — no signup walls, no data harvesting, no
-              compromise.
+              In a world where social platforms monetize your attention, ChatNexus
+              takes a different approach: real conversations between real people,
+              delivered in under 50 milliseconds, with zero data harvesting and
+              no signup requirements.
             </p>
             <p className="mission-body">
-              In a world of over-engineered social platforms that monetize your
-              attention, ChatNexus takes a different approach. We strip away the
-              noise and focus on what matters: real conversations between real
-              people. Whether you're looking for a quick chat with a stranger, a
-              global discussion room, or just a space to be yourself
-              anonymously, ChatNexus delivers that experience in under 30
-              seconds.
+              We exist because talking to strangers should be as easy as opening
+              a tab. ChatNexus strips away the noise and focuses on what matters:
+              genuine human connection. Whether you're looking for a quick chat
+              with a stranger, a global discussion room, or just a space to be
+              yourself anonymously, ChatNexus delivers that experience in under
+              30 seconds. Explore our{" "}
+              <Link href="/features" className="text-brand-primary hover:underline">full feature set</Link>{" "}
+              or visit the{" "}
+              <Link href="/help-center" className="text-brand-primary hover:underline">Help Center</Link>{" "}
+              if you need support.
             </p>
           </div>
         </section>

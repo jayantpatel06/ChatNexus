@@ -151,10 +151,10 @@ export default function FeaturesPage() {
   return (
     <>
       <Seo
-        title="Features | ChatNexus"
-        description="Explore all the features that make ChatNexus the fastest, most private way to chat with strangers online."
+        title="Anonymous Chat Features — Real-Time Messaging, Guest Access & More | ChatNexus"
+        description="Explore all the features that make ChatNexus the fastest, most private way to chat with strangers online. Real-time messaging, global rooms, and PWA support."
         path="/features"
-        keywords="ChatNexus features, anonymous chat features, real-time messaging, global chat rooms, guest access, PWA chat app"
+        keywords="ChatNexus features, anonymous chat features, real-time messaging, global chat rooms, guest access, PWA chat app, stranger chat features"
       />
       <div className="landing-root">
         <CustomCursor />
@@ -167,12 +167,13 @@ export default function FeaturesPage() {
         <section className="features-hero" ref={heroRef} style={{ opacity: 0 }}>
           <span className="section-tag">Features</span>
           <h1 className="features-hero-title">
-            <span className="hero-line">Everything You Need</span>
-            <span className="hero-line hero-line--accent">to Chat Freely.</span>
+            <span className="hero-line">Chat Features for Fast,</span>
+            <span className="hero-line hero-line--accent">Private Stranger Conversations.</span>
           </h1>
           <p className="features-hero-sub">
-            From lightning-fast delivery to granular privacy controls, ChatNexus
-            is engineered for the modern conversationalist.
+            Sub-50ms message delivery. Guest access in 10 seconds. End-to-end
+            privacy without compromise. Every feature in ChatNexus exists to make
+            stranger chat faster, safer, and more accessible than any other platform.
           </p>
         </section>
 
@@ -264,6 +265,8 @@ export default function FeaturesPage() {
           <h2 className="section-title">Ready to Start Chatting?</h2>
           <p className="section-desc" style={{ marginBottom: "32px" }}>
             Join thousands of users already connecting on ChatNexus.
+            <br />
+            <Link href="/about" className="text-brand-primary hover:underline">Learn more about our mission</Link>
           </p>
           <MagneticWrap>
             <Link href="/auth" className="hero-btn-primary">

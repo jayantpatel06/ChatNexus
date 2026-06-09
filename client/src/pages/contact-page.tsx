@@ -138,7 +138,7 @@ export default function ContactPage() {
         >
           <span className="section-tag">Contact</span>
           <h1 className="contact-hero-title">
-            <span className="hero-line">Let's Talk.</span>
+            <span className="hero-line">Contact the ChatNexus Team</span>
           </h1>
           <p className="contact-hero-sub">
             Have a question, feedback, or just want to say hello? We'd love to
@@ -243,10 +243,10 @@ export default function ContactPage() {
                   For general inquiries or partnership opportunities:
                 </p>
                 <a
-                  href="mailto:support@chatnexus.app"
+                  href="mailto:support@chatnexus.me"
                   className="contact-info-link"
                 >
-                  support@chatnexus.app
+                  support@chatnexus.me
                 </a>
               </div>
 

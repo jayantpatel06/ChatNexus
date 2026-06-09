@@ -44,8 +44,8 @@ const FEATURES = [
   },
   {
     Icon: Shield,
-    title: "Zero Permanent Storage",
-    desc: "Private messages are processed in real-time and not permanently stored on our servers. Guest data is automatically cleaned up.",
+    title: "Temporary Guest Sessions",
+    desc: "Guest data is designed to be temporary. Registered direct-message history may be retained when needed for conversation continuity.",
   },
   {
     Icon: MessageCircle,
@@ -63,7 +63,7 @@ const FAQS = [
   {
     question: "Does ChatNexus store my anonymous chat messages?",
     answer:
-      "Private messages are processed in real-time and not permanently stored on our servers. Guest sessions are ephemeral — when you leave, your session data is cleaned up.",
+      "Guest sessions are ephemeral and designed to be cleaned up when you leave. Registered direct-message history may be retained so conversations can continue across sessions.",
   },
   {
     question: "Can other users see my real identity?",

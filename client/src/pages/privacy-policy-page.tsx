@@ -77,7 +77,7 @@ const SECTIONS: LegalSection[] = [
       "Opt out of non-essential data collection",
     ],
     after: [
-      "To exercise any of these rights, please contact us through the Help Center or email us at support@chatnexus.app.",
+      "To exercise any of these rights, please contact us through the Help Center at chatnexus.me/help-center or email us at support@chatnexus.me.",
     ],
   },
   {

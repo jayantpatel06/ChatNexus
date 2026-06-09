@@ -35,7 +35,7 @@ const FEATURES = [
   {
     Icon: Shield,
     title: "Anonymous & Private",
-    desc: "Random chat sessions are private by default. No personal data required, no chat logs stored permanently.",
+    desc: "Random chat sessions are private by default. Guest sessions are temporary, while registered direct-message history may be retained for continuity.",
   },
   {
     Icon: Globe,

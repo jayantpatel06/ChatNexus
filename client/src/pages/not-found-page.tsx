@@ -1,18 +1,37 @@
-import { AlertCircle } from "lucide-react";
+import "@/pages/landing-page.css";
 import { Link, useLocation } from "wouter";
 import { Seo } from "@/components/seo";
-import { Card, CardContent } from "@/components/ui/card";
+import SiteNav from "@/components/site-nav";
+import { MagneticWrap, CustomCursor, useReveal } from "@/components/effects";
+import { useEffect, useState } from "react";
+import { hasValidStoredAuthSession } from "@/lib/auth-storage";
 
 const NOT_FOUND_PAGE = {
   title: "Page Not Found | ChatNexus",
   description: "The requested page could not be found.",
   robots: "noindex, nofollow",
-  heading: "404 Page Not Found",
-  message: "The page you requested does not exist or may have moved.",
+  tag: "404 Not Found",
+  heading: "Oops! Page Not Found",
+  message: "The page you are looking for doesn't exist. Click button below to go to the homepage.",
 } as const;
 
 export default function NotFoundPage() {
   const [location] = useLocation();
+  const [hasSession, setHasSession] = useState(hasValidStoredAuthSession());
+  const revealRef = useReveal(0.1);
+
+  useEffect(() => {
+    const syncStoredSession = () => {
+      setHasSession(hasValidStoredAuthSession());
+    };
+
+    window.addEventListener("storage", syncStoredSession);
+    window.addEventListener("focus", syncStoredSession);
+    return () => {
+      window.removeEventListener("storage", syncStoredSession);
+      window.removeEventListener("focus", syncStoredSession);
+    };
+  }, []);
 
   return (
     <>
@@ -22,27 +41,42 @@ export default function NotFoundPage() {
         path={location}
         robots={NOT_FOUND_PAGE.robots}
       />
-      <div className="min-h-screen w-full flex items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border shadow-md">
-          <CardContent className="pt-6">
-            <div className="flex mb-4 gap-2">
-              <AlertCircle className="h-8 w-8 text-destructive" />
-              <h1 className="text-2xl font-bold text-foreground">
-                {NOT_FOUND_PAGE.heading}
-              </h1>
+      <div className="landing-root min-h-screen flex flex-col">
+        <CustomCursor />
+
+        <div className="ambient-orbs" aria-hidden="true">
+          <div className="orb orb-purple" />
+          <div className="orb orb-cyan" />
+          <div className="orb orb-small" />
+        </div>
+
+        <SiteNav isAuthenticated={hasSession} />
+
+        <section className="hero flex flex-1 flex-col items-center justify-center -mt-10">
+          <div ref={revealRef} className="reveal-item flex flex-col items-center justify-center text-center z-10 px-4">
+
+            <span className="section-tag mb-4">
+              {NOT_FOUND_PAGE.tag}
+            </span>
+
+            <h1 className="hero-title mb-6">
+              <span className="hero-line">{NOT_FOUND_PAGE.heading}</span>
+            </h1>
+
+            <p className="hero-sub max-w-md mx-auto mb-10 text-lg">
+              The page you are looking for doesn't exist. Click<br/>
+              button below to go to the homepage.
+            </p>
+
+            <div className="hero-cta-row justify-center">
+              <MagneticWrap>
+                <Link href="/" className="hero-btn-primary !px-8">
+                  <span>Back to Homepage</span>
+                </Link>
+              </MagneticWrap>
             </div>
-
-            <p className="mt-4 text-sm text-muted-foreground">
-              {NOT_FOUND_PAGE.message}
-            </p>
-
-            <p className="mt-6 text-sm">
-              <Link href="/" className="text-primary underline underline-offset-4">
-                Return to the ChatNexus homepage
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </>
   );

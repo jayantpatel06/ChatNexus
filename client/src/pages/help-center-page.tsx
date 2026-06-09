@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { fetchWithTimeout } from "@/lib/api-client";
+import { getSiteUrl } from "@/components/seo";
 
 const DEFAULT_ISSUE_TYPE = "account_deletion";
 const HELP_CENTER_API_PATH = "/api/help-center";
@@ -53,7 +54,7 @@ const HELP_FAQS = [
   {
     question: "Is my data safe on ChatNexus?",
     answer:
-      "Absolutely. ChatNexus uses encrypted connections (HTTPS/WSS), secure password hashing, and minimal data retention. Private messages are processed in real-time and not permanently stored. Read our full Privacy Policy for details.",
+      "Absolutely. ChatNexus uses encrypted connections (HTTPS/WSS), secure password hashing, and minimal data retention. Guest sessions are temporary, and registered direct-message history may be retained for continuity. Read our full Privacy Policy for details.",
   },
   {
     question: "How long does it take to get a response from support?",
@@ -141,6 +142,33 @@ export default function HelpCenterPage() {
         title="Help Center | ChatNexus"
         description="Get help with your ChatNexus account. Find answers to common questions or submit a support request."
         path="/help-center"
+        keywords="ChatNexus help, ChatNexus support, account deletion, login issues, privacy"
+        structuredData={[
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: HELP_FAQS.map((faq) => ({
+              "@type": "Question",
+              name: faq.question,
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: faq.answer,
+              },
+            })),
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: "Help Center | ChatNexus",
+            description: "Get help with your ChatNexus account. Find answers to common questions or submit a support request.",
+            url: `${getSiteUrl()}/help-center`,
+            isPartOf: {
+              "@type": "WebSite",
+              name: "ChatNexus",
+              url: `${getSiteUrl()}/`,
+            },
+          },
+        ]}
       />
       <div className="landing-root">
         <CustomCursor />
@@ -191,7 +219,8 @@ export default function HelpCenterPage() {
             <h2 className="text-2xl font-bold tracking-tight">Submit a Request</h2>
             <p className="mt-2 text-sm text-brand-text">
               Can't find what you're looking for? Use this form for account
-              deletion or any account support issue.
+              deletion or any account support issue. You can also{" "}
+              <Link href="/contact" className="text-brand-primary hover:underline">contact us directly</Link>.
             </p>
 
             <form className="mt-8 space-y-6" onSubmit={onSubmit}>

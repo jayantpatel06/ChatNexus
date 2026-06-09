@@ -60,7 +60,7 @@ const SECTIONS: LegalSection[] = [
     title: "User Content",
     content: [
       "You retain ownership of the content you create and share on ChatNexus. However, by using the platform, you grant ChatNexus a limited, non-exclusive license to transmit, process, and temporarily store your content as necessary to operate the service.",
-      "We do not claim ownership of your messages, images, or files. Private messages are processed in real-time and are not permanently stored on our servers after delivery.",
+      "We do not claim ownership of your messages, images, or files. Private messages may be retained where needed to provide message history, safety, and account features.",
       "ChatNexus reserves the right to remove content that violates these terms without prior notice.",
     ],
     contentList: true,
@@ -121,7 +121,7 @@ const SECTIONS: LegalSection[] = [
 export default function TermsOfServicePage() {
   return (
     <LegalDocumentPage
-      heading="Terms & Conditions"
+      heading="Terms of Service"
       seoTitle="Terms of Service | ChatNexus"
       seoDescription="Read the ChatNexus Terms of Service governing the use of our anonymous chat platform."
       path="/terms"

@@ -57,7 +57,7 @@ const FAQS = [
   {
     question: "Is ChatNexus safe to use?",
     answer:
-      "ChatNexus uses encrypted connections, rate limiting, and user blocking tools. Guest sessions are ephemeral, private messages are not permanently stored, and we never sell user data.",
+      "ChatNexus uses encrypted connections, rate limiting, and user blocking tools. Guest sessions are ephemeral, registered message history may be retained for direct chats, and we never sell user data.",
   },
   {
     question: "Do I need a webcam to use ChatNexus?",
