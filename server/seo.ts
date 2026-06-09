@@ -1,6 +1,7 @@
 import { stat } from "fs/promises";
 import path from "path";
 import type { Request } from "express";
+import { BLOG_POSTS } from "../client/src/lib/blog-data";
 
 type SitemapChangefreq = "daily" | "weekly" | "monthly";
 type StructuredDataRecord = Record<string, unknown>;
@@ -71,6 +72,31 @@ function buildOrganizationStructuredData(siteUrl: string) {
       height: DEFAULT_LOGO_HEIGHT,
     },
     image: logoUrl,
+  };
+}
+
+function buildArticleStructuredData(
+  siteUrl: string,
+  canonicalUrl: string,
+  post: import("../client/src/lib/blog-data").BlogPostMetadata
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description: post.excerpt,
+    datePublished: post.date,
+    dateModified: post.date,
+    author: {
+      "@type": "Person",
+      name: post.author,
+    },
+    publisher: buildOrganizationStructuredData(siteUrl),
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": canonicalUrl,
+    },
+    image: resolveAbsoluteUrl(siteUrl, post.coverImage || DEFAULT_IMAGE_PATH),
   };
 }
 
@@ -488,7 +514,22 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     priority: "0.7",
     sourceFiles: ["client/src/pages/blog-page.tsx"],
   },
-] as const;
+  ...BLOG_POSTS.map((post) => ({
+    path: `/blog/${post.slug}`,
+    title: `${post.title} | ChatNexus Blog`,
+    description: post.excerpt,
+    heading: post.title,
+    summary: [post.excerpt],
+    keywords: post.targetKeyword,
+    indexable: true,
+    changefreq: "monthly" as const,
+    priority: "0.7",
+    sourceFiles: [`client/src/pages/blog/${post.slug}.tsx`], // Approximate
+    structuredData: (siteUrl: string, canonicalUrl: string) => [
+      buildArticleStructuredData(siteUrl, canonicalUrl, post),
+    ],
+  })),
+];
 
 const NOT_FOUND_ROUTE: RouteSeoConfig = {
   path: "/404",

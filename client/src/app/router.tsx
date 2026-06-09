@@ -26,6 +26,21 @@ const OmetvAlternativePage = lazy(() => import("@/pages/ometv-alternative"));
 const ChitChatAlternativePage = lazy(() => import("@/pages/chitchat-alternative"));
 const GlobalChatRoomPage = lazy(() => import("@/pages/global-chat-room"));
 const BlogPage = lazy(() => import("@/pages/blog-page"));
+
+// Blog Articles
+const BlogPillarOmegle = lazy(() => import("@/pages/blog/pillar-omegle-alternatives"));
+const BlogSafetyGuide = lazy(() => import("@/pages/blog/safety-guide"));
+const BlogGlobalChat = lazy(() => import("@/pages/blog/global-chat-explained"));
+const BlogStrangerVsRandom = lazy(() => import("@/pages/blog/stranger-vs-random"));
+const BlogAnonymousRooms = lazy(() => import("@/pages/blog/anonymous-rooms"));
+const BlogMakeFriends = lazy(() => import("@/pages/blog/make-friends"));
+const BlogIsOmegleSafe = lazy(() => import("@/pages/blog/is-omegle-safe"));
+const BlogAppsLikeMonkey = lazy(() => import("@/pages/blog/apps-like-monkey"));
+const BlogBestAppsToTalk = lazy(() => import("@/pages/blog/best-apps-to-talk-to-strangers"));
+const BlogWhyDidOmegleShutDown = lazy(() => import("@/pages/blog/why-did-omegle-shut-down"));
+const BlogTextVsVideoChat = lazy(() => import("@/pages/blog/text-vs-video-chat"));
+const BlogOmegleBanned = lazy(() => import("@/pages/blog/omegle-banned"));
+
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 const ProtectedRouteBoundary = lazy(() =>
   import("./protected-route").then((module) => ({
@@ -135,6 +150,20 @@ export function AppRouter() {
           <Route path="/chitchat-alternative" component={ChitChatAlternativePage} />
           <Route path="/global-chat-room" component={GlobalChatRoomPage} />
           <Route path="/blog" component={BlogPage} />
+          
+          <Route path="/blog/best-sites-like-omegle" component={BlogPillarOmegle} />
+          <Route path="/blog/how-to-talk-to-strangers-online-safely" component={BlogSafetyGuide} />
+          <Route path="/blog/what-is-a-global-chat-room" component={BlogGlobalChat} />
+          <Route path="/blog/stranger-chat-vs-random-chat" component={BlogStrangerVsRandom} />
+          <Route path="/blog/best-free-anonymous-chat-rooms" component={BlogAnonymousRooms} />
+          <Route path="/blog/how-to-make-friends-online" component={BlogMakeFriends} />
+          <Route path="/blog/is-omegle-safe" component={BlogIsOmegleSafe} />
+          <Route path="/blog/apps-like-monkey" component={BlogAppsLikeMonkey} />
+          <Route path="/blog/best-apps-to-talk-to-strangers" component={BlogBestAppsToTalk} />
+          <Route path="/blog/why-did-omegle-shut-down" component={BlogWhyDidOmegleShutDown} />
+          <Route path="/blog/text-vs-video-chat" component={BlogTextVsVideoChat} />
+          <Route path="/blog/omegle-banned" component={BlogOmegleBanned} />
+
           <Route component={NotFoundPage} />
         </Switch>
       </Suspense>

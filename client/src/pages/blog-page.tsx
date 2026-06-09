@@ -3,13 +3,15 @@ import PageFooter from "@/components/page-footer";
 import SiteNav from "@/components/site-nav";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { BLOG_POSTS } from "@/lib/blog-data";
+import { ArrowRight } from "lucide-react";
 
 export default function BlogPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <Seo
         title="Blog | ChatNexus"
-        description="Read the latest news, guides, and articles from the ChatNexus team."
+        description="Read the latest news, guides, and articles from the ChatNexus team on random chat and online safety."
         path="/blog"
       />
 
@@ -26,50 +28,31 @@ export default function BlogPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card className="border-border shadow-sm bg-card hover:border-primary/50 transition-colors">
-            <CardContent className="pt-6">
-              <div className="text-sm text-primary font-medium mb-2">Guides</div>
-              <h2 className="text-xl font-bold text-foreground mb-3 leading-tight">
-                <Link href="/stranger-chat">
-                  How to Stay Safe While Talking to Strangers Online
-                </Link>
-              </h2>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                A comprehensive guide on maintaining your privacy and safety while enjoying anonymous chat rooms and random video alternatives.
-              </p>
-              <span className="text-xs text-muted-foreground">Coming Soon</span>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-sm bg-card hover:border-primary/50 transition-colors">
-            <CardContent className="pt-6">
-              <div className="text-sm text-primary font-medium mb-2">Updates</div>
-              <h2 className="text-xl font-bold text-foreground mb-3 leading-tight">
-                <Link href="/features">
-                  Introducing the Global Chat Room: Sub-50ms Message Delivery
-                </Link>
-              </h2>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                Learn about the engineering behind our WebSocket infrastructure that powers thousands of concurrent users in real-time.
-              </p>
-              <span className="text-xs text-muted-foreground">Coming Soon</span>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-sm bg-card hover:border-primary/50 transition-colors">
-            <CardContent className="pt-6">
-              <div className="text-sm text-primary font-medium mb-2">Industry</div>
-              <h2 className="text-xl font-bold text-foreground mb-3 leading-tight">
-                <Link href="/omegle-alternative">
-                  Life After Omegle: The Rise of Text-First Random Chat
-                </Link>
-              </h2>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                Why users are moving away from webcam-forced platforms in favor of text-first, privacy-focused alternatives like ChatNexus.
-              </p>
-              <span className="text-xs text-muted-foreground">Coming Soon</span>
-            </CardContent>
-          </Card>
+          {BLOG_POSTS.map((post) => (
+            <Link key={post.slug} href={`/blog/${post.slug}`}>
+              <Card className="h-full border-border shadow-sm bg-card hover:border-brand-primary/50 transition-colors group cursor-pointer">
+                <CardContent className="p-6 flex flex-col h-full">
+                  <div className="text-xs text-brand-primary font-bold tracking-wider uppercase mb-3">
+                    {post.category}
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground mb-3 leading-tight group-hover:text-brand-primary transition-colors">
+                    {post.title}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-6 line-clamp-3 flex-1">
+                    {post.excerpt}
+                  </p>
+                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <span className="flex items-center text-xs font-semibold text-brand-primary">
+                      Read Article <ArrowRight className="ml-1 h-3 w-3" />
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
       </main>
 
