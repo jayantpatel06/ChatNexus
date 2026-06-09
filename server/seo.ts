@@ -44,15 +44,15 @@ export type ResolvedSeoPage = RouteSeoConfig & {
 export const DEFAULT_SITE_NAME = "ChatNexus";
 export const DEFAULT_OG_LOCALE = "en_US";
 export const DEFAULT_LANGUAGE = "en-US";
-export const DEFAULT_IMAGE_PATH = "/assets/images/logo-512.png";
+export const DEFAULT_IMAGE_PATH = "/assets/images/logo-512.webp";
 export const DEFAULT_LOGO_WIDTH = 512;
 export const DEFAULT_LOGO_HEIGHT = 512;
 export const INDEXABLE_ROBOTS =
   "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 export const NOINDEX_ROBOTS = "noindex, nofollow";
-export const HOME_SEO_TITLE = "ChatNexus - Talk to strangers";
+export const HOME_SEO_TITLE = "ChatNexus — Talk to Strangers Free | Random Chat & Global Rooms";
 export const HOME_SEO_DESCRIPTION =
-  "Talk to strangers, make friends, and jump into random chat on ChatNexus. Start anonymous conversations instantly and connect with people worldwide.";
+  "Talk to strangers instantly in free random chat rooms, global chat, and anonymous stranger chat — no sign-up needed. The best Omegle alternative in 2026.";
 export const AUTH_SEO_DESCRIPTION =
   "Log in, register, or continue as a guest to start chatting on ChatNexus.";
 
@@ -103,7 +103,7 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
       "Use guest access for instant anonymous chat, explore global messaging, and create an account when you want a more persistent profile.",
     ],
     keywords:
-      "Omegle, chitchat, monkey app, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus, chat app, online chat rooms, meet new people, instant conversations, no signup chat, mobile chat, PWA chat, real-time messaging, privacy-first chat",
+      "Omegle, chitchat, monkey app, stranger chat, anonymous chat, random chat, talk to strangers, global chat, guest chat, ChatNexus, chat app, online chat rooms, meet new people, instant conversations, no signup chat, mobile chat, PWA chat, real-time messaging, privacy-first chat, sites like omegle, free chat, chat rooms",
     indexable: true,
     changefreq: "daily",
     priority: "1.0",
@@ -154,16 +154,16 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
   },
   {
     path: "/features",
-    title: "Features | ChatNexus",
+    title: "Anonymous Chat Features — Real-Time Messaging, Guest Access & More | ChatNexus",
     description:
-      "Explore all the features that make ChatNexus the fastest, most private way to chat with strangers online.",
-    heading: "Chat Features for Fast, Private Conversations",
+      "Explore all the features that make ChatNexus the fastest, most private way to chat with strangers online. Real-time messaging, global rooms, and PWA support.",
+    heading: "Chat Features for Fast, Private Stranger Conversations",
     summary: [
       "ChatNexus combines real-time messaging, guest access, global chat rooms, privacy-first design, and mobile-friendly PWA support.",
       "The platform is designed for low-friction stranger chat, media sharing, and responsive performance across phone and desktop browsers.",
     ],
     keywords:
-      "ChatNexus features, anonymous chat features, real-time messaging, global chat rooms, guest access, PWA chat app",
+      "ChatNexus features, anonymous chat features, real-time messaging, global chat rooms, guest access, PWA chat app, stranger chat features",
     indexable: true,
     changefreq: "weekly",
     priority: "0.9",
@@ -171,16 +171,16 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
   },
   {
     path: "/about",
-    title: "About | ChatNexus",
+    title: "About ChatNexus — The Anonymous Stranger Chat Platform Built for Speed & Privacy",
     description:
-      "Learn about ChatNexus and our mission to make anonymous stranger chat safe, fast, and accessible for everyone.",
-    heading: "About ChatNexus",
+      "Learn about ChatNexus and our mission to make anonymous stranger chat safe, fast, and accessible for everyone. Privacy-first messaging with no signup required.",
+    heading: "About ChatNexus — Safe, Fast Anonymous Chat",
     summary: [
       "ChatNexus was created to make meeting strangers online feel fast, safe, and accessible without the friction of legacy chat platforms.",
       "The product focuses on privacy-first messaging, guest access, responsive performance, and a more transparent communication experience.",
     ],
     keywords:
-      "about ChatNexus, ChatNexus team, anonymous chat platform mission, stranger chat story",
+      "about ChatNexus, ChatNexus team, anonymous chat platform mission, stranger chat story, privacy-first chat",
     indexable: true,
     changefreq: "monthly",
     priority: "0.8",
@@ -320,6 +320,173 @@ const PUBLIC_ROUTE_DEFINITIONS: readonly RouteSeoConfig[] = [
     robots: NOINDEX_ROBOTS,
     indexable: false,
     sourceFiles: ["client/src/features/settings/settings-page.tsx"],
+  },
+  {
+    path: "/omegle-alternative",
+    title: "Best Omegle Alternative in 2026 — ChatNexus Free Random Chat",
+    description:
+      "Looking for a site like Omegle? ChatNexus is the best free Omegle alternative with instant stranger chat, global rooms, guest access, and no video required.",
+    heading: "Best Omegle Alternative in 2026 — ChatNexus",
+    summary: [
+      "ChatNexus is a modern Omegle alternative offering instant stranger chat, global chat rooms, and guest access without requiring video or a webcam.",
+      "Compare features, read FAQs, and start chatting on ChatNexus — the best free alternative to Omegle in 2026.",
+    ],
+    keywords:
+      "omegle alternative, sites like omegle, omegle replacement, best omegle alternative 2026, free omegle alternative, omegle shut down, chat like omegle",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.9",
+    sourceFiles: ["client/src/pages/omegle-alternative.tsx"],
+  },
+  {
+    path: "/stranger-chat",
+    title: "Stranger Chat — Talk to Strangers Online Free | ChatNexus",
+    description:
+      "Start a stranger chat instantly on ChatNexus. Talk to strangers online for free with no signup, no video, and full anonymity. Guest access available.",
+    heading: "Stranger Chat — Talk to Strangers Online Free",
+    summary: [
+      "ChatNexus stranger chat lets you talk to strangers online for free with no signup required.",
+      "Start anonymous conversations instantly, send friend requests to people you like, and enjoy private, real-time messaging.",
+    ],
+    keywords:
+      "stranger chat, talk to strangers, talk to strangers online, chat with strangers, stranger chat online free, anonymous stranger chat",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.9",
+    sourceFiles: ["client/src/pages/stranger-chat.tsx"],
+  },
+  {
+    path: "/random-chat",
+    title: "Random Chat — Meet Random People Online Free | ChatNexus",
+    description:
+      "Join random chat on ChatNexus and meet new people instantly. Free random chat with strangers — no signup, no video, just real conversations.",
+    heading: "Random Chat — Meet Random People Online Free",
+    summary: [
+      "ChatNexus random chat matches you with strangers from around the world for instant, anonymous conversations.",
+      "No signup needed. Just open ChatNexus, enter as a guest, and start a random chat in seconds.",
+    ],
+    keywords:
+      "random chat, random chat online, random chat with strangers, free random chat, random chat app, random video chat alternative",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.9",
+    sourceFiles: ["client/src/pages/random-chat.tsx"],
+  },
+  {
+    path: "/anonymous-chat",
+    title: "Anonymous Chat — Chat Without Registration | ChatNexus",
+    description:
+      "Chat anonymously on ChatNexus with no registration required. Free anonymous chat rooms with guest access, private messaging, and zero data tracking.",
+    heading: "Anonymous Chat — Chat Without Registration",
+    summary: [
+      "ChatNexus anonymous chat lets you chat without registration or sharing personal information.",
+      "Guest sessions are ephemeral, messages are not permanently stored, and your identity stays hidden.",
+    ],
+    keywords:
+      "anonymous chat, anonymous chat rooms, chat without registration, no signup chat, free anonymous chat, private chat online",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.9",
+    sourceFiles: ["client/src/pages/anonymous-chat.tsx"],
+  },
+  {
+    path: "/chatib-alternative",
+    title: "Best Chatib Alternative — Ad-Free, Fast Random Chat | ChatNexus",
+    description:
+      "Looking for a Chatib alternative? ChatNexus is a modern, 100% ad-free random chat platform with instant message delivery and real-time online status updates.",
+    heading: "The Ad-Free, Fast Chatib Alternative.",
+    summary: [
+      "ChatNexus is the modern alternative to Chatib, offering an ad-free, secure, and fast random chat experience.",
+      "Experience sub-50ms messaging and instant online status updates without any intrusive banner ads.",
+    ],
+    keywords:
+      "chatib alternative, sites like chatib, better than chatib, free chat rooms without ads, fast random chat, modern chatib replacement",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.8",
+    sourceFiles: ["client/src/pages/chatib-alternative.tsx"],
+  },
+  {
+    path: "/monkey-app-alternative",
+    title: "Best Monkey App Alternative — Text-First Anonymous Chat",
+    description:
+      "Looking for an alternative to Monkey App? ChatNexus offers text-first anonymous chat with no video pressure, no app downloads, and no phone number required.",
+    heading: "Chat Freely Without Video Pressure.",
+    summary: [
+      "ChatNexus is a text-first Monkey App alternative, offering anonymous chat directly from your browser without video pressure.",
+      "No app store download, no phone number verification, and absolutely no in-app coins or microtransactions.",
+    ],
+    keywords:
+      "monkey app alternative, apps like monkey, monkey chat alternative, text random chat, stranger chat without video",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.8",
+    sourceFiles: ["client/src/pages/monkey-app-alternative.tsx"],
+  },
+  {
+    path: "/ometv-alternative",
+    title: "Best Ome.tv Alternative — No Unfair Bans, Free Chat | ChatNexus",
+    description:
+      "Frustrated by unfair bans on Ome.tv? Switch to ChatNexus, the best Ome.tv alternative offering text-based anonymous chat with no camera or social login required.",
+    heading: "Tired of Unfair Bans? Switch to ChatNexus.",
+    summary: [
+      "ChatNexus provides a ban-free alternative to Ome.tv with a focus on text-based anonymous messaging.",
+      "No camera requirements, no forced social logins (like VK or Facebook), and no predatory pay-to-unban fees.",
+    ],
+    keywords:
+      "ometv alternative, ome.tv alternative, sites like ome.tv, better than ometv, random chat no bans, free text chat, anonymous chat no login",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.8",
+    sourceFiles: ["client/src/pages/ometv-alternative.tsx"],
+  },
+  {
+    path: "/chitchat-alternative",
+    title: "Best ChitChat.gg Alternative — Fast Global Rooms | ChatNexus",
+    description:
+      "Looking for an alternative to ChitChat? ChatNexus offers sub-50ms message delivery, global rooms, persistent DMs, and a premium modern design.",
+    heading: "A Faster, Modern ChitChat Alternative.",
+    summary: [
+      "ChatNexus provides a faster and more reliable global chat room experience compared to ChitChat, with sub-50ms message delivery.",
+      "Enjoy a modern glassmorphic interface, robust friend requests, and a progressive web app for mobile devices.",
+    ],
+    keywords:
+      "chitchat.gg alternative, chitchat alternative, sites like chitchat, fast global chat, anonymous chat rooms, modern text chat",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.8",
+    sourceFiles: ["client/src/pages/chitchat-alternative.tsx"],
+  },
+  {
+    path: "/global-chat-room",
+    title: "Global Chat Room — Talk with the World Free | ChatNexus",
+    description:
+      "Join the ChatNexus global chat room to talk with people from all over the world instantly. Free, real-time world chat with no registration required.",
+    heading: "Talk to the World in Real-Time.",
+    summary: [
+      "Jump into the ChatNexus global chat room and instantly connect with thousands of users worldwide.",
+      "Experience a lightning-fast, moderation-friendly world chat with absolutely no sign-up required.",
+    ],
+    keywords:
+      "global room, world chat, global chat room, international chat, chat with the world, free global chat",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.9",
+    sourceFiles: ["client/src/pages/global-chat-room.tsx"],
+  },
+  {
+    path: "/blog",
+    title: "Blog | ChatNexus",
+    description: "Read the latest news, guides, and articles from the ChatNexus team.",
+    heading: "ChatNexus Blog",
+    summary: [
+      "Insights, updates, and guides on privacy, social connections, and the future of random chat.",
+    ],
+    keywords: "chatnexus blog, random chat guides, online safety tips",
+    indexable: true,
+    changefreq: "weekly",
+    priority: "0.7",
+    sourceFiles: ["client/src/pages/blog-page.tsx"],
   },
 ] as const;
 

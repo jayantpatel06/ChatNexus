@@ -8,23 +8,42 @@ import {
 } from "react-icons/fa6";
 import { cn } from "@/lib/utils";
 
-const NAV_LINKS = [
-  { label: "Features", href: "/features" },
+const NAVIGATE_LINKS = [
+  { label: "Home", href: "/" },
   { label: "About", href: "/about" },
-  { label: "Help Center", href: "/help-center" },
+  { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
+  { label: "Help Center", href: "/help-center" },
+];
+
+const FEATURES_LINKS = [
+  { label: "Anonymous Chat", href: "/anonymous-chat" },
+  { label: "Random Chat", href: "/random-chat" },
+  { label: "Stranger Chat", href: "/stranger-chat" },
+  { label: "Global Chat Room", href: "/global-chat-room" },
+  { label: "Features", href: "/features" },
+];
+
+const ALTERNATIVE_LINKS = [
+  { label: "Omegle Alternative", href: "/omegle-alternative" },
+  { label: "Ome.tv Alternative", href: "/ometv-alternative" },
+  { label: "Chatib Alternative", href: "/chatib-alternative" },
+  { label: "Monkey App Alternative", href: "/monkey-app-alternative" },
+  { label: "ChitChat Alternative", href: "/chitchat-alternative" },
 ];
 
 const LEGAL_LINKS = [
-  { label: "Privacy", href: "/privacy" },
-  { label: "Terms", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Terms of Service", href: "/terms" },
 ];
 
+const LINKEDIN_URL = "https://linkedin.com/in/jayantpatel06";
+
 const SOCIALS = [
-  { Icon: FaXTwitter, href: "#", label: "Twitter/X" },
-  { Icon: FaInstagram, href: "#", label: "Instagram" },
-  { Icon: FaGithub, href: "#", label: "GitHub" },
-  { Icon: FaLinkedinIn, href: "#", label: "LinkedIn" },
+  { Icon: FaXTwitter, href: LINKEDIN_URL, label: "Twitter/X" },
+  { Icon: FaInstagram, href: LINKEDIN_URL, label: "Instagram" },
+  { Icon: FaGithub, href: LINKEDIN_URL, label: "GitHub" },
+  { Icon: FaLinkedinIn, href: LINKEDIN_URL, label: "LinkedIn" },
 ];
 
 function FooterLink({
@@ -70,24 +89,89 @@ function FooterLink({
 export default function PageFooter() {
   return (
     <footer className="site-footer">
-      {/* ── Top row: brand + socials ── */}
-      <div className="site-footer__top">
-        <Link href="/">
-          <div className="site-footer__brand">
-            <img
-              src="/assets/images/logo-48.png"
-              alt=""
-              className="site-footer__logo-img"
-              width="48"
-              height="48"
-              loading="lazy"
-              decoding="async"
-            />
-            <span className="site-footer__brand-name">ChatNexus</span>
-          </div>
-        </Link>
+      <div className="site-footer__main">
+        {/* ── Left Info Column ── */}
+        <div className="site-footer__info">
+          <Link href="/">
+            <div className="site-footer__brand">
+              <img
+                src="/assets/images/logo-48.webp"
+                alt="ChatNexus"
+                className="site-footer__logo-img"
+                width="36"
+                height="36"
+                loading="lazy"
+                decoding="async"
+              />
+              <span className="site-footer__brand-name">ChatNexus</span>
+            </div>
+          </Link>
+          <p className="site-footer__desc">
+            Anonymous chat platform built for privacy, safety, and real human connections worldwide.
+          </p>
+          <Link href="/auth?redirect=/random" className="site-footer__cta">
+            Start Chatting
+          </Link>
+        </div>
 
-        <div className="site-footer__socials">
+        {/* ── Right Links Area ── */}
+        <div className="site-footer__links-area">
+          <div className="site-footer__link-column">
+            <h4 className="site-footer__col-title">Navigate</h4>
+            <div className="site-footer__links">
+              {NAVIGATE_LINKS.map(({ label, href }) => (
+                <FooterLink key={href} href={href}>
+                  {label}
+                </FooterLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="site-footer__link-column">
+            <h4 className="site-footer__col-title">Features</h4>
+            <div className="site-footer__links">
+              {FEATURES_LINKS.map(({ label, href }) => (
+                <FooterLink key={href} href={href}>
+                  {label}
+                </FooterLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="site-footer__link-column">
+            <h4 className="site-footer__col-title">Alternatives</h4>
+            <div className="site-footer__links">
+              {ALTERNATIVE_LINKS.map(({ label, href }) => (
+                <FooterLink key={href} href={href}>
+                  {label}
+                </FooterLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="site-footer__link-column">
+            <h4 className="site-footer__col-title">Legal</h4>
+            <div className="site-footer__links">
+              {LEGAL_LINKS.map(({ label, href }) => (
+                <FooterLink key={href} href={href}>
+                  {label}
+                </FooterLink>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Divider ── */}
+      <div className="site-footer__divider" />
+
+      {/* ── Bottom row: copyright and socials ── */}
+      <div className="site-footer__bottom">
+        <div className="site-footer__copy-left">
+          <span>© {new Date().getFullYear()} ChatNexus. All rights reserved.</span>
+        </div>
+
+        <div className="site-footer__socials-bottom">
           {SOCIALS.map(({ Icon, href, label }) => (
             <a
               key={label}
@@ -100,34 +184,6 @@ export default function PageFooter() {
               <Icon className="w-[16px] h-[16px]" />
             </a>
           ))}
-        </div>
-      </div>
-
-      {/* ── Divider ── */}
-      <div className="site-footer__divider" />
-
-      {/* ── Bottom row: copyright + links ── */}
-      <div className="site-footer__bottom">
-        <div className="site-footer__copy">
-          <span>© {new Date().getFullYear()} ChatNexus</span>
-          <span>All rights reserved</span>
-        </div>
-
-        <div className="site-footer__links-wrap">
-          <div className="site-footer__links">
-            {NAV_LINKS.map(({ label, href }) => (
-              <FooterLink key={href} href={href}>
-                {label}
-              </FooterLink>
-            ))}
-          </div>
-          <div className="site-footer__links">
-            {LEGAL_LINKS.map(({ label, href }) => (
-              <FooterLink key={href} href={href}>
-                {label}
-              </FooterLink>
-            ))}
-          </div>
         </div>
       </div>
     </footer>

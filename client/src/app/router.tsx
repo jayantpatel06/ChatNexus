@@ -16,6 +16,16 @@ const AboutPage = lazy(() => import("@/pages/about-page"));
 const ContactPage = lazy(() => import("@/pages/contact-page"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms-of-service-page"));
+const OmegleAlternativePage = lazy(() => import("@/pages/omegle-alternative"));
+const StrangerChatPage = lazy(() => import("@/pages/stranger-chat"));
+const RandomChatPage2 = lazy(() => import("@/pages/random-chat"));
+const AnonymousChatPage = lazy(() => import("@/pages/anonymous-chat"));
+const ChatibAlternativePage = lazy(() => import("@/pages/chatib-alternative"));
+const MonkeyAppAlternativePage = lazy(() => import("@/pages/monkey-app-alternative"));
+const OmetvAlternativePage = lazy(() => import("@/pages/ometv-alternative"));
+const ChitChatAlternativePage = lazy(() => import("@/pages/chitchat-alternative"));
+const GlobalChatRoomPage = lazy(() => import("@/pages/global-chat-room"));
+const BlogPage = lazy(() => import("@/pages/blog-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 const ProtectedRouteBoundary = lazy(() =>
   import("./protected-route").then((module) => ({
@@ -115,6 +125,16 @@ export function AppRouter() {
           <Route path="/contact" component={ContactPage} />
           <Route path="/privacy" component={PrivacyPolicyPage} />
           <Route path="/terms" component={TermsOfServicePage} />
+          <Route path="/omegle-alternative" component={OmegleAlternativePage} />
+          <Route path="/stranger-chat" component={StrangerChatPage} />
+          <Route path="/random-chat" component={RandomChatPage2} />
+          <Route path="/anonymous-chat" component={AnonymousChatPage} />
+          <Route path="/chatib-alternative" component={ChatibAlternativePage} />
+          <Route path="/monkey-app-alternative" component={MonkeyAppAlternativePage} />
+          <Route path="/ometv-alternative" component={OmetvAlternativePage} />
+          <Route path="/chitchat-alternative" component={ChitChatAlternativePage} />
+          <Route path="/global-chat-room" component={GlobalChatRoomPage} />
+          <Route path="/blog" component={BlogPage} />
           <Route component={NotFoundPage} />
         </Switch>
       </Suspense>

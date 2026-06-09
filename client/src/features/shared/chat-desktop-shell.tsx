@@ -26,7 +26,7 @@ const commandCenterShortcuts = [
 function ChatNexusShellLogo() {
   return (
     <img
-      src="/assets/images/logo-256.png"
+      src="/assets/images/logo-256.webp"
       alt="ChatNexus"
       className="h-40 w-40 opacity-60 dark:opacity-50 lg:h-52 lg:w-52"
       draggable={false}

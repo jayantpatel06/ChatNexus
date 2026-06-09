@@ -1,3 +1,11 @@
 User-agent: *
 Allow: /
+Disallow: /direct
+Disallow: /global
+Disallow: /random
+Disallow: /settings
+Disallow: /api/
+
+Sitemap: https://chatnexus.me/sitemap.xml
+
 # Runtime robots.txt is served by the Express route using SITE_URL/VITE_SITE_URL.

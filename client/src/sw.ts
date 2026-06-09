@@ -54,8 +54,8 @@ self.addEventListener("push", (event) => {
       // real-time client list (which can disagree in multi-tab / rapid-switch scenarios).
       await self.registration.showNotification(payload.title ?? "ChatNexus", {
         body: payload.body ?? "You have a new message.",
-        icon: "/assets/images/pwa-icon-192.png",
-        badge: "/assets/images/logo-64.png",
+        icon: "/assets/images/pwa-icon-192.webp",
+        badge: "/assets/images/logo-64.webp",
         tag: payload.tag ?? "chatnexus-message",
         data: {
           url: payload.url ?? "/direct",

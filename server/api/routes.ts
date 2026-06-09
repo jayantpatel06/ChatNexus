@@ -20,7 +20,7 @@ import { registerSupportRoutes } from "./support";
 
 function registerSystemRoutes(app: Express) {
   app.get("/favicon.ico", (_req, res) => {
-    res.redirect(301, "/assets/images/logo-48.png");
+    res.redirect(301, "/assets/images/logo-48.webp");
   });
 
   app.get("/robots.txt", (req, res) => {

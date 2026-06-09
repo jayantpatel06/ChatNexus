@@ -9,6 +9,7 @@ import {
 import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
+  ChevronDown,
   LayoutDashboard,
   LogIn,
   Menu,
@@ -34,7 +35,7 @@ import {
 } from "@/components/theme-toggle";
 
 const LANDING_SECTION_IDS = ["hero", "features", "about", "faq", "support"] as const;
-const NAV_LOGO_SRC = "/assets/images/logo-48.png";
+const NAV_LOGO_SRC = "/assets/images/logo-48.webp";
 
 type SiteNavProps = {
   isAuthenticated?: boolean;
@@ -165,7 +166,7 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
   );
 
   const renderLink = (label: string, hash: string, path: string) => {
-    if (isLanding) {
+    if (isLanding && hash) {
       return (
         <a
           href={`#${hash}`}
@@ -184,14 +185,15 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
   };
 
   return (
-    <nav ref={navRef} className="site-nav" style={NAV_GLASS_BLUR_STYLE}>
+    <nav ref={navRef} className="site-nav">
+      <div className="nav-bg" style={NAV_GLASS_BLUR_STYLE} />
       <div className="nav-inner">
         <Link href="/" className="nav-brand-link nav-brand-link--desktop">
           <div className="nav-brand">
             <div className="nav-logo">
               <img
                 src={NAV_LOGO_SRC}
-                alt=""
+                alt="ChatNexus — anonymous stranger chat platform"
                 className="nav-logo-img"
                 width="48"
                 height="48"
@@ -206,7 +208,7 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
           <div className="nav-logo">
             <img
               src={NAV_LOGO_SRC}
-              alt=""
+              alt="ChatNexus — anonymous stranger chat platform"
               className="nav-logo-img"
               width="48"
               height="48"
@@ -221,10 +223,21 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
 
         <div className="nav-pill">
           {renderLink("Home", "hero", "/")}
-          {renderLink("Features", "features", "/features")}
-          {renderLink("About", "about", "/about")}
-          {renderLink("FAQs", "faq", "/help-center")}
-          {renderLink("Contact", "support", "/contact")}
+
+          <div className="nav-dropdown-wrapper">
+            <Link href="/features" className={`nav-pill-link nav-dropdown-trigger ${location === "/features" ? "active" : ""}`}>
+              Features <ChevronDown className="w-3 h-3 ml-0.5 inline-block" />
+            </Link>
+            <div className="nav-dropdown-menu">
+              <Link href="/anonymous-chat" className="nav-dropdown-item">Anonymous Chat</Link>
+              <Link href="/stranger-chat" className="nav-dropdown-item">Private Chat</Link>
+              <Link href="/global-chat-room" className="nav-dropdown-item">Global Chat</Link>
+              <Link href="/random-chat" className="nav-dropdown-item">Random Chat</Link>
+            </div>
+          </div>
+
+          {renderLink("Blog", "", "/blog")}
+          {renderLink("Help Center", "faq", "/help-center")}
         </div>
 
         <div className="nav-actions">

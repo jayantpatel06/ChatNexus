@@ -14,7 +14,7 @@ type SeoProps = {
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 };
 
-const DEFAULT_IMAGE = "/assets/images/logo-512.png";
+const DEFAULT_IMAGE = "/assets/images/logo-512.webp";
 const DEFAULT_SITE_NAME = "ChatNexus";
 const DEFAULT_LOCALE = "en_US";
 const DEFAULT_OG_IMAGE_SIZE = 512;
