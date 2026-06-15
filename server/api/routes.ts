@@ -31,9 +31,16 @@ function registerSystemRoutes(app: Express) {
     const siteUrl = getSiteUrl(req);
 
     res.set("Cache-Control", "public, max-age=3600").type("text/plain").send(
-      ["User-agent: *", "Allow: /", `Sitemap: ${siteUrl}/sitemap.xml`].join(
-        "\n",
-      ),
+      [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /direct",
+        "Disallow: /global",
+        "Disallow: /random",
+        "Disallow: /settings",
+        "Disallow: /api/",
+        `Sitemap: ${siteUrl}/sitemap.xml`
+      ].join("\n"),
     );
   });
 

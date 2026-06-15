@@ -37,7 +37,7 @@ const LEGAL_LINKS = [
   { label: "Terms of Service", href: "/terms" },
 ];
 
-const LINKEDIN_URL = "https://linkedin.com/in/jayantpatel06";
+const LINKEDIN_URL = "https://linkedin.com";
 
 const SOCIALS = [
   { Icon: FaXTwitter, href: LINKEDIN_URL, label: "Twitter/X" },
