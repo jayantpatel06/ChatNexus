@@ -211,10 +211,10 @@ export default function AuthPage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && !isLoading) {
       setLocation(postAuthRedirectPathRef.current, { replace: true });
     }
-  }, [user, setLocation]);
+  }, [user, isLoading, setLocation]);
 
   useEffect(() => {
     if (isLoading) {
@@ -244,6 +244,14 @@ export default function AuthPage() {
 
     return () => animation.cancel();
   }, [loaded]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#05080d]">
+        <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+      </div>
+    );
+  }
 
   if (user) {
     return null;

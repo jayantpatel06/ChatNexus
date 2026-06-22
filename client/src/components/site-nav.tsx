@@ -228,7 +228,7 @@ export default function SiteNav({ isAuthenticated }: SiteNavProps = {}) {
             <Link href="/features" className={`nav-pill-link nav-dropdown-trigger ${location === "/features" ? "active" : ""}`}>
               Features <ChevronDown className="w-3 h-3 ml-0.5 inline-block" />
             </Link>
-            <div className="nav-dropdown-menu">
+            <div className="nav-dropdown-menu" style={NAV_GLASS_BLUR_STYLE}>
               <Link href="/anonymous-chat" className="nav-dropdown-item">Anonymous Chat</Link>
               <Link href="/stranger-chat" className="nav-dropdown-item">Private Chat</Link>
               <Link href="/global-chat-room" className="nav-dropdown-item">Global Chat</Link>

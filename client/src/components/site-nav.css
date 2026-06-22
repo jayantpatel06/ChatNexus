@@ -259,8 +259,6 @@
   min-width: 180px;
   background-color: rgba(255, 255, 255, 0.72);
   background: color-mix(in srgb, var(--ln-card-glass, rgba(20, 20, 20, 0.6)) 70%, transparent);
-  backdrop-filter: blur(20px) saturate(1.35);
-  -webkit-backdrop-filter: blur(20px) saturate(1.35);
   border: 1px solid var(--ln-glass-border-strong, rgba(255, 255, 255, 0.1));
   border-radius: 12px;
   padding: 8px;
@@ -273,6 +271,17 @@
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
   z-index: 50;
   pointer-events: none;
+}
+
+/* Creates a generous invisible hover bridge so it doesn't close easily */
+.nav-dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: -40px;
+  right: -40px;
+  bottom: -40px;
+  z-index: -1;
 }
 
 .dark .nav-dropdown-menu {
