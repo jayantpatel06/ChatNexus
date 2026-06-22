@@ -13,6 +13,7 @@ export const insertUserSchema = z.object({
   age: z.number().min(18).max(120).nullable().optional(),
   gender: z.string().max(10).nullable().optional(),
   isOnline: z.boolean().default(false).optional(),
+  isPrivate: z.boolean().default(false).optional(),
   isGuest: z.boolean().default(false).optional(),
 });
 
@@ -46,6 +47,7 @@ export const publicUserSchema = z.object({
   age: z.number().int().min(18).max(120).nullable(),
   gender: z.string().max(10).nullable(),
   isOnline: z.boolean(),
+  isPrivate: z.boolean(),
   isGuest: z.boolean(),
 });
 

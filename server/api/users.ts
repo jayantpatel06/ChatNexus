@@ -1060,4 +1060,40 @@ export function registerUserRoutes(app: Express, io: SocketIOServer) {
   );
   app.put("/api/user/profile", jwtAuth, createUpdateProfileController(io));
   app.put("/api/user/username", jwtAuth, createUpdateUsernameController(io));
+  app.put("/api/user/privacy", jwtAuth, createUpdatePrivacyController(io));
+}
+
+function createUpdatePrivacyController(io: SocketIOServer) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await storage.getUser(req.jwtUser!.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.isGuest) {
+        return res.status(403).json({ message: "Guest accounts cannot edit privacy settings" });
+      }
+
+      const { isPrivate } = req.body;
+      if (typeof isPrivate !== "boolean") {
+        return res.status(400).json({ message: "Invalid payload" });
+      }
+
+      const updatedUser = await storage.updateUserPrivacy(user.userId, isPrivate);
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to update privacy" });
+      }
+
+      primeJwtUserCache(updatedUser);
+      await emitSidebarUsers(io);
+
+      res.json({
+        user: toPublicUser(updatedUser),
+        profile: toSelfUserProfile(updatedUser),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

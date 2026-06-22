@@ -138,6 +138,7 @@ function getRandomMessageSender(
   return {
     ...currentPartner,
     isOnline: true,
+    isPrivate: false,
   };
 }
 

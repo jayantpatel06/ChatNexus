@@ -58,8 +58,9 @@ const CacheKeys = {
     `chatnexus:conv:${conversationId}:last`,
   conversationUnread: (conversationId: string, userId: number) =>
     `chatnexus:conv:${conversationId}:unread:${userId}`,
-  globalMessages: () => "chatnexus:global:recent",
-};
+  globalMessages: () => `chatnexus:global:recent`,
+  user: (userId: number) => `chatnexus:user:${userId}`,
+} as const;
 
 const CacheTTL = {
   CONVERSATION: 120,
@@ -105,6 +106,7 @@ export interface IStorage {
     id: number,
     profile: { username: string; age: number },
   ): Promise<DbUser | undefined>;
+  updateUserPrivacy(id: number, isPrivate: boolean): Promise<DbUser | undefined>;
   getOnlineUsers(): Promise<User[]>;
   getUsersByIds(ids: number[]): Promise<User[]>;
   getFriendUsers(userId: number): Promise<User[]>;
@@ -325,6 +327,7 @@ class DatabaseStorage implements IStorage {
 
     if (cacheClient) {
       await cacheClient.del(CacheKeys.globalMessages()).catch(() => {});
+      await cacheClient.del(CacheKeys.user(id)).catch(() => {});
     }
 
     this.clearBlockLookupCacheForUser(id);
@@ -335,14 +338,33 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateUserUsername(id: number, username: string): Promise<DbUser | undefined> {
-    return userRepository.updateUsername(id, username);
+    const updatedUser = await userRepository.updateUsername(id, username);
+    if (updatedUser && cacheClient) {
+      await cacheClient.del(CacheKeys.user(id)).catch(() => {});
+    }
+    return updatedUser;
   }
 
   async updateUserProfile(
     id: number,
     profile: { username: string; age: number },
   ): Promise<DbUser | undefined> {
-    return userRepository.updateProfile(id, profile);
+    const updatedUser = await userRepository.updateProfile(id, profile);
+    if (updatedUser && cacheClient) {
+      await cacheClient.del(CacheKeys.user(id)).catch(() => {});
+    }
+    return updatedUser;
+  }
+
+  async updateUserPrivacy(
+    id: number,
+    isPrivate: boolean,
+  ): Promise<DbUser | undefined> {
+    const updatedUser = await userRepository.updatePrivacy(id, isPrivate);
+    if (updatedUser && cacheClient) {
+      await cacheClient.del(CacheKeys.user(id)).catch(() => {});
+    }
+    return updatedUser;
   }
 
   async getOnlineUsers(): Promise<User[]> {

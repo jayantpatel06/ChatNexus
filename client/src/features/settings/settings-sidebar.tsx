@@ -34,6 +34,7 @@ import {
   LogOut,
   Palette,
   Settings,
+  Shield,
   User as UserIcon,
   UserPlus,
 } from "lucide-react";
@@ -44,6 +45,7 @@ import {
 
 type SettingsSection =
   | "profile"
+  | "privacy"
   | "friendRequests"
   | "notifications"
   | "blocked"
@@ -474,6 +476,30 @@ export function SettingsSidebar() {
     }
   };
 
+  const updatePrivacyMutation = useMutation({
+    mutationFn: async (isPrivate: boolean) => {
+      const res = await apiRequest("PUT", "/api/user/privacy", { isPrivate });
+      return readJsonResponse<{ user: User; profile: SelfUserProfile }>(res);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/user/profile"], data.profile);
+      updateUser(data.user);
+      toast({
+        title: "Privacy settings updated",
+        description: data.user.isPrivate
+          ? "Your account is now private."
+          : "Your account is now public.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: error.message || "Failed to update privacy settings",
+      });
+    },
+  });
+
   const toggleSection = (section: SettingSectionKey) => {
     setActiveSection((current) => (current === section ? null : section));
   };
@@ -503,6 +529,13 @@ export function SettingsSidebar() {
       description: "Accept or reject friend requests",
       icon: UserPlus,
       iconClassName: "bg-fuchsia-500",
+    },
+    {
+      id: "privacy",
+      title: "Privacy",
+      description: "Control who can see you online",
+      icon: Shield,
+      iconClassName: "bg-indigo-500",
     },
     {
       id: "notifications",
@@ -637,16 +670,35 @@ export function SettingsSidebar() {
             <Button
               type="submit"
               disabled={isSaving || !newUsername.trim() || !newAge.trim()}
-              className="mt-2 h-10 w-full md:h-9 md:text-xs"
+              className="h-10 w-full rounded-sm bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 md:h-8 md:text-xs"
             >
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin md:h-3.5 md:w-3.5" />
-              ) : (
-                "Save Profile"
-              )}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin md:h-3.5 md:w-3.5" /> : "Save Changes"}
             </Button>
           )}
         </form>
+      );
+    }
+
+    if (section === "privacy") {
+      return (
+        <div className="space-y-4 pt-2 md:space-y-3">
+          <div className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/30 px-4 py-3 md:px-3 md:py-2.5">
+            <div className="space-y-0.5">
+              <Label className="text-[15px] font-medium text-foreground md:text-[13px]">
+                Private Account
+              </Label>
+              <p className="text-[13px] text-muted-foreground md:text-[11px]">
+                When the account is Private, only your friends can see your online status.
+              </p>
+            </div>
+            <Switch
+              checked={profile?.isPrivate ?? false}
+              onCheckedChange={(checked) => updatePrivacyMutation.mutate(checked)}
+              disabled={updatePrivacyMutation.isPending || isGuestUser}
+              className="data-[state=checked]:bg-indigo-500"
+            />
+          </div>
+        </div>
       );
     }
 

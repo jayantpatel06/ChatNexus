@@ -76,7 +76,8 @@ export async function getSidebarUsersForUser(userId: number): Promise<User[]> {
   for (const connectedUser of connectedUsers) {
     if (
       connectedUser.userId !== userId &&
-      !restrictedUserIds.includes(connectedUser.userId)
+      !restrictedUserIds.includes(connectedUser.userId) &&
+      !connectedUser.isPrivate
     ) {
       sidebarUsers.set(connectedUser.userId, {
         ...connectedUser,

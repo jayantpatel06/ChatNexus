@@ -54,6 +54,22 @@ export const userRepository = {
     }
   },
 
+  async updatePrivacy(
+    userId: number,
+    isPrivate: boolean,
+  ): Promise<DbUser | undefined> {
+    if (!prisma) return undefined;
+
+    const updatedUser = await prisma.user.update({
+      where: { userId },
+      data: {
+        isPrivate,
+      },
+    });
+
+    return updatedUser ?? undefined;
+  },
+
   async updateOnlineStatus(id: number, isOnline: boolean): Promise<void> {
     if (!prisma) return;
     try {

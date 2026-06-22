@@ -35,6 +35,7 @@ export const publicUserSelect = {
   age: true,
   gender: true,
   isOnline: true,
+  isPrivate: true,
   isGuest: true,
 } as const;
 
