@@ -535,7 +535,7 @@ export function GlobalChatRoomPanel({
               aria-label="Message global chatroom"
               className={cn(
                 "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                hasDraftText ? "pr-12" : "pr-14",
+                "pr-20",
               )}
               rows={1}
               value={messageInput}
@@ -544,8 +544,31 @@ export function GlobalChatRoomPanel({
               onFocus={handleInputFocus}
               data-testid="textarea-message-input"
             />
-            <div className="absolute bottom-2 right-1.5 flex items-center">
-              {hasDraftText ? (
+            <div className="absolute bottom-2 right-1.5 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                ref={composerPickerTriggerRef}
+                className={cn(
+                  "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                  isComposerPickerOpen && "bg-muted text-foreground",
+                )}
+                title={
+                  isComposerPickerOpen
+                    ? "Show keyboard"
+                    : "Open GIF and emoji picker"
+                }
+                aria-label={
+                  isComposerPickerOpen
+                    ? "Show keyboard"
+                    : "Open GIF and emoji picker"
+                }
+                data-testid="button-picker-switch"
+                onClick={handlePickerSwitch}
+              >
+                <Smile className="h-4 w-4" />
+              </Button>
+              {hasDraftText && (
                 <Button
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={handleSendMessage}
@@ -555,30 +578,6 @@ export function GlobalChatRoomPanel({
                   title="Send Message"
                 >
                   <Send className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  ref={composerPickerTriggerRef}
-                  className={cn(
-                    "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
-                    isComposerPickerOpen && "bg-muted text-foreground",
-                  )}
-                  title={
-                    isComposerPickerOpen
-                      ? "Show keyboard"
-                      : "Open GIF and emoji picker"
-                  }
-                  aria-label={
-                    isComposerPickerOpen
-                      ? "Show keyboard"
-                      : "Open GIF and emoji picker"
-                  }
-                  data-testid="button-picker-switch"
-                  onClick={handlePickerSwitch}
-                >
-                  <Smile className="h-4 w-4" />
                 </Button>
               )}
             </div>

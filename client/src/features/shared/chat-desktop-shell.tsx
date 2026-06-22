@@ -4,6 +4,10 @@ import {
   MessageCircleMore,
   Settings2,
   Shuffle,
+  Users,
+  History,
+  MessageSquare,
+  Zap,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -17,10 +21,15 @@ type ChatDesktopShellPlaceholderProps = {
 };
 
 const commandCenterShortcuts = [
-  { label: "Open Chat", shortcut: "C", icon: MessageCircleMore },
-  { label: "Open Global", shortcut: "G", icon: Globe },
-  { label: "Open Random", shortcut: "R", icon: Shuffle },
-  { label: "Open Settings", shortcut: "S", icon: Settings2 },
+  { label: "Open Chat", shortcut: "Alt D", icon: MessageCircleMore },
+  { label: "Open Global", shortcut: "Alt G", icon: Globe },
+  { label: "Open Random", shortcut: "Alt F", icon: Shuffle },
+  { label: "Open Settings", shortcut: "Alt S", icon: Settings2 },
+  { label: "View Chats", shortcut: "1", icon: MessageSquare },
+  { label: "View Friends", shortcut: "2", icon: Users },
+  { label: "View History", shortcut: "3", icon: History },
+  { label: "Random Match", shortcut: "Esc", icon: Zap },
+  { label: "Join Global Room", shortcut: "G", icon: Globe },
 ];
 
 function ChatNexusShellLogo() {
@@ -94,7 +103,6 @@ export function ChatDesktopShellPlaceholder({
                     </span>
                   </div>
                   <span className="flex items-center gap-1 font-mono text-xs font-semibold text-muted-foreground">
-                    <Command className="h-3.5 w-3.5" />
                     {item.shortcut}
                   </span>
                 </div>

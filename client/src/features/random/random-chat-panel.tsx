@@ -785,14 +785,13 @@ export function RandomChatArea({
               >
                 {footerActionLabel}
               </Button>
-
               <div className="relative min-w-0 flex-1 rounded-[.75rem] border border-border bg-card px-6 shadow-sm">
                 <Textarea
                   placeholder={currentPartner ? "Message..." : "Send a message"}
                   aria-label="Message random chat"
                   className={cn(
                     "min-h-[40px] max-h-32 resize-none rounded-none border-0 py-3 bg-card px-0 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                    hasDraftText ? "pr-12" : "pr-14",
+                    "pr-20",
                   )}
                   rows={1}
                   value={messageInput}
@@ -802,8 +801,32 @@ export function RandomChatArea({
                   disabled={isComposerDisabled}
                   data-testid="textarea-message-input"
                 />
-                <div className="absolute bottom-2 md:bottom-1.5 right-2 flex items-center">
-                  {hasDraftText ? (
+                <div className="absolute bottom-2 md:bottom-1.5 right-2 flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    ref={composerPickerTriggerRef}
+                    className={cn(
+                      "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                      isComposerPickerOpen && "bg-muted text-foreground",
+                    )}
+                    title={
+                      isComposerPickerOpen
+                        ? "Show keyboard"
+                        : "Open GIF and emoji picker"
+                    }
+                    aria-label={
+                      isComposerPickerOpen
+                        ? "Show keyboard"
+                        : "Open GIF and emoji picker"
+                    }
+                    data-testid="button-picker-switch"
+                    onClick={handlePickerSwitch}
+                    disabled={isComposerDisabled}
+                  >
+                    <Smile className="h-4 w-4" />
+                  </Button>
+                  {hasDraftText && (
                     <Button
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={onSendMessage}
@@ -815,31 +838,6 @@ export function RandomChatArea({
                       data-testid="button-send-message"
                     >
                       <Send className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      ref={composerPickerTriggerRef}
-                      className={cn(
-                        "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
-                        isComposerPickerOpen && "bg-muted text-foreground",
-                      )}
-                      title={
-                        isComposerPickerOpen
-                          ? "Show keyboard"
-                          : "Open GIF and emoji picker"
-                      }
-                      aria-label={
-                        isComposerPickerOpen
-                          ? "Show keyboard"
-                          : "Open GIF and emoji picker"
-                      }
-                      data-testid="button-picker-switch"
-                      onClick={handlePickerSwitch}
-                      disabled={isComposerDisabled}
-                    >
-                      <Smile className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

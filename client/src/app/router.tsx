@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { PageLoader } from "@/components/page-loader";
 import { getAppLenis } from "@/lib/lenis";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 
 const LandingPage = lazy(() => import("@/pages/landing-page"));
 const ChatDashboard = lazy(() => import("@/features/direct/direct-page"));
@@ -108,11 +110,37 @@ function NotificationNavigationBridge() {
   return null;
 }
 
+function GlobalShortcutsBridge() {
+  const [location, setLocation] = useLocation();
+
+  useKeyboardShortcuts([
+    {
+      combo: { key: "d", altKey: true },
+      action: () => navigateWithinAppShell(location, "/direct", setLocation),
+    },
+    {
+      combo: { key: "g", altKey: true },
+      action: () => navigateWithinAppShell(location, "/global", setLocation),
+    },
+    {
+      combo: { key: "f", altKey: true },
+      action: () => navigateWithinAppShell(location, "/random", setLocation),
+    },
+    {
+      combo: { key: "s", altKey: true },
+      action: () => navigateWithinAppShell(location, "/settings", setLocation),
+    },
+  ]);
+
+  return null;
+}
+
 export function AppRouter() {
   return (
     <>
       <RouteScrollRestoration />
       <NotificationNavigationBridge />
+      <GlobalShortcutsBridge />
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={LandingPage} />

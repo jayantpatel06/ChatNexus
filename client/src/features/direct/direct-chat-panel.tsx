@@ -2822,8 +2822,8 @@ export function ChatArea({
                       className={cn(
                         "min-h-[40px] max-h-32 rounded-none border-0 bg-card px-0 py-3 text-sm text-foreground placeholder:text-muted-foreground shadow-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
                         hasDraftText || editTarget
-                          ? "pr-12"
-                          : "pl-6 pr-14 sm:pr-16",
+                          ? "pr-20"
+                          : "pl-6 pr-20 sm:pr-24",
                       )}
                       rows={1}
                       value={messageText}
@@ -2850,8 +2850,47 @@ export function ChatArea({
                         </Button>
                       </div>
                     )}
-                    <div className="absolute bottom-2 right-1.5 flex items-center">
-                      {hasDraftText || editTarget ? (
+                    <div className="absolute bottom-2 right-1.5 flex items-center gap-1">
+                      {!(hasDraftText || editTarget) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                          title="Attach media"
+                          aria-label="Attach media"
+                          data-testid="button-attach-file"
+                          onClick={() => {
+                            closeComposerPicker();
+                            fileInputRef.current?.click();
+                          }}
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        ref={composerPickerTriggerRef}
+                        className={cn(
+                          "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
+                          isComposerPickerOpen && "bg-muted text-foreground",
+                        )}
+                        title={
+                          isComposerPickerOpen
+                            ? "Show keyboard"
+                            : "Open GIF and emoji picker"
+                        }
+                        aria-label={
+                          isComposerPickerOpen
+                            ? "Show keyboard"
+                            : "Open GIF and emoji picker"
+                        }
+                        data-testid="button-picker-switch"
+                        onClick={handlePickerSwitch}
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                      {(hasDraftText || editTarget) && (
                         <Button
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={handleSendMessage}
@@ -2864,47 +2903,6 @@ export function ChatArea({
                         >
                           <Send className="h-4 w-4" />
                         </Button>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                            title="Attach media"
-                            aria-label="Attach media"
-                            data-testid="button-attach-file"
-                            onClick={() => {
-                              closeComposerPicker();
-                              fileInputRef.current?.click();
-                            }}
-                          >
-                            <ImageIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            ref={composerPickerTriggerRef}
-                            className={cn(
-                              "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground",
-                              isComposerPickerOpen &&
-                                "bg-muted text-foreground",
-                            )}
-                            title={
-                              isComposerPickerOpen
-                                ? "Show keyboard"
-                                : "Open GIF and emoji picker"
-                            }
-                            aria-label={
-                              isComposerPickerOpen
-                                ? "Show keyboard"
-                                : "Open GIF and emoji picker"
-                            }
-                            data-testid="button-picker-switch"
-                            onClick={handlePickerSwitch}
-                          >
-                            <Smile className="h-4 w-4" />
-                          </Button>
-                        </>
                       )}
                     </div>
                   </div>

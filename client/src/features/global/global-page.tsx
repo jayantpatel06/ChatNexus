@@ -6,6 +6,7 @@ import { MobileBottomNav } from "@/features/shared/mobile-bottom-nav";
 import { ChatDesktopShellPlaceholder } from "@/features/shared/chat-desktop-shell";
 import { Seo } from "@/components/seo";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export default function GlobalChatPage() {
   const [location, setLocation] = useLocation();
@@ -26,6 +27,17 @@ export default function GlobalChatPage() {
   const closeDesktopRoom = () => {
     setShowDesktopRoom(false);
   };
+
+  useKeyboardShortcuts([
+    {
+      combo: { key: "g" },
+      action: () => {
+        if (!showDesktopRoom) {
+          openGlobalRoom();
+        }
+      },
+    },
+  ]);
 
   if (isMobile) {
     return (

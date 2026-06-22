@@ -33,6 +33,7 @@ import {
   ChatNavigationMenu,
   type ChatNavigationItem,
 } from "@/features/shared/chat-navigation-menu";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 // Extended user type with online status tracking
 interface CachedUser extends User {
@@ -478,6 +479,21 @@ export function UsersSidebar({
       navigateWithinAppShell(location, "/direct", setLocation);
     }
   };
+
+  useKeyboardShortcuts([
+    {
+      combo: { key: "1"},
+      action: () => handleDashboardViewChange("chat"),
+    },
+    {
+      combo: { key: "2"},
+      action: () => handleDashboardViewChange("friends"),
+    },
+    {
+      combo: { key: "3"},
+      action: () => handleDashboardViewChange("history"),
+    },
+  ]);
 
   const activeDashboardView: "chat" | "friends" | "history" =
     mode === "history"

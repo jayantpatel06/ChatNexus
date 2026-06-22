@@ -543,7 +543,7 @@ export function RandomSidebar({
       return;
     }
 
-    const targetLocation = `/${selectedItem}`;
+    const targetLocation = selectedItem === "chat" ? "/direct" : `/${selectedItem}`;
     if (location !== targetLocation) {
       navigateWithinAppShell(location, targetLocation, setLocation);
     }
