@@ -205,7 +205,7 @@ export default function ChatibAlternativePage() {
               <strong>ChatNexus fixes all of this.</strong> We built our platform on cutting-edge WebSocket technology to ensure that message delivery and user status updates happen in milliseconds. When someone goes offline, you know instantly.
             </p>
             <p className="text-brand-text text-base leading-7">
-              Most importantly, ChatNexus is <span className="text-white font-semibold">100% free of advertisements</span>. No pop-ups, no tracking scripts, no cluttered interfaces. Just you and your conversations in a sleek, modern environment.
+              Most importantly, ChatNexus is <span className="text-brand-text font-semibold">100% free of advertisements</span>. No pop-ups, no tracking scripts, no cluttered interfaces. Just you and your conversations in a sleek, modern environment.
             </p>
           </div>
 
@@ -233,10 +233,10 @@ export default function ChatibAlternativePage() {
           </div>
 
           <div className="mx-auto mt-8 max-w-2xl px-4">
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+            <div className="overflow-hidden rounded-2xl border border-brand-border bg-brand-card/20">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-white/70">
+                  <tr className="border-b border-brand-border text-brand-text/70">
                     <th className="px-6 py-4 font-medium">Feature</th>
                     <th className="px-6 py-4 text-center font-medium">ChatNexus</th>
                     <th className="px-6 py-4 text-center font-medium">Chatib</th>
@@ -286,9 +286,9 @@ export default function ChatibAlternativePage() {
             {FAQS.map(({ question, answer }) => (
               <details
                 key={question}
-                className="group rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-5 transition-colors hover:bg-white/[0.05]"
+                className="group rounded-2xl border border-brand-border bg-brand-card/20 px-6 py-5 transition-colors hover:bg-brand-card/40"
               >
-                <summary className="cursor-pointer list-none text-base font-medium text-white [&::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-base font-medium text-brand-text [&::-webkit-details-marker]:hidden">
                   {question}
                 </summary>
                 <p className="mt-3 text-sm leading-6 text-brand-text">{answer}</p>

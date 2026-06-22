@@ -221,8 +221,8 @@ export default function RandomChatPage() {
           </div>
           <div className="mx-auto mt-8 max-w-3xl space-y-6 px-4">
             {FAQS.map(({ question, answer }) => (
-              <details key={question} className="group rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-5 transition-colors hover:bg-white/[0.05]">
-                <summary className="cursor-pointer list-none text-base font-medium text-white [&::-webkit-details-marker]:hidden">{question}</summary>
+              <details key={question} className="group rounded-2xl border border-brand-border bg-brand-card/20 px-6 py-5 transition-colors hover:bg-brand-card/40">
+                <summary className="cursor-pointer list-none text-base font-medium text-brand-text [&::-webkit-details-marker]:hidden">{question}</summary>
                 <p className="mt-3 text-sm leading-6 text-brand-text">{answer}</p>
               </details>
             ))}

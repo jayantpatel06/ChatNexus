@@ -176,21 +176,21 @@ export default function StrangerChatPage() {
               <div className="flex gap-4 items-start">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/20 text-brand-primary font-bold">1</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Open ChatNexus</h3>
+                  <h3 className="font-semibold text-brand-text mb-1">Open ChatNexus</h3>
                   <p className="text-brand-text text-sm leading-6">Visit ChatNexus on any device — desktop, phone, or tablet. No app download required thanks to our PWA technology.</p>
                 </div>
               </div>
               <div className="flex gap-4 items-start">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/20 text-brand-primary font-bold">2</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Enter as a Guest</h3>
+                  <h3 className="font-semibold text-brand-text mb-1">Enter as a Guest</h3>
                   <p className="text-brand-text text-sm leading-6">Pick any username and jump straight in. No email, no phone number, no verification. Your anonymity is guaranteed.</p>
                 </div>
               </div>
               <div className="flex gap-4 items-start">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/20 text-brand-primary font-bold">3</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Start Chatting</h3>
+                  <h3 className="font-semibold text-brand-text mb-1">Start Chatting</h3>
                   <p className="text-brand-text text-sm leading-6">You're instantly connected to a stranger chat. Send messages, share media, and if you click — send a friend request to keep talking.</p>
                 </div>
               </div>
@@ -223,8 +223,8 @@ export default function StrangerChatPage() {
           </div>
           <div className="mx-auto mt-8 max-w-3xl space-y-6 px-4">
             {FAQS.map(({ question, answer }) => (
-              <details key={question} className="group rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-5 transition-colors hover:bg-white/[0.05]">
-                <summary className="cursor-pointer list-none text-base font-medium text-white [&::-webkit-details-marker]:hidden">{question}</summary>
+              <details key={question} className="group rounded-2xl border border-brand-border bg-brand-card/20 px-6 py-5 transition-colors hover:bg-brand-card/40">
+                <summary className="cursor-pointer list-none text-base font-medium text-brand-text [&::-webkit-details-marker]:hidden">{question}</summary>
                 <p className="mt-3 text-sm leading-6 text-brand-text">{answer}</p>
               </details>
             ))}
