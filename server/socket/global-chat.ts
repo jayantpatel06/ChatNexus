@@ -30,6 +30,9 @@ export async function handleGlobalMessage(
     }
 
     io.emit("global_message", { message: savedMessage });
+    
+    // Trigger cleanup asynchronously
+    cleanupExpiredGlobalMessagesIfNeeded(io).catch(console.error);
   } catch (error) {
     console.error("Socket.IO global_message error:", error);
   }
@@ -42,7 +45,7 @@ export async function cleanupExpiredGlobalMessagesIfNeeded(
 
   if (
     lastGlobalChatCleanupAt > 0 &&
-    now - lastGlobalChatCleanupAt < SOCKET_CONFIG.GLOBAL_CHAT_MAX_AGE_MS
+    now - lastGlobalChatCleanupAt < 3600000 // 1 hour debounce
   ) {
     return;
   }
@@ -54,11 +57,8 @@ export async function cleanupExpiredGlobalMessagesIfNeeded(
 
   pendingGlobalChatCleanup = (async () => {
     try {
-      const expiredBefore = new Date(
-        Date.now() - SOCKET_CONFIG.GLOBAL_CHAT_MAX_AGE_MS,
-      );
       const deletedMessageIds =
-        await storage.cleanupExpiredGlobalMessages(expiredBefore);
+        await storage.cleanupExpiredGlobalMessages(100);
 
       lastGlobalChatCleanupAt = Date.now();
 

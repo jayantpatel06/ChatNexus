@@ -123,7 +123,7 @@ export interface IStorage {
   getRecentMessagesForUser(userId: number): Promise<Message[]>;
   createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessageWithSender>;
   getGlobalMessages(limit?: number): Promise<GlobalMessageWithSender[]>;
-  cleanupExpiredGlobalMessages(olderThan: Date): Promise<number[]>;
+  cleanupExpiredGlobalMessages(limit: number): Promise<number[]>;
   createAttachment(attachment: InsertAttachment): Promise<Attachment>;
   deleteAttachment(id: number): Promise<void>;
   getOldAttachments(olderThan: Date): Promise<Attachment[]>;
@@ -611,9 +611,9 @@ class DatabaseStorage implements IStorage {
     return messages;
   }
 
-  async cleanupExpiredGlobalMessages(olderThan: Date): Promise<number[]> {
+  async cleanupExpiredGlobalMessages(limit: number): Promise<number[]> {
     const deletedMessageIds =
-      await messageRepository.deleteGlobalMessagesOlderThan(olderThan);
+      await messageRepository.deleteGlobalMessagesBeyondLimit(limit);
 
     if (deletedMessageIds.length > 0 && cacheClient) {
       await cacheClient.del(CacheKeys.globalMessages()).catch(() => {});

@@ -1009,10 +1009,10 @@ export function SettingsSidebar() {
                             <Icon className="h-4.5 w-4.5 md:h-3.5 md:w-3.5" />
                           </div>
                           <div className="min-w-0 text-left">
-                            <p className="truncate text-[15px] font-semibold leading-tight text-foreground md:text-sm">
+                            <p className="truncate text-[16px] font-semibold leading-tight text-foreground md:text-sm">
                               {item.title}
                             </p>
-                            <p className="mt-1 text-sm text-muted-foreground md:text-xs">
+                            <p className="mt-1 text-xs text-muted-foreground md:text-xs">
                               {item.description}
                             </p>
                           </div>

@@ -128,13 +128,25 @@ export const messageRepository = {
     }
   },
 
-  async deleteGlobalMessagesOlderThan(olderThan: Date): Promise<number[]> {
+  async deleteGlobalMessagesBeyondLimit(limit: number): Promise<number[]> {
     if (!prisma) return [];
     try {
       return await prisma.$transaction(async (tx) => {
+        const messagesToKeep = await tx.globalMessage.findMany({
+          orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+          take: limit,
+          select: { id: true },
+        });
+
+        if (messagesToKeep.length < limit) {
+          return [];
+        }
+
+        const keepIds = messagesToKeep.map((message) => message.id);
+
         const expiredMessages = await tx.globalMessage.findMany({
           where: {
-            timestamp: { lt: olderThan },
+            id: { notIn: keepIds },
           },
           select: {
             id: true,
@@ -156,7 +168,7 @@ export const messageRepository = {
         return expiredMessageIds;
       });
     } catch (error) {
-      console.error("Error deleting expired global messages:", error);
+      console.error("Error deleting old global messages:", error);
       throw error;
     }
   },

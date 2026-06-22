@@ -293,10 +293,54 @@ export function UsersSidebar({
     [friendUsersQuery.data],
   );
 
+  const statsTargetUserIdsKey = useMemo(() => {
+    const ids = new Set<number>();
+    cachedUsers.forEach((_, id) => ids.add(id));
+    (historyUsersQuery.data ?? []).forEach((u) => ids.add(u.userId));
+    (friendUsersQuery.data ?? []).forEach((u) => ids.add(u.userId));
+    return Array.from(ids)
+      .sort((a, b) => a - b)
+      .slice(0, 100)
+      .join(",");
+  }, [cachedUsers, historyUsersQuery.data, friendUsersQuery.data]);
+
+  const { data: conversationStats } = useQuery({
+    queryKey: ["conversations-stats", currentUserId, statsTargetUserIdsKey],
+    queryFn: async () => {
+      if (!statsTargetUserIdsKey) return {};
+      const res = await apiRequest(
+        "GET",
+        `/api/conversations/stats?userIds=${encodeURIComponent(statsTargetUserIdsKey)}`,
+      );
+      return readJsonResponse<ConversationStatsResponse>(res);
+    },
+    enabled: !!currentUserId && statsTargetUserIdsKey.length > 0,
+  });
+
   const sourceUsers = useMemo<CachedUser[]>(() => {
     if (mode !== "history") {
       if (!appliedFilters.friendsOnly || user?.isGuest) {
-        return Array.from(cachedUsers.values());
+        const usersMap = new Map<number, CachedUser>();
+        
+        cachedUsers.forEach((cachedUser, userId) => {
+          usersMap.set(userId, cachedUser);
+        });
+
+        (historyUsersQuery.data ?? []).forEach((historyUser) => {
+          if (!usersMap.has(historyUser.userId)) {
+            const stats = conversationStats?.[historyUser.userId];
+            if (stats && stats.unread > 0) {
+              usersMap.set(historyUser.userId, {
+                ...historyUser,
+                isOnline: false,
+                isPinned: true,
+                lastSeen: 0,
+              });
+            }
+          }
+        });
+
+        return Array.from(usersMap.values());
       }
 
       return (friendUsersQuery.data ?? []).map((friendUser) => {
@@ -356,20 +400,6 @@ export function UsersSidebar({
         .join(","),
     [candidateUsers],
   );
-
-  // Fetch conversation stats for candidate users
-  const { data: conversationStats } = useQuery({
-    queryKey: ["conversations-stats", currentUserId, candidateUserIdsKey],
-    queryFn: async () => {
-      if (!candidateUserIdsKey) return {};
-      const res = await apiRequest(
-        "GET",
-        `/api/conversations/stats?userIds=${encodeURIComponent(candidateUserIdsKey)}`,
-      );
-      return readJsonResponse<ConversationStatsResponse>(res);
-    },
-    enabled: !!currentUserId && candidateUserIdsKey.length > 0,
-  });
 
   const displayUsers = candidateUsers
     .filter(
