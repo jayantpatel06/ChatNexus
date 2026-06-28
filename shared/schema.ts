@@ -38,6 +38,7 @@ export const registerUserSchema = z.object({
 
 export const updateUserProfileSchema = z.object({
   username: z.string().trim().min(2).max(20).regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/, "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods."),
+  gender: z.enum(["Male", "Female", "Other"]).optional(),
   age: z.coerce.number().int().min(18).max(120),
 });
 

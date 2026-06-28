@@ -237,11 +237,13 @@ async function updateMemberProfile(user: DbUser, profile: UpdateUserProfile) {
     }
   }
 
+
   let updatedUser: DbUser | undefined;
   try {
     updatedUser = await storage.updateUserProfile(user.userId, {
       username: profile.username,
       age: profile.age,
+      gender: profile.gender,
     });
   } catch (error) {
     if (isPrismaUniqueConstraintError(error, "username")) {

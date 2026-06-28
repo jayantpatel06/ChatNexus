@@ -21,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -175,7 +182,8 @@ export function SettingsSidebar() {
   );
   const [usernameError, setUsernameError] = useState("");
   const [ageError, setAgeError] = useState("");
-  
+  const [newGender, setNewGender] = useState(user?.gender || "");
+  const [genderError, setGenderError] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -229,7 +237,8 @@ export function SettingsSidebar() {
   useEffect(() => {
     setNewUsername(user?.username || "");
     setNewAge(user?.age != null ? String(user.age) : "");
-  }, [user?.age, user?.username]);
+    setNewGender(user?.gender || "");
+  }, [user?.age, user?.username, user?.gender]);
 
   useEffect(() => {
     setPreferenceDraft((prev) => ({
@@ -248,8 +257,10 @@ export function SettingsSidebar() {
     setNewAge(
       profileQuery.data.age != null ? String(profileQuery.data.age) : "",
     );
+    setNewGender(profileQuery.data.gender || "");
     setUsernameError("");
     setAgeError("");
+    setGenderError("");
     setPasswordError("");
     setCurrentPassword("");
     setNewPassword("");
@@ -298,7 +309,7 @@ export function SettingsSidebar() {
   }, [socket]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { username: string; age: number }) => {
+    mutationFn: async (data: { username: string; age: number; gender?: string }) => {
       const res = await apiRequest("PUT", "/api/user/profile", data);
       return readJsonResponse<{
         user: User;
@@ -531,7 +542,11 @@ export function SettingsSidebar() {
       setAgeError("18-120");
       return;
     }
-    if (trimmedUsername === user?.username && parsedAge === user?.age) {
+    if (
+      trimmedUsername === user?.username &&
+      parsedAge === user?.age &&
+      newGender === (user?.gender || "")
+    ) {
       toast({
         title: "No changes",
         description: "Update your info first.",
@@ -541,7 +556,12 @@ export function SettingsSidebar() {
 
     setUsernameError("");
     setAgeError("");
-    updateProfileMutation.mutate({ username: trimmedUsername, age: parsedAge });
+    setGenderError("");
+    updateProfileMutation.mutate({ 
+      username: trimmedUsername, 
+      age: parsedAge,
+      gender: newGender || undefined,
+    });
   };
 
   const handleSubmitPassword = (event: FormEvent) => {
@@ -759,12 +779,29 @@ export function SettingsSidebar() {
               <Label className="m-2 text-xs font-semibold text-muted-foreground md:m-1.5 md:text-[11px]">
                 Gender
               </Label>
-              <Input
-                value={genderLabel}
-                readOnly
-                aria-readonly="true"
-                className="h-10 border border-border/80 bg-muted/20 text-sm text-muted-foreground shadow-none md:h-9 md:text-xs"
-              />
+              <Select
+                value={newGender || ""}
+                onValueChange={(value) => setNewGender(value)}
+                disabled={isSaving || isGuestUser}
+              >
+                <SelectTrigger
+                  className={cn(
+                    "mt-1 h-10 rounded-sm !border-solid !border-1 !border-foreground/40 bg-background text-sm text-foreground shadow-none focus:!border-solid focus:!border-1 focus:!border-primary focus-visible:!border-solid focus-visible:!border-1 focus-visible:!border-primary md:h-9 md:text-xs",
+                    genderError &&
+                      "!border-destructive focus:!border-destructive focus-visible:!border-destructive",
+                  )}
+                >
+                  <SelectValue placeholder="Gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              {genderError ? (
+                <p className="text-xs text-destructive md:text-[11px]">{genderError}</p>
+              ) : null}
             </div>
           </div>
 

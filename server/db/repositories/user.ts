@@ -110,7 +110,7 @@ export const userRepository = {
 
   async updateProfile(
     id: number,
-    profile: { username: string; age: number },
+    profile: { username: string; age: number; gender?: string },
   ): Promise<DbUser | undefined> {
     if (!prisma) return undefined;
     try {
@@ -119,6 +119,7 @@ export const userRepository = {
         data: {
           username: profile.username,
           age: profile.age,
+          gender: profile.gender,
         },
       });
     } catch (error) {

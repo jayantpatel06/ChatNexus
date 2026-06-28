@@ -105,7 +105,7 @@ export interface IStorage {
   updateUserPassword(id: number, passwordHash: string): Promise<DbUser | undefined>;
   updateUserProfile(
     id: number,
-    profile: { username: string; age: number },
+    profile: { username: string; age: number; gender?: string },
   ): Promise<DbUser | undefined>;
   updateUserPrivacy(id: number, isPrivate: boolean): Promise<DbUser | undefined>;
   getOnlineUsers(): Promise<User[]>;
@@ -356,7 +356,7 @@ class DatabaseStorage implements IStorage {
 
   async updateUserProfile(
     id: number,
-    profile: { username: string; age: number },
+    profile: { username: string; age: number; gender?: string },
   ): Promise<DbUser | undefined> {
     const updatedUser = await userRepository.updateProfile(id, profile);
     if (updatedUser && cacheClient) {
