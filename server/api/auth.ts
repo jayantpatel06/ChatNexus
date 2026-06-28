@@ -92,8 +92,14 @@ async function registerMemberUser(
   return { user: toPublicUser(user), token: signToken(user) };
 }
 
-async function authenticateMemberUser(gmail: string, password: string) {
-  const user = await storage.getUserByGmail(gmail);
+async function authenticateMemberUser(identifier: string, password: string) {
+  let user;
+  if (identifier.includes("@")) {
+    user = await storage.getUserByGmail(identifier);
+  } else {
+    user = await storage.getUserByUsername(identifier);
+  }
+
   if (!user || !user.passwordHash) {
     return null;
   }
@@ -200,12 +206,12 @@ async function loginController(
   try {
     const validatedData = parseLoginPayload(req.body);
     const payload = await authenticateMemberUser(
-      validatedData.gmail,
+      (validatedData as any).identifier || (validatedData as any).gmail, // Handle both old token types briefly if they exist in some caches, but mainly identifier
       validatedData.password,
     );
 
     if (!payload) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid username, email, or password" });
     }
 
     return res.status(200).json(payload);

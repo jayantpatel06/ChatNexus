@@ -18,12 +18,12 @@ export const insertUserSchema = z.object({
 });
 
 export const loginUserSchema = z.object({
-  gmail: z.string().email(),
+  identifier: z.string().min(1, "Username or email is required"),
   password: z.string().min(1),
 });
 
 export const guestLoginSchema = z.object({
-  username: z.string().min(2).max(20),
+  username: z.string().min(2).max(20).regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/, "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods."),
   age: z.number().min(18).max(120),
   gender: z.enum(["Male", "Female", "Other"]),
 });
@@ -31,13 +31,13 @@ export const guestLoginSchema = z.object({
 export const registerUserSchema = z.object({
   gmail: z.string().email(),
   password: z.string().min(6),
-  username: z.string().min(1).max(50),
+  username: z.string().min(2).max(20).regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/, "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods."),
   age: z.number().min(18).max(120),
   gender: z.enum(["Male", "Female", "Other"]),
 });
 
 export const updateUserProfileSchema = z.object({
-  username: z.string().trim().min(2).max(20),
+  username: z.string().trim().min(2).max(20).regex(/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/, "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods."),
   age: z.coerce.number().int().min(18).max(120),
 });
 

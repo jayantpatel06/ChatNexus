@@ -187,7 +187,7 @@ export default function AuthPage() {
 
   const loginForm = useForm<LoginUser>({
     defaultValues: {
-      gmail: "",
+      identifier: "",
       password: "",
     },
   });
@@ -198,7 +198,7 @@ export default function AuthPage() {
       password: "",
       username: "",
       age: 18,
-      gender: undefined,
+      gender: "Female",
     },
   });
 
@@ -206,7 +206,7 @@ export default function AuthPage() {
     defaultValues: {
       username: "",
       age: 18,
-      gender: "Male",
+      gender: "Female",
     },
   });
 
@@ -335,23 +335,19 @@ export default function AuthPage() {
           data-testid="form-login"
         >
           <div className="space-y-3">
-            <Label htmlFor="login-email" className="sr-only">
-              Email
+            <Label htmlFor="login-identifier" className="sr-only">
+              Username or Email
             </Label>
             <Input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              placeholder="Enter your email address"
+              id="login-identifier"
+              type="text"
+              autoComplete="username"
+              placeholder="Enter your username or email"
               className={FIELD_CLASS_NAME}
-              {...loginForm.register("gmail", {
-                required: "Email is required.",
-                pattern: {
-                  value: EMAIL_PATTERN,
-                  message: "Please enter a valid email address.",
-                },
+              {...loginForm.register("identifier", {
+                required: "Username or email is required.",
               })}
-              data-testid="input-login-email"
+              data-testid="input-login-identifier"
             />
           </div>
 
@@ -421,12 +417,16 @@ export default function AuthPage() {
                 {...registerForm.register("username", {
                   required: "Username is required.",
                   minLength: {
-                    value: 1,
-                    message: "Username is required.",
+                    value: 2,
+                    message: "Username must be at least 2 characters.",
                   },
                   maxLength: {
-                    value: 50,
-                    message: "Username must be 50 characters or fewer.",
+                    value: 20,
+                    message: "Username must be 20 characters or fewer.",
+                  },
+                  pattern: {
+                    value: /^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/,
+                    message: "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods.",
                   },
                 })}
                 data-testid="input-register-username"
@@ -619,6 +619,10 @@ export default function AuthPage() {
               maxLength: {
                 value: 20,
                 message: "Guest username must be 20 characters or fewer.",
+              },
+              pattern: {
+                value: /^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$/,
+                message: "Usernames can only use letters, numbers, underscores and periods. They cannot start/end with a period or have consecutive periods.",
               },
             })}
           />
