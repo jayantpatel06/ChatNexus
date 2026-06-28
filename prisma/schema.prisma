@@ -90,8 +90,8 @@ model Message {
   editedAt       DateTime? @map("edited_at")
   deletedAt      DateTime? @map("deleted_at")
   timestamp      DateTime  @default(now())
-  receiver       User      @relation("Receiver", fields: [receiverId], references: [userId])
-  sender         User      @relation("Sender", fields: [senderId], references: [userId])
+  receiver       User      @relation("Receiver", fields: [receiverId], references: [userId], onDelete: Cascade)
+  sender         User      @relation("Sender", fields: [senderId], references: [userId], onDelete: Cascade)
   replyTo        Message?  @relation("MessageReplies", fields: [replyToId], references: [msgId], onDelete: SetNull)
   replies        Message[] @relation("MessageReplies")
 
@@ -139,7 +139,7 @@ model GlobalMessage {
   senderId  Int      @map("sender_id")
   message   String
   timestamp DateTime @default(now())
-  sender    User     @relation(fields: [senderId], references: [userId])
+  sender    User     @relation(fields: [senderId], references: [userId], onDelete: Cascade)
 
   @@map("GlobalMessages")
   @@index([timestamp])

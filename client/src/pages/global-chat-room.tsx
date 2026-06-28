@@ -155,7 +155,7 @@ export default function GlobalChatRoomPage() {
           </p>
           <div className="hero-cta-row" style={{ justifyContent: "center", marginTop: "2rem" }}>
             <MagneticWrap>
-              <Link href="/auth?redirect=/global/chat" className="hero-btn-primary">
+              <Link href="/auth?redirect=/global" className="hero-btn-primary">
                 Join Global Chat
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -229,7 +229,7 @@ export default function GlobalChatRoomPage() {
           </div>
           <div className="flex justify-center">
             <MagneticWrap>
-              <Link href="/auth?redirect=/global/chat" className="hero-btn-primary">
+              <Link href="/auth?redirect=/global" className="hero-btn-primary">
                 Join Global Chat
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

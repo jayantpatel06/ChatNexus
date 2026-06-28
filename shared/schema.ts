@@ -41,6 +41,11 @@ export const updateUserProfileSchema = z.object({
   age: z.coerce.number().int().min(18).max(120),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required").max(128, "Password must not exceed 128 characters"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters").max(128, "Password must not exceed 128 characters"),
+});
+
 export const publicUserSchema = z.object({
   userId: z.number().int().positive(),
   username: z.string().min(1).max(50),

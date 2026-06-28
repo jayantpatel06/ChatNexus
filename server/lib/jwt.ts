@@ -1,5 +1,5 @@
 import jwt, { SignOptions } from "jsonwebtoken";
-import { User } from "@shared/schema";
+import { DbUser } from "@shared/schema";
 
 const JWT_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
 
@@ -7,6 +7,7 @@ interface AppJwtPayload {
   sub: number;
   username: string;
   isGuest: boolean;
+  pwHash?: string;
   iat?: number;
   exp?: number;
 }
@@ -25,7 +26,7 @@ export function assertJwtSecretConfigured(): void {
   getJwtSecret();
 }
 
-export function signToken(user: User): string {
+export function signToken(user: DbUser): string {
   const options: SignOptions = {
     algorithm: "HS256",
     expiresIn: JWT_EXPIRY_SECONDS,
@@ -36,6 +37,7 @@ export function signToken(user: User): string {
       sub: user.userId,
       username: user.username,
       isGuest: user.isGuest,
+      pwHash: user.passwordHash ? user.passwordHash.substring(0, 10) : undefined,
     },
     getJwtSecret(),
     options,
@@ -44,7 +46,7 @@ export function signToken(user: User): string {
 
 export function verifyToken(
   token: string,
-): { userId: number; username: string; isGuest: boolean } | null {
+): { userId: number; username: string; isGuest: boolean; pwHash?: string } | null {
   try {
     const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: ["HS256"],
@@ -59,6 +61,7 @@ export function verifyToken(
       userId: payload.sub,
       username: payload.username,
       isGuest: payload.isGuest ?? false,
+      pwHash: payload.pwHash,
     };
   } catch {
     return null;

@@ -5,6 +5,7 @@ import { navigateWithinAppShell } from "@/app/app-shell-navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { apiRequest, readJsonResponse } from "@/lib/api-client";
 import { queryClient } from "@/lib/queryClient";
+import { setStoredToken, removeStoredToken, removeStoredUser } from "@/lib/auth-storage";
 import {
   getPushSubscriptionStatus,
   isPushNotificationsSupported,
@@ -19,6 +20,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn, getUserInitials } from "@/lib/utils";
 import type { FriendRequestWithUsers, SelfUserProfile, User } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
@@ -37,6 +56,8 @@ import {
   Shield,
   User as UserIcon,
   UserPlus,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   ChatNavigationMenu,
@@ -50,6 +71,7 @@ type SettingsSection =
   | "notifications"
   | "blocked"
   | "appearance"
+  | "security"
   | "help"
   | "about"
   | null;
@@ -153,6 +175,14 @@ export function SettingsSidebar() {
   );
   const [usernameError, setUsernameError] = useState("");
   const [ageError, setAgeError] = useState("");
+  
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["/api/user/profile"],
@@ -220,6 +250,11 @@ export function SettingsSidebar() {
     );
     setUsernameError("");
     setAgeError("");
+    setPasswordError("");
+    setCurrentPassword("");
+    setNewPassword("");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
   }, [profileQuery.data]);
 
   useEffect(() => {
@@ -416,6 +451,57 @@ export function SettingsSidebar() {
     },
   });
 
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      const res = await apiRequest("POST", "/api/auth/change-password", data);
+      return readJsonResponse<{ token?: string }>(res);
+    },
+    onSuccess: (data) => {
+      if (data && data.token) {
+        setStoredToken(data.token);
+      }
+      toast({
+        title: "Password updated",
+        description: "Your password has been changed successfully.",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordError("");
+      setIsPasswordModalOpen(false);
+    },
+    onError: (error: Error) => {
+      setPasswordError(error.message);
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/auth/account");
+    },
+    onSuccess: () => {
+      removeStoredToken();
+      removeStoredUser();
+      toast({
+        title: "Account deleted",
+        description: "Your account and data have been permanently removed.",
+      });
+      queryClient.clear();
+      setLocation("/");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Deletion failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmitProfile = (event: FormEvent) => {
     event.preventDefault();
     if (user?.isGuest) {
@@ -456,6 +542,20 @@ export function SettingsSidebar() {
     setUsernameError("");
     setAgeError("");
     updateProfileMutation.mutate({ username: trimmedUsername, age: parsedAge });
+  };
+
+  const handleSubmitPassword = (event: FormEvent) => {
+    event.preventDefault();
+    if (!currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
+      return;
+    }
+    setPasswordError("");
+    changePasswordMutation.mutate({ currentPassword, newPassword });
   };
 
   const handleNavigationSelect = (item: ChatNavigationItem) => {
@@ -557,6 +657,13 @@ export function SettingsSidebar() {
       description: "Theme and display",
       icon: Palette,
       iconClassName: "bg-amber-500",
+    },
+    {
+      id: "security",
+      title: "Security & Account",
+      description: "Password and account deletion",
+      icon: Lock,
+      iconClassName: "bg-red-500",
     },
     {
       id: "help",
@@ -910,6 +1017,175 @@ export function SettingsSidebar() {
           </div>
           <ThemeToggleButton2 className="shrink-0 shadow-none" />
         </SettingsSurface>
+      );
+    }
+
+    if (section === "security") {
+      return (
+        <div className="space-y-4 px-4 pt-1 md:space-y-3">
+          {!isGuestUser && (
+            <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full justify-center text-sm font-semibold md:h-9 md:text-xs">
+                  Change Password
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Change Password</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmitPassword} className="space-y-4 mt-2">
+                  <div className="space-y-2 rounded-sm p-1">
+                    <Label
+                      htmlFor="current-password"
+                      className="m-2 text-xs font-semibold text-muted-foreground md:m-1.5 md:text-[11px]"
+                    >
+                      Current Password
+                    </Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="current-password"
+                        type={showCurrentPassword ? "text" : "password"}
+                        autoComplete="off"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        disabled={changePasswordMutation.isPending}
+                        className={cn(
+                          "h-10 pr-10 rounded-sm !border-solid !border-1 !border-foreground/40 bg-background text-sm text-foreground shadow-none focus:!border-solid focus:!border-1 focus:!border-primary focus-visible:!border-solid focus-visible:!border-1 focus-visible:!border-primary md:h-9 md:text-xs",
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full w-10 text-muted-foreground hover:bg-transparent"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        tabIndex={-1}
+                      >
+                        {showCurrentPassword ? (
+                          <EyeOff className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                        ) : (
+                          <Eye className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                        )}
+                      </Button>
+                    </div>
+
+                    <Label
+                      htmlFor="new-password"
+                      className="m-2 mt-4 block text-xs font-semibold text-muted-foreground md:m-1.5 md:mt-3 md:text-[11px]"
+                    >
+                      New Password
+                    </Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="new-password"
+                        type={showNewPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        disabled={changePasswordMutation.isPending}
+                        className={cn(
+                          "h-10 pr-10 rounded-sm !border-solid !border-1 !border-foreground/40 bg-background text-sm text-foreground shadow-none focus:!border-solid focus:!border-1 focus:!border-primary focus-visible:!border-solid focus-visible:!border-1 focus-visible:!border-primary md:h-9 md:text-xs",
+                          passwordError &&
+                            "!border-destructive focus:!border-destructive focus-visible:!border-destructive",
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full w-10 text-muted-foreground hover:bg-transparent"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        tabIndex={-1}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                        ) : (
+                          <Eye className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                    {passwordError && (
+                      <p className="mt-1 text-xs font-medium text-destructive">
+                        {passwordError}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={
+                      changePasswordMutation.isPending || !currentPassword || !newPassword
+                    }
+                    className="w-full h-10 rounded-sm bg-primary/90 text-sm font-semibold hover:bg-primary md:h-9 md:text-xs"
+                  >
+                    {changePasswordMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Update Password"
+                    )}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          <div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="w-full justify-center bg-destructive/10
+                  hover:bg-destructive/20
+                  text-destructive h-10 rounded-sm text-sm font-semibold md:h-9 md:text-xs"
+                >
+                  Delete Account
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your
+                    account and remove all your sent and received messages, friendships, and data from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                  <Label htmlFor="delete-confirm" className="text-xs mb-2 block">
+                    Please type <strong>DELETE</strong> to confirm.
+                  </Label>
+                  <Input
+                    id="delete-confirm"
+                    className={cn(
+                          "h-10 pr-10 rounded-sm !border-solid !border-1 !border-foreground/40 bg-background text-sm text-foreground shadow-none focus:!border-solid focus:!border-1 focus:!border-primary focus-visible:!border-solid focus-visible:!border-1 focus-visible:!border-primary md:h-9 md:text-xs",
+                          passwordError &&
+                            "!border-destructive focus:!border-destructive focus-visible:!border-destructive",
+                        )}
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                  />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setDeleteConfirmText("")}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive hover:bg-destructive/90"
+                    disabled={deleteConfirmText !== "DELETE" || deleteAccountMutation.isPending}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      deleteAccountMutation.mutate();
+                    }}
+                  >
+                    {deleteAccountMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Delete Account"
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
       );
     }
 

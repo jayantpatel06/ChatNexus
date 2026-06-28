@@ -4,6 +4,7 @@ import {
   guestLoginSchema,
   loginUserSchema,
   registerUserSchema,
+  changePasswordSchema,
   type DbUser,
   type GuestLogin,
   type InsertUser,
@@ -253,6 +254,61 @@ async function refreshTokenController(
   }
 }
 
+async function changePasswordController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const user = await storage.getUser(req.jwtUser!.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.passwordHash) {
+      return res.status(400).json({ message: "Cannot change password for guest or external accounts" });
+    }
+
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+    const passwordsMatch = await comparePasswords(currentPassword, user.passwordHash);
+    if (!passwordsMatch) {
+      return res.status(400).json({ message: "Incorrect current password" });
+    }
+
+    const newHash = await hashPassword(newPassword);
+    await storage.updateUserPassword(user.userId, newHash);
+    const updatedUser = await storage.getUser(user.userId);
+    
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update user" });
+    }
+
+    const token = signToken(updatedUser);
+    res.json({ message: "Password updated successfully", token, user: toPublicUser(updatedUser) });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ message: "Invalid input data", errors: error.errors });
+    }
+    next(error);
+  }
+}
+
+async function deleteAccountController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const user = req.jwtUser!;
+    await logoutUser(user);
+    if (!user.isGuest) {
+      await storage.deleteUser(user.userId);
+    }
+    res.json({ message: "Account deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
@@ -262,4 +318,6 @@ export function setupAuth(app: Express) {
   app.post("/api/logout", jwtAuth, logoutController);
   app.get("/api/user", jwtAuth, currentUserController);
   app.post("/api/auth/refresh", jwtAuth, refreshTokenController);
+  app.post("/api/auth/change-password", authRateLimiter, jwtAuth, changePasswordController);
+  app.delete("/api/auth/account", jwtAuth, deleteAccountController);
 }

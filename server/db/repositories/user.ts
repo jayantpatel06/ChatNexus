@@ -95,6 +95,19 @@ export const userRepository = {
     }
   },
 
+  async updatePassword(id: number, passwordHash: string): Promise<DbUser | undefined> {
+    if (!prisma) return undefined;
+    try {
+      return await prisma.user.update({
+        where: { userId: id },
+        data: { passwordHash },
+      });
+    } catch (error) {
+      console.error("Error updating password:", error);
+      throw error;
+    }
+  },
+
   async updateProfile(
     id: number,
     profile: { username: string; age: number },

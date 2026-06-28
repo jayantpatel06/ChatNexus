@@ -11,7 +11,7 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 export default function GlobalChatPage() {
   const [location, setLocation] = useLocation();
   const isMobile = useIsMobile();
-  const [showDesktopRoom, setShowDesktopRoom] = useState(false);
+  const [showDesktopRoom, setShowDesktopRoom] = useState(true);
 
   const openGlobalRoom = () => {
     if (!isMobile) {

@@ -66,19 +66,38 @@ export async function jwtAuth(req: Request, res: Response, next: NextFunction) {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
-    const cachedUser = getCachedJwtUser(decoded.userId);
-    if (cachedUser) {
-      req.jwtUser = cachedUser;
-      return next();
-    }
+    let user = getCachedJwtUser(decoded.userId);
+    let fromCache = true;
 
-    const user = await storage.getUser(decoded.userId);
+    if (!user) {
+      user = await storage.getUser(decoded.userId);
+      fromCache = false;
+    }
 
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
 
-    primeJwtUserCache(user);
+    const currentPwHash = user.passwordHash ? user.passwordHash.substring(0, 10) : undefined;
+    if (decoded.pwHash !== currentPwHash) {
+      // If we read from cache, it might be stale. Refetch to be sure.
+      if (fromCache) {
+        user = await storage.getUser(decoded.userId);
+        if (!user) return res.status(401).json({ message: "User not found" });
+        const freshPwHash = user.passwordHash ? user.passwordHash.substring(0, 10) : undefined;
+        if (decoded.pwHash !== freshPwHash) {
+          invalidateJwtUserCache(decoded.userId);
+          return res.status(401).json({ message: "Password was changed. Please log in again." });
+        }
+      } else {
+        return res.status(401).json({ message: "Password was changed. Please log in again." });
+      }
+    }
+
+    if (!fromCache) {
+      primeJwtUserCache(user!);
+    }
+
     req.jwtUser = user;
     next();
   } catch (error) {

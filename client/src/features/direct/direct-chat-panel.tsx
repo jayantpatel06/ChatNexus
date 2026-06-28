@@ -1889,6 +1889,22 @@ export function ChatArea({
     }
   };
 
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image/") === 0) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          void sendAttachmentFile(file);
+          break;
+        }
+      }
+    }
+  }, [sendAttachmentFile]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
     messageTextRef.current = nextValue;
@@ -2829,6 +2845,7 @@ export function ChatArea({
                       value={messageText}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
                       onFocus={handleInputFocus}
                       data-testid="textarea-message-input"
                     />
